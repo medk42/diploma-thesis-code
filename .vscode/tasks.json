@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "type": "cmake",
+        "label": "Project: Build",
+        "command": "cleanRebuild",
+        "targets": [
+          "all"
+        ],
+        "group": "build",
+        "problemMatcher": [],
+        "detail": "Builds Project (cmake)",
+        "dependsOn": "CMake: configure",
+        "dependsOrder": "sequence"
+      },
+      {
+        "type": "cmake",
+        "label": "Project: Build and Install",
+        "command": "install",
+        "targets": [
+          "all"
+        ],
+        "group": "build",
+        "problemMatcher": [],
+        "detail": "Builds and Installs Project (cmake)",
+        "dependsOn": "Project: Build",
+        "dependsOrder": "sequence"
+      }
+  
+    ]
+  }
+  

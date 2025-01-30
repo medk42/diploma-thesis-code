@@ -1,0 +1,32 @@
+my_project/
+├── CMakeLists.txt         # Top-level CMake configuration
+├── include/              # Header files
+│   └── my_project       # Project-specific headers
+├── src/                  # Source files for the main application
+│   ├── main.cpp           # Main executable
+│   └── utils/            # Utility functions
+├── modules/              # Modular components
+│   ├── camera_calibration/
+│   │   ├── CMakeLists.txt
+│   │   └── src/
+│   ├── pen_calibration/
+│   │   ├── CMakeLists.txt
+│   │   └── src/
+│   └── pen_tracking/
+│       ├── CMakeLists.txt
+│       └── src/
+├── demos/                # Demo programs for testing individual components
+│   ├── camera_demo/
+│   │   ├── CMakeLists.txt
+│   │   └── src/
+│   ├── pen_demo/
+│   │   ├── CMakeLists.txt
+│   │   └── src/
+│   └── tracking_demo/
+│       ├── CMakeLists.txt
+│       └── src/
+├── tests/                 # Unit and integration tests
+│   ├── CMakeLists.txt     # Test-specific CMake configuration
+│   └── test/
+├── thirdparty/            # External libraries (if needed)
+└── README.md              # Project documentation
