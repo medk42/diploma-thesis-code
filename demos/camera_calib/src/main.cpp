@@ -1,17 +1,74 @@
 #include <iostream>
 
-// #include <opencv2/core.hpp>
-// #include <opencv2/aruco.hpp>
-// #include <opencv2/imgcodecs.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/objdetect/aruco_detector.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/opencv.hpp>
+
+#include <vector>
+
+#include "defaults.h"
+#include "logging.h"
+
+#include "camera_calibration.h"
+
+using namespace aergo;
 
 int main(int argc, char** argv)
 {
-    std::cout << "Hello world!" << std::endl;
+    if (argc != 2)
+    {
+        LOG_ERROR("Requires one argument")
+        return 0;
+    }
 
-    // cv::Mat markerImage;
-    // cv::aruco::Dictionary dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
-    // cv::aruco::generateImageMarker(dictionary, 23, 200, markerImage, 1);
-    // cv::imwrite("marker23.png", markerImage);
+
+
+    std::string charuco_calib_path = argv[1];
+
+    std::vector<std::string> image_paths;
+    cv::glob(charuco_calib_path, image_paths);
+
+
+
+    cv::aruco::CharucoBoard charuco_board(
+        cv::Size(
+            defaults::charucoboard::COL_COUNT,
+            defaults::charucoboard::ROW_COUNT
+        ),
+        defaults::charucoboard::SQUARE_LENGTH,
+        defaults::charucoboard::MARKER_LENGTH,
+        defaults::charucoboard::DICTIONARY
+    );
+    charuco_board.setLegacyPattern(defaults::charucoboard::LEGACY_PATTERN);
+
+    camera_calibration::CharucoCalibration charuco_calibration(charuco_board, cv::aruco::CornerRefineMethod::CORNER_REFINE_SUBPIX);
+
+
+
+    for (auto&& image_path : image_paths)   
+    {
+        cv::Mat image = cv::imread(image_path);
+        if (image.empty())
+        {
+            LOG_ERROR("Failed to read image: " + image_path)
+            continue;
+        }
+
+        cv::Mat visualization;
+        bool result = charuco_calibration.addImage(image, &visualization);
+        if (result)
+        {
+            cv::imshow("Found corners", visualization);
+            cv::waitKey(0);
+            cv::destroyAllWindows();
+        }
+        else
+        {
+            LOG_ERROR("Failed to calibrate image \"" << image_path << "\"")
+        }
+    }
+
 
     return 0;
 }

@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "cameracalib",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/demos/binaries/camera_calib.exe",
+            "args": ["${workspaceFolder}/demos/camera_calib/data/charuco_calib"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/demos/binaries",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "Project: Build and Install"
+        }
+    ]
+}

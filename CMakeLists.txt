@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 # Find OpenCV
 find_package(OpenCV 4 REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
 
 # Include directories
 include_directories(include)
