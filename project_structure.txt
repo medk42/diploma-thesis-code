@@ -30,3 +30,8 @@ my_project/
 │   └── test/
 ├── thirdparty/            # External libraries (if needed)
 └── README.md              # Project documentation
+
+
+Name:
+
+Aergo: A short, memorable name that combines "aero" (air or gesture) and "go" (implying action or control), suggesting a system that enables intuitive control through gestures.
