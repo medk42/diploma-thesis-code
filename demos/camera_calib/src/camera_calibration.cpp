@@ -36,8 +36,21 @@ bool CharucoCalibration::addImage(cv::Mat image, cv::Mat* return_visualization)
 
     if (charuco_corners.size() >= min_required_corners_)
     {
-        charuco_corners_all_.push_back(charuco_corners);
-        charuco_ids_all_.push_back(charuco_ids);
+        if (!image_size_)
+        {
+            image_size_ = cv::Size(image.cols, image.rows);
+        }
+        else if (image_size_->width != image.cols || image_size_->height != image.rows)
+        {
+            return false;
+        }
+
+        std::vector<cv::Point3f> object_points;
+        std::vector<cv::Point2f> image_points;
+        charuco_detector_->getBoard().matchImagePoints(charuco_corners, charuco_ids, object_points, image_points);
+
+        object_points_all_.push_back(object_points);
+        image_points_all_.push_back(image_points);
     }
     else
     {
@@ -53,7 +66,25 @@ bool CharucoCalibration::addImage(cv::Mat image, cv::Mat* return_visualization)
     return true;
 }
 
-void CharucoCalibration::calibrateCamera()
+CalibrationResult CharucoCalibration::calibrateCamera()
 {
-    // cv::calibrateCamera()
+    CalibrationResult result {.success = false }; 
+
+    if (!image_size_)
+    {
+        return result;
+    }
+
+    result.rms_error = cv::calibrateCamera(
+        object_points_all_, 
+        image_points_all_, 
+        *image_size_, 
+        result.camera_matrix, 
+        result.distortion_coefficients, 
+        result.rvecs, 
+        result.tvecs
+    );
+    result.success = true;
+
+    return result;
 }

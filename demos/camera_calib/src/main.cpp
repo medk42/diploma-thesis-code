@@ -69,6 +69,9 @@ int main(int argc, char** argv)
         }
     }
 
+    camera_calibration::CalibrationResult result = charuco_calibration.calibrateCamera();
+
+    LOG("\n\nSuccess: " << result.success << "\n" << "Camera:\n" << result.camera_matrix << "\n\nDistortion:\n" << result.distortion_coefficients << "\n\nRMS error: " << result.rms_error << "\n\n")
 
     return 0;
 }
