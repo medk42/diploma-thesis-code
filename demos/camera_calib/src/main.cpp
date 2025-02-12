@@ -73,5 +73,28 @@ int main(int argc, char** argv)
 
     LOG("\n\nSuccess: " << result.success << "\n" << "Camera:\n" << result.camera_matrix << "\n\nDistortion:\n" << result.distortion_coefficients << "\n\nRMS error: " << result.rms_error << "\n\n")
 
+    std::string export_filename = "camera_parameters.xml";
+
+    cv::FileStorage fs(export_filename, cv::FileStorage::WRITE);
+    if (!fs.isOpened())
+    {
+        LOG_ERROR("Failed to open export file \"" << export_filename << "\"");
+    }
+    else
+    {
+        try
+        {
+            fs << "CAMERA_MATRIX" << result.camera_matrix;
+            fs << "DISTORTION_COEFFICIENTS" << result.distortion_coefficients;
+            fs.release();
+            LOG("Successfully wrote calibration to file \"" << export_filename << "\"");
+        }
+        catch(const cv::Exception& e)
+        {
+            LOG_ERROR("Failed to write to file \"" << export_filename << "\", error: " << e.what());
+        }
+        
+    }
+
     return 0;
 }
