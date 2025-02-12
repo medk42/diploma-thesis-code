@@ -24,6 +24,18 @@
             "environment": [],
             // "externalConsole": false,
             "preLaunchTask": "Project: Build and Install"
+        },
+        {
+            "name": "pencalib",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/demos/binaries/pen_calib.exe",
+            "args": ["${workspaceFolder}/demos/pen_calib/data/pen_images"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/demos/binaries",
+            "environment": [],
+            // "externalConsole": false,
+            "preLaunchTask": "Project: Build and Install"
         }
     ]
 }
