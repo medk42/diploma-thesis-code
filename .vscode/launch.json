@@ -1,40 +1,28 @@
 {
     "version": "0.2.0",
     "configurations": [
-        // {
-        //     "name": "cameracalib",
-        //     "type": "cppvsdbg",
-        //     "request": "launch",
-        //     "program": "${workspaceFolder}/demos/binaries/camera_calib.exe",
-        //     "args": ["${workspaceFolder}/demos/camera_calib/data/charuco_calib"],
-        //     "stopAtEntry": false,
-        //     "cwd": "${workspaceFolder}/demos/binaries",
-        //     "environment": [],
-        //     "externalConsole": true,
-        //     "preLaunchTask": "Project: Build and Install"
-        // },
         {
             "name": "cameracalib",
-            "type": "cppdbg",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/demos/binaries/camera_calib.exe",
             "args": ["${workspaceFolder}/demos/camera_calib/data/charuco_calib"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            // "externalConsole": false,
+            "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"
         },
         {
             "name": "pencalib",
-            "type": "cppdbg",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/demos/binaries/pen_calib.exe",
             "args": ["${workspaceFolder}/demos/pen_calib/data/pen_images"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            // "externalConsole": false,
+            "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"
         }
     ]
