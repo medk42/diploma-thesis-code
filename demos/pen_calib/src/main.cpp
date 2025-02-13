@@ -1,9 +1,13 @@
 #include <iostream>
+#include <vector>
 
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
 
 #include "logging.h"
+#include "defaults.h"
+
+using namespace aergo;
 
 /*
 
@@ -34,7 +38,10 @@ We will originally define the position relative to the top of the pen.
     94 ... (0, 0.01, 0.04), rot 90
     95 ... (0, 0.01, 0.04), rot 180
 
-    98 ... (0, 0.01, 0.01), rot 
+    96 ... (0, 0.01, 0.01), rot -135 = 225
+    97 ... (0, 0.01, 0.01), rot -45 = 315
+    98 ... (0, 0.01, 0.01), rot 45
+    99 ... (0, 0.01, 0.01), rot 135
 
 */
 
@@ -72,20 +79,108 @@ bool loadCameraCalibration(const std::string& filename, cv::Mat& camera_matrix, 
     return true;
 }
 
-// struct SimpleCostFunction {
-//     bool operator()(const double* const x, double* residual) const {
-//         residual[0] = (x[0] - (2.0)) * (x[0] - (2.0)) * (x[0] + (2.0));
-//         return true;
-//     }
-// };
+void displayError(cv::Mat& image, cv::Point2f pos1, cv::Point2f pos2)
+{
+    int x = pos1.x;
+    int y = pos1.y;
 
-struct MyCostFunctor {
-    bool operator()(const double* params, double* residuals) const {
-        residuals[0] = params[0] - 3;  // x3 -> 3
-        residuals[1] = params[1] - 4;  // x4 -> 4
-        return true;
+    cv::Rect2i roi(x - 25, y - 25, 50, 50);
+    cv::Mat cropped = image(roi);
+    cv::Mat scaled;
+    cv::resize(cropped, scaled, cv::Size(1000, 1000), cv::INTER_CUBIC);
+
+    float p1x = (pos1.x - x + 25) * 20;
+    float p1y = (pos1.y - y + 25) * 20;
+    float p2x = (pos2.x - x + 25) * 20;
+    float p2y = (pos2.y - y + 25) * 20;
+
+    cv::line(scaled, cv::Point2f(p1x - 20, p1y - 20), cv::Point2f(p1x + 20, p1y + 20), cv::Scalar(0, 0, 255));
+    cv::line(scaled, cv::Point2f(p1x - 20, p1y + 20), cv::Point2f(p1x + 20, p1y - 20), cv::Scalar(0, 0, 255));
+
+    cv::line(scaled, cv::Point2f(p2x - 20, p2y - 20), cv::Point2f(p2x + 20, p2y + 20), cv::Scalar(0, 255, 0));
+    cv::line(scaled, cv::Point2f(p2x - 20, p2y + 20), cv::Point2f(p2x + 20, p2y - 20), cv::Scalar(0, 255, 0)); 
+
+    cv::imshow("Error", scaled);
+    cv::waitKey(0);
+    cv::destroyAllWindows();
+}
+
+void getObservedMarkers(std::string pathname)
+{
+    std::vector<std::string> image_paths;
+    cv::glob(pathname, image_paths);
+
+    cv::aruco::DetectorParameters detector_parameters;
+    detector_parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+    // detector_parameters.cornerRefinementWinSize = 2;
+    // detector_parameters.adaptiveThreshWinSizeMin = 15;
+    // detector_parameters.adaptiveThreshWinSizeMax = 15;
+    // detector_parameters.useAruco3Detection = false;
+    // detector_parameters.minMarkerPerimeterRate = 0.02;
+    // detector_parameters.maxMarkerPerimeterRate = 2;
+    // detector_parameters.minSideLengthCanonicalImg = 16;
+    // detector_parameters.adaptiveThreshConstant = 7;
+
+    cv::aruco::ArucoDetector aruco_detector(
+        defaults::pen::DICTIONARY, 
+        cv::aruco::DetectorParameters(), 
+        cv::aruco::RefineParameters()
+    );
+
+    cv::aruco::ArucoDetector aruco_detector2(
+        defaults::pen::DICTIONARY, 
+        detector_parameters, 
+        cv::aruco::RefineParameters()
+    );
+
+    for (auto&& path : image_paths)
+    {
+        cv::Mat image = cv::imread(path);
+
+        cv::Mat gray;
+        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+
+        std::vector<std::vector<cv::Point2f>> corners;
+        std::vector<int> ids;
+
+        aruco_detector.detectMarkers(gray, corners, ids);
+
+        cv::Mat image_draw = image.clone();
+        cv::aruco::drawDetectedMarkers(image_draw, corners, ids);
+    
+
+        cv::imshow("Image", image_draw);
+        cv::waitKey(0);
+        cv::destroyAllWindows();
+
+        std::vector<std::vector<cv::Point2f>> corners2;
+        std::vector<int> ids2;
+        aruco_detector2.detectMarkers(gray, corners2, ids2);
+
+        image_draw = image.clone();
+        cv::aruco::drawDetectedMarkers(image_draw, corners, ids);
+
+        cv::imshow("Image", image_draw);
+        cv::waitKey(0);
+        cv::destroyAllWindows();
+
+        if (corners.size() == corners2.size())
+        {
+            for (int i = 0; i < corners.size(); ++i)
+            {
+                displayError(image, corners[i][0], corners2[i][0]);
+                displayError(image, corners[i][1], corners2[i][1]);
+                displayError(image, corners[i][2], corners2[i][2]);
+                displayError(image, corners[i][3], corners2[i][3]);
+            }
+        }
     }
-};
+}
+
+void calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients)
+{
+
+}
 
 int main(int argc, char* argv[]) {
     if (argc != 3)
@@ -110,42 +205,8 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    std::vector<double> params = {10.0, 20.0, 0.0, 0.0};
-    std::cout << "Before optimization: "
-    << params[0] << " " << params[1] << " " << params[2] << " " << params[3] << std::endl;
+    getObservedMarkers(argv[1]);
 
-    ceres::Problem problem;
-
-    // Add residual block (uses all 4 elements)
-    problem.AddResidualBlock(
-        new ceres::NumericDiffCostFunction<MyCostFunctor, ceres::CENTRAL, 2, 2>(
-            new MyCostFunctor()
-        ), 
-        nullptr, 
-        params.data()
-    );
-    problem.AddResidualBlock(
-        new ceres::NumericDiffCostFunction<MyCostFunctor, ceres::CENTRAL, 2, 2>(
-            new MyCostFunctor()
-        ), 
-        nullptr, 
-        params.data() + 2
-    );
-
-    // Keep first 2 elements fixed
-    problem.SetParameterBlockConstant(params.data());
-
-    ceres::Solver::Options options;
-    // options.linear_solver_type = ceres::DENSE_QR;
-    options.minimizer_progress_to_stdout = true;
-    // options.max_num_iterations = 1000;
-
-    ceres::Solver::Summary summary;
-    ceres::Solve(options, &problem, &summary);
-
-    std::cout << summary.FullReport() << std::endl;
-    std::cout << "After optimization: "
-              << params[0] << " " << params[1] << " " << params[2] << " " << params[3] << std::endl;
 
 
     return 0;

@@ -14,6 +14,12 @@ namespace aergo::defaults
         const cv::aruco::Dictionary DICTIONARY = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_100);
         const bool LEGACY_PATTERN = true;
     };
+
+    namespace pen
+    {
+        const cv::aruco::Dictionary DICTIONARY = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_100);
+        const int PEN_FIXED_MARKER = 92;
+    };
 };
 
 #endif // AERGO_DEFAULTS_H
