@@ -18,7 +18,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/demos/binaries/pen_calib.exe",
-            "args": ["${workspaceFolder}/demos/pen_calib/data/pen_images"],
+            "args": ["${workspaceFolder}/demos/pen_calib/data/pen_images", "camera_parameters.xml"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
