@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <array>
 
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
@@ -81,8 +82,8 @@ bool loadCameraCalibration(const std::string& filename, cv::Mat& camera_matrix, 
 
 void displayError(cv::Mat& image, cv::Point2f pos1, cv::Point2f pos2)
 {
-    int x = pos1.x;
-    int y = pos1.y;
+    int x = (int)pos1.x;
+    int y = (int)pos1.y;
 
     cv::Rect2i roi(x - 25, y - 25, 50, 50);
     cv::Mat cropped = image(roi);
@@ -105,33 +106,33 @@ void displayError(cv::Mat& image, cv::Point2f pos1, cv::Point2f pos2)
     cv::destroyAllWindows();
 }
 
-void getObservedMarkers(std::string pathname)
+struct observed_marker
+{
+    std::array<cv::Point2f, 4> markers_points_;
+    int marker_id_;
+};
+
+cv::aruco::ArucoDetector getArucoDetector()
+{
+    cv::aruco::DetectorParameters detector_parameters;
+    detector_parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+
+    cv::aruco::ArucoDetector aruco_detector(
+        defaults::pen::DICTIONARY, 
+        detector_parameters
+    );
+
+    return std::move(aruco_detector);
+}
+
+std::vector<std::vector<observed_marker>> getObservedMarkers(std::string pathname, bool display=false)
 {
     std::vector<std::string> image_paths;
     cv::glob(pathname, image_paths);
 
-    cv::aruco::DetectorParameters detector_parameters;
-    detector_parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
-    // detector_parameters.cornerRefinementWinSize = 2;
-    // detector_parameters.adaptiveThreshWinSizeMin = 15;
-    // detector_parameters.adaptiveThreshWinSizeMax = 15;
-    // detector_parameters.useAruco3Detection = false;
-    // detector_parameters.minMarkerPerimeterRate = 0.02;
-    // detector_parameters.maxMarkerPerimeterRate = 2;
-    // detector_parameters.minSideLengthCanonicalImg = 16;
-    // detector_parameters.adaptiveThreshConstant = 7;
+    cv::aruco::ArucoDetector aruco_detector = getArucoDetector();
 
-    cv::aruco::ArucoDetector aruco_detector(
-        defaults::pen::DICTIONARY, 
-        cv::aruco::DetectorParameters(), 
-        cv::aruco::RefineParameters()
-    );
-
-    cv::aruco::ArucoDetector aruco_detector2(
-        defaults::pen::DICTIONARY, 
-        detector_parameters, 
-        cv::aruco::RefineParameters()
-    );
+    std::vector<std::vector<observed_marker>> observed_markers;
 
     for (auto&& path : image_paths)
     {
@@ -145,41 +146,61 @@ void getObservedMarkers(std::string pathname)
 
         aruco_detector.detectMarkers(gray, corners, ids);
 
-        cv::Mat image_draw = image.clone();
-        cv::aruco::drawDetectedMarkers(image_draw, corners, ids);
-    
-
-        cv::imshow("Image", image_draw);
-        cv::waitKey(0);
-        cv::destroyAllWindows();
-
-        std::vector<std::vector<cv::Point2f>> corners2;
-        std::vector<int> ids2;
-        aruco_detector2.detectMarkers(gray, corners2, ids2);
-
-        image_draw = image.clone();
-        cv::aruco::drawDetectedMarkers(image_draw, corners, ids);
-
-        cv::imshow("Image", image_draw);
-        cv::waitKey(0);
-        cv::destroyAllWindows();
-
-        if (corners.size() == corners2.size())
+        std::vector<observed_marker> image_markers;
+        for (int i = 0; i < corners.size(); ++i)
         {
-            for (int i = 0; i < corners.size(); ++i)
+            if (defaults::pen::USED_MARKER_IDS.contains(ids[i]))
             {
-                displayError(image, corners[i][0], corners2[i][0]);
-                displayError(image, corners[i][1], corners2[i][1]);
-                displayError(image, corners[i][2], corners2[i][2]);
-                displayError(image, corners[i][3], corners2[i][3]);
+                observed_marker marker;
+                marker.marker_id_ = ids[i];
+                marker.markers_points_[0] = corners[i][0];
+                marker.markers_points_[1] = corners[i][1];
+                marker.markers_points_[2] = corners[i][2];
+                marker.markers_points_[3] = corners[i][3];
+                
+                image_markers.emplace_back(std::move(marker));
             }
         }
+        observed_markers.emplace_back(std::move(image_markers));
+
+        if (display)
+        {
+            cv::aruco::drawDetectedMarkers(image, corners, ids);
+            cv::imshow("Image", image);
+            cv::waitKey(0);
+            cv::destroyAllWindows();
+        }
     }
+
+    return observed_markers;
 }
 
-void calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients)
+void calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<std::vector<observed_marker>> observed_markers)
 {
+    auto& single_image = observed_markers[0];
+    std::vector<int> ids;
+    std::vector<std::vector<cv::Point2f>> positions;
 
+    std::vector<cv::Point3f> marker_points = 
+    {
+        cv::Point3f(-defaults::pen::MARKER_SIZE / 2,  defaults::pen::MARKER_SIZE / 2, 0),
+        cv::Point3f( defaults::pen::MARKER_SIZE / 2,  defaults::pen::MARKER_SIZE / 2, 0),
+        cv::Point3f( defaults::pen::MARKER_SIZE / 2, -defaults::pen::MARKER_SIZE / 2, 0),
+        cv::Point3f(-defaults::pen::MARKER_SIZE / 2, -defaults::pen::MARKER_SIZE / 2, 0)
+    };
+
+    for (auto& marker : single_image)
+    {
+        cv::Mat marker_92({-0.04980401067312665, 0.004462607451718355, 0.1550822892821251});
+
+        cv::Mat rvec, tvec;
+        cv::solvePnP(marker_points, marker.markers_points_, camera_matrix, distortion_coefficients, rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE);
+
+        cv::Mat res = tvec - marker_92;
+
+        LOG("Marker " << marker.marker_id_ << ": \n\nTVEC\n" << tvec << "\n\nRVEC\n" << rvec << "\n\nDIFF\n" << res << "\n\n\n")
+    }
+    
 }
 
 int main(int argc, char* argv[]) {
@@ -205,8 +226,10 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    getObservedMarkers(argv[1]);
 
+
+    std::vector<std::vector<observed_marker>> observed_markers = getObservedMarkers(argv[1]);
+    calibrateMarkers(camera_matrix, distortion_coefficients, observed_markers);
 
 
     return 0;
