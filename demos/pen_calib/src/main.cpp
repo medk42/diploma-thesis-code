@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <array>
+#include <map>
 
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
@@ -112,6 +113,58 @@ struct observed_marker
     int marker_id_;
 };
 
+struct Transformation {
+    cv::Mat rotation;    // 3x3 rotation matrix
+    cv::Mat translation; // 3x1 translation vector
+
+    Transformation() : rotation(cv::Mat::eye(3, 3, CV_32F)), translation(cv::Mat::zeros(3, 1, CV_32F)) {}
+
+    Transformation(const cv::Mat& rvec, const cv::Mat& tvec) 
+    {
+        cv::Rodrigues(rvec, rotation);
+        translation = tvec.clone();
+
+        rotation.clone().convertTo(rotation, CV_32F);
+        translation.clone().convertTo(translation, CV_32F);
+    }
+
+    /// Overload the multiply operator to perform the transformation compositions
+    Transformation operator*(const Transformation& other) const
+    {
+        Transformation result;
+        result.rotation = this->rotation * other.rotation;
+        result.translation = this->rotation * other.translation + this->translation;
+        return result;
+    }
+
+    cv::Point3f operator*(const cv::Point3f& other) const
+    {
+        cv::Mat other_mat(3, 1, CV_32F); 
+        other_mat.at<float>(0) = other.x;
+        other_mat.at<float>(1) = other.y;
+        other_mat.at<float>(2) = other.z;
+        
+        cv::Mat res = rotation * other_mat;
+        res += translation;
+
+        return cv::Point3f(res.at<float>(0), res.at<float>(1), res.at<float>(2));
+    }
+
+    Transformation inverse() const
+    {
+        Transformation inv;
+        cv::transpose(this->rotation, inv.rotation);
+        inv.translation = -inv.rotation * this->translation;
+        return inv;
+    }
+
+    void print() const
+    {
+        std::cout << "Rotation:\n" << this->rotation << std::endl;
+        std::cout << "Translation:\n" << this->translation << std::endl;
+    }
+};
+
 cv::aruco::ArucoDetector getArucoDetector()
 {
     cv::aruco::DetectorParameters detector_parameters;
@@ -189,17 +242,41 @@ void calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
         cv::Point3f(-defaults::pen::MARKER_SIZE / 2, -defaults::pen::MARKER_SIZE / 2, 0)
     };
 
+    std::map<int, Transformation> camera_to_marker_transformations;
+
     for (auto& marker : single_image)
     {
-        cv::Mat marker_92({-0.04980401067312665, 0.004462607451718355, 0.1550822892821251});
-
         cv::Mat rvec, tvec;
         cv::solvePnP(marker_points, marker.markers_points_, camera_matrix, distortion_coefficients, rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE);
 
-        cv::Mat res = tvec - marker_92;
-
-        LOG("Marker " << marker.marker_id_ << ": \n\nTVEC\n" << tvec << "\n\nRVEC\n" << rvec << "\n\nDIFF\n" << res << "\n\n\n")
+        camera_to_marker_transformations[marker.marker_id_] = Transformation(rvec, tvec);
     }
+
+    auto camera_to_92 = camera_to_marker_transformations[92];
+    auto m92_to_camera = camera_to_92.inverse();
+    auto m92_to_m93 = m92_to_camera * camera_to_marker_transformations[93];
+    auto m92_to_m97 = m92_to_camera * camera_to_marker_transformations[97];
+
+    LOG("92 -> 97 in CAM space:\n")
+
+    m92_to_m97.print();
+
+    LOG("\n\n92 -> 93 in CAM space:\n")
+
+    m92_to_m93.print();
+
+    std::vector<cv::Point3f> test_points = 
+    {
+        cv::Point3f(-1,  1, 0),
+        cv::Point3f( 1,  1, 0),
+        cv::Point3f( 1, -1, 0),
+        cv::Point3f(-1, -1, 0)
+    };
+    test_points = marker_points;
+
+    LOG("\n\nTransform:\n\n92\n\t" << test_points[0] << "\n\t" << test_points[1] << "\n\t" << test_points[2] << "\n\t" << test_points[3] << "\n\n")
+    LOG("93\n\t" << (m92_to_m93 * test_points[0]) << "\n\t" << (m92_to_m93 * test_points[1]) << "\n\t" << (m92_to_m93 * test_points[2]) << "\n\t" << (m92_to_m93 * test_points[3]))
+    LOG("97\n\t" << (m92_to_m97 * test_points[0]) << "\n\t" << (m92_to_m97 * test_points[1]) << "\n\t" << (m92_to_m97 * test_points[2]) << "\n\t" << (m92_to_m97 * test_points[3]))
     
 }
 
