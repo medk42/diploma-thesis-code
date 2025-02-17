@@ -297,11 +297,8 @@ void traverseGraph(const TransformationGraph& transf_graph, std::map<int, Transf
     }
 }
 
-bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<std::vector<observed_marker>> observed_markers)
+std::vector<cv::Point3f> getMarkerPoints3d()
 {
-    std::vector<int> ids;
-    std::vector<std::vector<cv::Point2f>> positions;
-
     std::vector<cv::Point3f> marker_points = 
     {
         cv::Point3f(-defaults::pen::MARKER_SIZE / 2,  defaults::pen::MARKER_SIZE / 2, 0),
@@ -310,6 +307,159 @@ bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
         cv::Point3f(-defaults::pen::MARKER_SIZE / 2, -defaults::pen::MARKER_SIZE / 2, 0)
     };
 
+    return std::move(marker_points);
+}
+
+struct CameraMarkerCostFunctor
+{
+    CameraMarkerCostFunctor(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, observed_marker marker)
+    : camera_matrix_(camera_matrix), distortion_coefficients_(distortion_coefficients), marker_(marker) 
+    {
+        marker_points_ = getMarkerPoints3d();
+    }
+
+    /// @brief Calculate the residual error for a specific camera-marker pair. 
+    /// @param camera_rvec_tvec 6 doubles, rvec and tvec for camera, fixed_to_camera transformation
+    /// @param marker_rvec_tvec 6 doubles, rvec and tvec for marker, fixed_to_marker transformation
+    /// @param residuals 8 doubles, error in u and v in the image plane for each of the 4 marker corners
+    bool operator()(const double* camera_rvec_tvec, const double* marker_rvec_tvec, double* residuals) const
+    {
+        cv::Mat cam_rvec = (cv::Mat_<double>(3, 1) << camera_rvec_tvec[0], camera_rvec_tvec[1], camera_rvec_tvec[2]);
+        cv::Mat cam_tvec = (cv::Mat_<double>(3, 1) << camera_rvec_tvec[3], camera_rvec_tvec[4], camera_rvec_tvec[5]);
+
+        cv::Mat mark_rvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[0], marker_rvec_tvec[1], marker_rvec_tvec[2]);
+        cv::Mat mark_tvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[3], marker_rvec_tvec[4], marker_rvec_tvec[5]);
+
+        Transformation fixed_to_camera(cam_rvec, cam_tvec);
+        Transformation fixed_to_marker(mark_rvec, mark_tvec);
+
+        Transformation camera_to_marker = fixed_to_camera.inverse() * fixed_to_marker;
+        auto [rvec, tvec] = camera_to_marker.asRvecTvec();
+        
+        std::vector<cv::Point2f> projected_points;
+
+        cv::projectPoints(marker_points_, rvec, tvec, camera_matrix_, distortion_coefficients_, projected_points);
+
+        for (int i = 0; i < 4; ++i)
+        {
+            cv::Point2f diff = projected_points[i] - marker_.markers_points_[i];
+            residuals[2 * i] = diff.x;
+            residuals[2 * i + 1] = diff.y;
+        }
+
+        return true;
+    }
+
+    cv::Mat& camera_matrix_;
+    cv::Mat& distortion_coefficients_;
+    observed_marker marker_;
+    std::vector<cv::Point3f> marker_points_;
+};
+
+struct camera_marker_pair
+{
+    int camera_id;
+    observed_marker marker;
+};
+
+void runOptimizer(
+    cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<camera_marker_pair> camera_marker_pairs, 
+    std::map<int, Transformation> fixed_marker_to_other_transformations)
+{
+    LOG(camera_matrix)
+    LOG(distortion_coefficients)
+    ceres::Problem problem;
+
+    std::vector<double> rvec_tvec_markers;
+    std::vector<double> rvec_tvec_cameras;
+
+    std::map<int, int> marker_id_to_i;
+    std::map<int, int> camera_id_to_i;
+
+    std::vector<std::shared_ptr<CameraMarkerCostFunctor>> cost_functors;
+    std::vector<std::shared_ptr<ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>>> const_functions;
+
+    int g = 0;
+    for (int marker_id : defaults::pen::USED_MARKER_IDS)
+    {
+        Transformation fixed_to_marker = fixed_marker_to_other_transformations[marker_id];
+        auto [rvec, tvec] = fixed_to_marker.asRvecTvec();
+
+        rvec_tvec_markers.insert(rvec_tvec_markers.end(), {
+            rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2), 
+            tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2)
+        });
+
+        marker_id_to_i[marker_id] = g;
+        ++g;
+    }
+
+    g = 0;
+    for (auto pair : camera_marker_pairs)
+    {
+        if (!camera_id_to_i.contains(pair.camera_id))
+        {
+            Transformation fixed_to_camera = fixed_marker_to_other_transformations[pair.camera_id];
+            auto [rvec, tvec] = fixed_to_camera.asRvecTvec();
+
+            rvec_tvec_cameras.insert(rvec_tvec_cameras.end(), {
+                rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2), 
+                tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2)
+            });
+
+            camera_id_to_i[pair.camera_id] = g;
+            ++g;
+        }
+    }
+    
+
+    for (auto pair : camera_marker_pairs)
+    {
+        auto cost_functor = std::make_shared<CameraMarkerCostFunctor>(camera_matrix, distortion_coefficients, pair.marker);
+        auto cost_function = std::make_shared<ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>>(cost_functor.get());
+
+        cost_functors.push_back(cost_functor);
+        const_functions.push_back(cost_function);
+
+        // TODO add a correct loss
+        problem.AddResidualBlock(
+            cost_function.get(), 
+            nullptr, 
+            rvec_tvec_cameras.data() + 6 * camera_id_to_i[pair.camera_id],
+            rvec_tvec_markers.data() + 6 * marker_id_to_i[pair.marker.marker_id_]
+        );
+    }
+
+    // Keep fixed marker position fixed
+    problem.SetParameterBlockConstant(rvec_tvec_markers.data() + 6 * marker_id_to_i[defaults::pen::PEN_FIXED_MARKER_ID]);
+
+    ceres::Solver::Options options;
+    // options.linear_solver_type = ceres::DENSE_QR;
+    options.minimizer_progress_to_stdout = true;
+    // options.max_num_iterations = 1000;
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
+    std::cout << summary.FullReport() << std::endl;
+
+    std::vector<cv::Point3f> marker_points = getMarkerPoints3d();
+    for (int marker_id : defaults::pen::USED_MARKER_IDS)
+    {
+        double* marker_rvec_tvec = rvec_tvec_markers.data() + 6 * marker_id_to_i[marker_id];
+        cv::Mat mark_rvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[0], marker_rvec_tvec[1], marker_rvec_tvec[2]);
+        cv::Mat mark_tvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[3], marker_rvec_tvec[4], marker_rvec_tvec[5]);
+
+        Transformation fixed_to_marker(mark_rvec, mark_tvec);
+        LOG("{\n\t'name': '" << marker_id << "',\n\t'points': np.array([\n\t\t" << (fixed_to_marker * marker_points[0]) << ",\n\t\t" << (fixed_to_marker * marker_points[1]) << ",\n\t\t" << (fixed_to_marker * marker_points[2]) << ",\n\t\t" << (fixed_to_marker * marker_points[3]) << "\n\t])\n},")
+    }
+}
+
+bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<std::vector<observed_marker>> observed_markers)
+{
+    std::vector<int> ids;
+    std::vector<std::vector<cv::Point2f>> positions;
+
+    std::vector<cv::Point3f> marker_points = getMarkerPoints3d();
+
     int max_id = *std::max_element(defaults::pen::USED_MARKER_IDS.begin(), defaults::pen::USED_MARKER_IDS.end());
     int camera_first_id = max_id + 1000;
     int camera_count = 0;
@@ -317,6 +467,9 @@ bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
     TransformationGraph transf_graph;
 
     std::set<int> active_cameras;
+
+    // camera marker pairs for optimization
+    std::vector<camera_marker_pair> camera_marker_pairs;
 
     for (auto& single_image : observed_markers)
     {
@@ -333,6 +486,10 @@ bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
             {
                 Transformation camera_to_marker = Transformation(rvec, tvec);
                 camera_to_marker_transformations[marker.marker_id_] = camera_to_marker;
+                camera_marker_pairs.push_back({
+                    .camera_id = camera_count + camera_first_id,
+                    .marker = marker
+                });
             }
             else
             {
@@ -343,6 +500,7 @@ bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
 
         if (camera_to_marker_transformations.size() >= 2)
         {
+            
             active_cameras.insert(camera_count);
             for (const auto& first : camera_to_marker_transformations)
             {
@@ -385,8 +543,6 @@ bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
         LOG(first << "->" << second << ": " << tvec << " = " << cv::norm(tvec) * 1000 << "mm; " << (cv::norm(rvec) * 180.0 / CV_PI) << "deg\n")
     }
 
-    LOG("\n\nTransform:\n\n92\n\t" << marker_points[0] << "\n\t" << marker_points[1] << "\n\t" << marker_points[2] << "\n\t" << marker_points[3] << "\n\n")
-
     // check that user photos contain all markers
     for (int marker_id : defaults::pen::USED_MARKER_IDS)
     {
@@ -395,12 +551,7 @@ bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
             LOG("Failed to detect marker " << marker_id << " in the provided photos.")
             return false;
         }
-
-        Transformation fixed_to_marker = fixed_marker_to_other_transformations.at(marker_id);
-        LOG("{\n\t'name': '" << marker_id << "',\n\t'points': np.array([\n\t\t" << (fixed_to_marker * marker_points[0]) << ",\n\t\t" << (fixed_to_marker * marker_points[1]) << ",\n\t\t" << (fixed_to_marker * marker_points[2]) << ",\n\t\t" << (fixed_to_marker * marker_points[3]) << "\n\t])\n},")
     }
-
-    LOG("\n\n\nCAMERAS\n\n\n")
 
     // sanity check, this should never fail
     for (int camera_id : active_cameras)
@@ -410,11 +561,9 @@ bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
             LOG("Sanity check failed. Camera " << camera_id + 1 << " not in graph.")
             return false;
         }
-
-        
-        Transformation fixed_to_camera = fixed_marker_to_other_transformations.at(camera_first_id + camera_id);
-        LOG("{\n\t'name': '" << camera_first_id + camera_id << "',\n\t'points': np.array([\n\t\t" << (fixed_to_camera * marker_points[0]) << ",\n\t\t" << (fixed_to_camera * marker_points[1]) << ",\n\t\t" << (fixed_to_camera * marker_points[2]) << ",\n\t\t" << (fixed_to_camera * marker_points[3]) << "\n\t])\n},")
     }
+
+    runOptimizer(camera_matrix, distortion_coefficients, camera_marker_pairs, fixed_marker_to_other_transformations);
     
     return true;
 }
