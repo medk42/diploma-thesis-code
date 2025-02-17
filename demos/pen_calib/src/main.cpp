@@ -2,6 +2,7 @@
 #include <vector>
 #include <array>
 #include <map>
+#include <queue>
 
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
@@ -117,15 +118,23 @@ struct Transformation {
     cv::Mat rotation;    // 3x3 rotation matrix
     cv::Mat translation; // 3x1 translation vector
 
-    Transformation() : rotation(cv::Mat::eye(3, 3, CV_32F)), translation(cv::Mat::zeros(3, 1, CV_32F)) {}
+    Transformation() : rotation(cv::Mat::eye(3, 3, CV_64F)), translation(cv::Mat::zeros(3, 1, CV_64F)) {}
 
     Transformation(const cv::Mat& rvec, const cv::Mat& tvec) 
     {
         cv::Rodrigues(rvec, rotation);
         translation = tvec.clone();
 
-        rotation.clone().convertTo(rotation, CV_32F);
-        translation.clone().convertTo(translation, CV_32F);
+        rotation.clone().convertTo(rotation, CV_64F);
+        translation.clone().convertTo(translation, CV_64F);
+    }
+
+    std::pair<cv::Mat, cv::Mat> asRvecTvec()
+    {
+        cv::Mat rvec;
+        cv::Rodrigues(rotation, rvec);  // Convert rotation matrix back to rotation vector
+        cv::Mat tvec = translation.clone();  // Clone the translation vector
+        return std::make_pair(rvec, tvec);
     }
 
     /// Overload the multiply operator to perform the transformation compositions
@@ -137,17 +146,17 @@ struct Transformation {
         return result;
     }
 
-    cv::Point3f operator*(const cv::Point3f& other) const
+    cv::Point3d operator*(const cv::Point3f& other) const
     {
-        cv::Mat other_mat(3, 1, CV_32F); 
-        other_mat.at<float>(0) = other.x;
-        other_mat.at<float>(1) = other.y;
-        other_mat.at<float>(2) = other.z;
+        cv::Mat other_mat(3, 1, CV_64F); 
+        other_mat.at<double>(0) = other.x;
+        other_mat.at<double>(1) = other.y;
+        other_mat.at<double>(2) = other.z;
         
         cv::Mat res = rotation * other_mat;
         res += translation;
 
-        return cv::Point3f(res.at<float>(0), res.at<float>(1), res.at<float>(2));
+        return cv::Point3d(res.at<double>(0), res.at<double>(1), res.at<double>(2));
     }
 
     Transformation inverse() const
@@ -163,6 +172,38 @@ struct Transformation {
         std::cout << "Rotation:\n" << this->rotation << std::endl;
         std::cout << "Translation:\n" << this->translation << std::endl;
     }
+};
+
+class TransformationGraph
+{
+    typedef std::list<std::pair<int, Transformation>> edge_list;
+
+public:
+
+    void addEdge(int start_node, int end_node, Transformation transformation)
+    {
+        graph_data_[start_node].push_back(std::make_pair(end_node, transformation));
+        graph_data_[end_node].push_back(std::make_pair(start_node, transformation.inverse()));
+    }
+
+    const edge_list& getEdges(int node) const
+    {
+        if (!graph_data_.contains(node))
+        {
+            return empty_list;
+        }
+        
+        return graph_data_.at(node);
+    }
+
+    bool containsNode(int node) const
+    {
+        return graph_data_.contains(node);
+    }
+
+private:
+    std::map<int, edge_list> graph_data_;
+    edge_list empty_list;
 };
 
 cv::aruco::ArucoDetector getArucoDetector()
@@ -228,9 +269,36 @@ std::vector<std::vector<observed_marker>> getObservedMarkers(std::string pathnam
     return observed_markers;
 }
 
-void calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<std::vector<observed_marker>> observed_markers)
+void traverseGraph(const TransformationGraph& transf_graph, std::map<int, Transformation>& fixed_marker_to_other_transformations, int start_node)
 {
-    auto& single_image = observed_markers[0];
+    fixed_marker_to_other_transformations.clear();
+
+    std::queue<std::pair<int, Transformation>> node_queue;
+    std::set<int> seen_nodes;
+    node_queue.push(std::make_pair(start_node, Transformation()));
+    seen_nodes.insert(start_node);
+    
+    while (!node_queue.empty())
+    {
+        auto [node, fixed_to_node] = node_queue.front();
+        node_queue.pop();
+
+        fixed_marker_to_other_transformations[node] = fixed_to_node;
+
+        for (auto [other, node_to_other] : transf_graph.getEdges(node))
+        {
+            if (!seen_nodes.contains(other))
+            {
+                seen_nodes.insert(other);
+                Transformation fixed_to_other = fixed_to_node * node_to_other;
+                node_queue.push(std::make_pair(other, fixed_to_other));
+            }
+        }
+    }
+}
+
+bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<std::vector<observed_marker>> observed_markers)
+{
     std::vector<int> ids;
     std::vector<std::vector<cv::Point2f>> positions;
 
@@ -242,42 +310,113 @@ void calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, 
         cv::Point3f(-defaults::pen::MARKER_SIZE / 2, -defaults::pen::MARKER_SIZE / 2, 0)
     };
 
-    std::map<int, Transformation> camera_to_marker_transformations;
+    int max_id = *std::max_element(defaults::pen::USED_MARKER_IDS.begin(), defaults::pen::USED_MARKER_IDS.end());
+    int camera_first_id = max_id + 1000;
+    int camera_count = 0;
+    
+    TransformationGraph transf_graph;
 
-    for (auto& marker : single_image)
+    std::set<int> active_cameras;
+
+    for (auto& single_image : observed_markers)
     {
-        cv::Mat rvec, tvec;
-        cv::solvePnP(marker_points, marker.markers_points_, camera_matrix, distortion_coefficients, rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE);
+        std::map<int, Transformation> camera_to_marker_transformations;
 
-        camera_to_marker_transformations[marker.marker_id_] = Transformation(rvec, tvec);
+        for (auto& marker : single_image)
+        {
+            cv::Mat rvec, tvec;
+            cv::solvePnP(marker_points, marker.markers_points_, camera_matrix, distortion_coefficients, rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE);
+
+            double angle_off_axis = cv::abs(180 - cv::norm(rvec) * 180.0 / CV_PI);
+
+            if (angle_off_axis < defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG)
+            {
+                Transformation camera_to_marker = Transformation(rvec, tvec);
+                camera_to_marker_transformations[marker.marker_id_] = camera_to_marker;
+            }
+            else
+            {
+                LOG("CAMERA " << camera_count << " ignoring " << marker.marker_id_ << " due to angle " << angle_off_axis << " > " << defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG)
+            }
+            
+        }
+
+        if (camera_to_marker_transformations.size() >= 2)
+        {
+            active_cameras.insert(camera_count);
+            for (const auto& first : camera_to_marker_transformations)
+            {
+                int first_key = first.first;
+                Transformation camera_to_first = first.second;
+                
+                transf_graph.addEdge(camera_first_id + camera_count, first_key, camera_to_first);
+
+                for (const auto& second : camera_to_marker_transformations)
+                {
+                    int second_key = second.first;
+                    Transformation camera_to_second = second.second;
+
+                    if (first_key != second_key)
+                    {
+                        Transformation first_to_second = camera_to_first.inverse() * camera_to_second;
+                        transf_graph.addEdge(first_key, second_key, first_to_second);
+                    }
+                }
+            }
+        }
+        else
+        {
+            LOG("Not enough markers detected on camera " << camera_count + 1)
+        }
+            
+        ++camera_count;
+    }
+         
+    std::map<int, Transformation> fixed_marker_to_other_transformations;
+    traverseGraph(transf_graph, fixed_marker_to_other_transformations, defaults::pen::PEN_FIXED_MARKER_ID);
+
+    std::vector<std::pair<int, int>> opposites = {{92, 94}, {93,95}, {96, 98}, {97,99}};
+    for (auto [first, second] : opposites)
+    {
+        auto fixed_to_first = fixed_marker_to_other_transformations[first];
+        auto fixed_to_second = fixed_marker_to_other_transformations[second];
+        auto first_to_second = fixed_to_first.inverse() * fixed_to_second;
+        auto [rvec, tvec] = first_to_second.asRvecTvec();
+        LOG(first << "->" << second << ": " << tvec << " = " << cv::norm(tvec) * 1000 << "mm; " << (cv::norm(rvec) * 180.0 / CV_PI) << "deg\n")
     }
 
-    auto camera_to_92 = camera_to_marker_transformations[92];
-    auto m92_to_camera = camera_to_92.inverse();
-    auto m92_to_m93 = m92_to_camera * camera_to_marker_transformations[93];
-    auto m92_to_m97 = m92_to_camera * camera_to_marker_transformations[97];
+    LOG("\n\nTransform:\n\n92\n\t" << marker_points[0] << "\n\t" << marker_points[1] << "\n\t" << marker_points[2] << "\n\t" << marker_points[3] << "\n\n")
 
-    LOG("92 -> 97 in CAM space:\n")
-
-    m92_to_m97.print();
-
-    LOG("\n\n92 -> 93 in CAM space:\n")
-
-    m92_to_m93.print();
-
-    std::vector<cv::Point3f> test_points = 
+    // check that user photos contain all markers
+    for (int marker_id : defaults::pen::USED_MARKER_IDS)
     {
-        cv::Point3f(-1,  1, 0),
-        cv::Point3f( 1,  1, 0),
-        cv::Point3f( 1, -1, 0),
-        cv::Point3f(-1, -1, 0)
-    };
-    test_points = marker_points;
+        if (!fixed_marker_to_other_transformations.contains(marker_id))
+        {
+            LOG("Failed to detect marker " << marker_id << " in the provided photos.")
+            return false;
+        }
 
-    LOG("\n\nTransform:\n\n92\n\t" << test_points[0] << "\n\t" << test_points[1] << "\n\t" << test_points[2] << "\n\t" << test_points[3] << "\n\n")
-    LOG("93\n\t" << (m92_to_m93 * test_points[0]) << "\n\t" << (m92_to_m93 * test_points[1]) << "\n\t" << (m92_to_m93 * test_points[2]) << "\n\t" << (m92_to_m93 * test_points[3]))
-    LOG("97\n\t" << (m92_to_m97 * test_points[0]) << "\n\t" << (m92_to_m97 * test_points[1]) << "\n\t" << (m92_to_m97 * test_points[2]) << "\n\t" << (m92_to_m97 * test_points[3]))
+        Transformation fixed_to_marker = fixed_marker_to_other_transformations.at(marker_id);
+        LOG("{\n\t'name': '" << marker_id << "',\n\t'points': np.array([\n\t\t" << (fixed_to_marker * marker_points[0]) << ",\n\t\t" << (fixed_to_marker * marker_points[1]) << ",\n\t\t" << (fixed_to_marker * marker_points[2]) << ",\n\t\t" << (fixed_to_marker * marker_points[3]) << "\n\t])\n},")
+    }
+
+    LOG("\n\n\nCAMERAS\n\n\n")
+
+    // sanity check, this should never fail
+    for (int camera_id : active_cameras)
+    {
+        if (!fixed_marker_to_other_transformations.contains(camera_first_id + camera_id))
+        {
+            LOG("Sanity check failed. Camera " << camera_id + 1 << " not in graph.")
+            return false;
+        }
+
+        
+        Transformation fixed_to_camera = fixed_marker_to_other_transformations.at(camera_first_id + camera_id);
+        LOG("{\n\t'name': '" << camera_first_id + camera_id << "',\n\t'points': np.array([\n\t\t" << (fixed_to_camera * marker_points[0]) << ",\n\t\t" << (fixed_to_camera * marker_points[1]) << ",\n\t\t" << (fixed_to_camera * marker_points[2]) << ",\n\t\t" << (fixed_to_camera * marker_points[3]) << "\n\t])\n},")
+    }
     
+    return true;
 }
 
 int main(int argc, char* argv[]) {

@@ -23,6 +23,7 @@ namespace aergo::defaults
         const int PEN_FIXED_MARKER_ID = 92;
         const std::set<int> USED_MARKER_IDS = {92, 93, 94, 95, 96, 97, 98, 99};
         const float MARKER_SIZE = 0.013f;
+        const float IGNORE_MARKERS_ABOVE_ANGLE_DEG = 40;
     };
 };
 
