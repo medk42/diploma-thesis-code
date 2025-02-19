@@ -46,6 +46,30 @@ We will originally define the position relative to the top of the pen.
     98 ... (0, 0.01, 0.01), rot 45
     99 ... (0, 0.01, 0.01), rot 135
 
+
+    id: rvec  tvec
+    92: 0,0,0  0,0,0
+    93: 0,-pi/2,0  -0.01, 0, -0.01
+    94: 0,-pi,0  0,0,-0.02
+    95: 0,pi/2,0  0.01,0,-0.01
+
+    96: 0,pi/4,0  sqrt(50),0.03,-(10-sqrt(50))
+    97: 0,-pi/4,0  -sqrt(50),0.03,-(10-sqrt(50))
+    98: 0,-3/4pi,0  -sqrt(50),0.03,-(10+sqrt(50))
+    99: 0,3/4pi,0  sqrt(50),0.03,-(10+sqrt(50))
+
+
+    // optimal transformation definition by hand
+    // fixed_marker_to_other_transformations[92] = Transformation(0, 0, 0,    0, 0, 0);
+    // fixed_marker_to_other_transformations[93] = Transformation(0, -CV_PI/2, 0,    -0.01, 0, -0.01);
+    // fixed_marker_to_other_transformations[94] = Transformation(0, -CV_PI, 0,    0, 0, -0.02);
+    // fixed_marker_to_other_transformations[95] = Transformation(0, CV_PI/2, 0,    0.01, 0, -0.01);
+
+    // fixed_marker_to_other_transformations[96] = Transformation(0, CV_PI/4, 0,    cv::sqrt(50)/1000.0, 0.03, -(10 - cv::sqrt(50)) / 1000.0);
+    // fixed_marker_to_other_transformations[97] = Transformation(0, -CV_PI/4, 0,    -cv::sqrt(50)/1000.0, 0.03, -(10 - cv::sqrt(50)) / 1000.0);
+    // fixed_marker_to_other_transformations[98] = Transformation(0, -3*CV_PI/4, 0,    -cv::sqrt(50)/1000.0, 0.03, -(10 + cv::sqrt(50)) / 1000.0);
+    // fixed_marker_to_other_transformations[99] = Transformation(0, 3*CV_PI/4, 0,    cv::sqrt(50)/1000.0, 0.03, -(10 + cv::sqrt(50)) / 1000.0);
+
 */
 
 
@@ -125,6 +149,25 @@ struct Transformation {
         cv::Rodrigues(rvec, rotation);
         translation = tvec.clone();
 
+        rotation.clone().convertTo(rotation, CV_64F);
+        translation.clone().convertTo(translation, CV_64F);
+    }
+
+    Transformation(double rvec0, double rvec1, double rvec2, double tvec0, double tvec1, double tvec2)
+    {
+        cv::Mat rvec(3, 1, CV_64F); 
+        rvec.at<double>(0) = rvec0;
+        rvec.at<double>(1) = rvec1;
+        rvec.at<double>(2) = rvec2;
+
+        cv::Mat tvec(3, 1, CV_64F); 
+        tvec.at<double>(0) = tvec0;
+        tvec.at<double>(1) = tvec1;
+        tvec.at<double>(2) = tvec2;
+
+        cv::Rodrigues(rvec, rotation);
+        translation = tvec;
+        
         rotation.clone().convertTo(rotation, CV_64F);
         translation.clone().convertTo(translation, CV_64F);
     }
@@ -412,12 +455,11 @@ void runOptimizer(
 
     for (auto pair : camera_marker_pairs)
     {
-        // TODO add a correct loss
         problem.AddResidualBlock(
             new ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>(
                 new CameraMarkerCostFunctor(camera_matrix, distortion_coefficients, pair.marker)
             ), 
-            nullptr, 
+            new ceres::SoftLOneLoss(1), 
             rvec_tvec_cameras.data() + 6 * camera_id_to_i[pair.camera_id],
             rvec_tvec_markers.data() + 6 * marker_id_to_i[pair.marker.marker_id_]
         );
@@ -427,9 +469,9 @@ void runOptimizer(
     problem.SetParameterBlockConstant(rvec_tvec_markers.data() + 6 * marker_id_to_i[defaults::pen::PEN_FIXED_MARKER_ID]);
 
     ceres::Solver::Options options;
-    // options.linear_solver_type = ceres::DENSE_QR;
+    options.linear_solver_type = ceres::DENSE_QR;
     options.minimizer_progress_to_stdout = true;
-    // options.max_num_iterations = 1000;
+    options.max_num_iterations = 100;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.FullReport() << std::endl;
