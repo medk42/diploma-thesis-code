@@ -376,9 +376,6 @@ void runOptimizer(
     std::map<int, int> marker_id_to_i;
     std::map<int, int> camera_id_to_i;
 
-    std::vector<std::shared_ptr<CameraMarkerCostFunctor>> cost_functors;
-    std::vector<std::shared_ptr<ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>>> const_functions;
-
     int g = 0;
     for (int marker_id : defaults::pen::USED_MARKER_IDS)
     {
@@ -415,15 +412,11 @@ void runOptimizer(
 
     for (auto pair : camera_marker_pairs)
     {
-        auto cost_functor = std::make_shared<CameraMarkerCostFunctor>(camera_matrix, distortion_coefficients, pair.marker);
-        auto cost_function = std::make_shared<ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>>(cost_functor.get());
-
-        cost_functors.push_back(cost_functor);
-        const_functions.push_back(cost_function);
-
         // TODO add a correct loss
         problem.AddResidualBlock(
-            cost_function.get(), 
+            new ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>(
+                new CameraMarkerCostFunctor(camera_matrix, distortion_coefficients, pair.marker)
+            ), 
             nullptr, 
             rvec_tvec_cameras.data() + 6 * camera_id_to_i[pair.camera_id],
             rvec_tvec_markers.data() + 6 * marker_id_to_i[pair.marker.marker_id_]
@@ -441,6 +434,8 @@ void runOptimizer(
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.FullReport() << std::endl;
 
+    std::map<int, Transformation> fixed_to_markers;
+
     std::vector<cv::Point3f> marker_points = getMarkerPoints3d();
     for (int marker_id : defaults::pen::USED_MARKER_IDS)
     {
@@ -449,7 +444,18 @@ void runOptimizer(
         cv::Mat mark_tvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[3], marker_rvec_tvec[4], marker_rvec_tvec[5]);
 
         Transformation fixed_to_marker(mark_rvec, mark_tvec);
+        fixed_to_markers[marker_id] = fixed_to_marker;
         LOG("{\n\t'name': '" << marker_id << "',\n\t'points': np.array([\n\t\t" << (fixed_to_marker * marker_points[0]) << ",\n\t\t" << (fixed_to_marker * marker_points[1]) << ",\n\t\t" << (fixed_to_marker * marker_points[2]) << ",\n\t\t" << (fixed_to_marker * marker_points[3]) << "\n\t])\n},")
+    }
+
+    std::vector<std::pair<int, int>> opposites = {{92, 94}, {93,95}, {96, 98}, {97,99}};
+    for (auto [first, second] : opposites)
+    {
+        auto fixed_to_first = fixed_to_markers[first];
+        auto fixed_to_second = fixed_to_markers[second];
+        auto first_to_second = fixed_to_first.inverse() * fixed_to_second;
+        auto [rvec, tvec] = first_to_second.asRvecTvec();
+        LOG(first << "->" << second << ": " << tvec << " = " << cv::norm(tvec) * 1000 << "mm; " << (cv::norm(rvec) * 180.0 / CV_PI) << "deg\n")
     }
 }
 
