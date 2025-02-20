@@ -16,7 +16,8 @@ used_marker_ids_(used_marker_ids),
 marker_size_(marker_size),
 ignore_markers_above_angle_(ignore_markers_above_angle),
 fixed_marker_id_(fixed_marker_id),
-camera_count_(0)
+camera_count_(0),
+marker_points_(std::move(getMarkerPoints3d()))
 {
     int max_marker_id = *std::max_element(used_marker_ids_.begin(), used_marker_ids_.end());
     camera_first_id_ = (max_marker_id / 1000) * 1000 + 1000;
@@ -38,7 +39,6 @@ bool PenCalibration::addImage(cv::Mat image, cv::Mat* return_visualization)
     std::vector<int> ids;
     aruco_detector_.detectMarkers(gray, corners, ids);
 
-    std::vector<cv::Point3f> marker_points = getMarkerPoints3d();
     std::vector<observed_marker> image_markers;
     for (int i = 0; i < corners.size(); ++i)
     {
@@ -54,7 +54,7 @@ bool PenCalibration::addImage(cv::Mat image, cv::Mat* return_visualization)
 
             cv::Mat rvec, tvec;
             bool success = cv::solvePnP(
-                marker_points, marker.markers_points_, 
+                marker_points_, marker.markers_points_, 
                 camera_matrix_, distortion_coefficients_, 
                 rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE
             );
@@ -79,6 +79,7 @@ bool PenCalibration::addImage(cv::Mat image, cv::Mat* return_visualization)
     }
 
     observed_markers_.emplace_back(std::move(image_markers));
+    ++camera_count_;
 
     if (return_visualization)
     {
@@ -173,8 +174,6 @@ void PenCalibration::traverseGraph(const TransformationGraph& transf_graph, std:
 
 std::pair<double, double> PenCalibration::calculateMRE_RMSRE(std::map<int, Transformation>& fixed_marker_to_others)
 {
-    std::vector<cv::Point3f> marker_points_ = getMarkerPoints3d();
-
     std::vector<double> errors;
 
     for (auto& camera_markers : observed_markers_)
@@ -294,17 +293,16 @@ void PenCalibration::optimizerPrepareData(std::map<int, helper::Transformation>&
 
 void PenCalibration::optimizerPrepareProblem(ceres::Problem& problem, std::vector<double>& rvec_tvec_markers, std::map<int, int>& marker_id_to_i, std::vector<double>& rvec_tvec_cameras, std::map<int, int>& camera_id_to_i)
 {
-    std::vector<cv::Point3f> marker_points = getMarkerPoints3d();
     for (auto& camera_markers : observed_markers_)
     {
         for (auto& marker : camera_markers)
         {
             problem.AddResidualBlock(
                 new ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>(
-                    new CameraMarkerCostFunctor(camera_matrix_, distortion_coefficients_, marker, marker_points)
+                    new CameraMarkerCostFunctor(camera_matrix_, distortion_coefficients_, marker, marker_points_)
                 ), 
                 new ceres::SoftLOneLoss(1), 
-                rvec_tvec_cameras.data() + 6 * camera_id_to_i[marker.camera_id_],
+                rvec_tvec_cameras.data() + 6 * camera_id_to_i[camera_first_id_ + marker.camera_id_],
                 rvec_tvec_markers.data() + 6 * marker_id_to_i[marker.marker_id_]
             );
         }

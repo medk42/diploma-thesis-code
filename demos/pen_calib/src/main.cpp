@@ -12,6 +12,7 @@
 #include "pen_calibration.h"
 
 using namespace aergo;
+using namespace pen_calibration;
 
 /*
 
@@ -124,6 +125,66 @@ cv::aruco::ArucoDetector getArucoDetector()
 
 
 
+void printCalibrationResults(const PenCalibrationResult& result) {
+    // Print result status
+    std::cout << "Calibration Result: ";
+    switch (result.result_) {
+        case PenCalibrationResult::Result::SUCCESS:
+            std::cout << "SUCCESS" << std::endl;
+            break;
+        case PenCalibrationResult::Result::FAILED_TO_BUILD_GRAPH:
+            std::cout << "FAILED TO BUILD GRAPH" << std::endl;
+            break;
+        case PenCalibrationResult::Result::SANITY_CHECK_FAIL:
+            std::cout << "SANITY CHECK FAIL" << std::endl;
+            break;
+        case PenCalibrationResult::Result::SOLVER_NO_CONVERGENCE:
+            std::cout << "SOLVER DID NOT CONVERGE" << std::endl;
+            break;
+        case PenCalibrationResult::Result::SOLVER_FAIL:
+            std::cout << "SOLVER FAILED" << std::endl;
+            break;
+        case PenCalibrationResult::Result::OPPOSITE_FAIL:
+            std::cout << "FAILED TO DETERMINE OPPOSITE MARKERS" << std::endl;
+            break;
+    }
+
+    if (result.result_ != PenCalibrationResult::Result::SUCCESS)
+    {
+        return;
+    }
+
+    // Print metrics
+    std::cout << "\nCalibration Metrics:" << std::endl;
+    std::cout << "---------------------" << std::endl;
+    std::cout << "Mean Reprojection Error (after initialization): " << result.metrics_.init_mre_ << std::endl;
+    std::cout << "Root Mean Squared Reprojection Error (after initialization): " << result.metrics_.init_rmsre_ << std::endl;
+    std::cout << "Mean Reprojection Error (after optimization): " << result.metrics_.final_mre_ << std::endl;
+    std::cout << "Root Mean Squared Reprojection Error (after optimization): " << result.metrics_.final_rmsre_ << std::endl;
+
+    // Print solver statistics
+    std::cout << "\nSolver Statistics:" << std::endl;
+    std::cout << "-----------------" << std::endl;
+    std::cout << "Solver Run Time (seconds): " << result.solver_stats_.solver_time_ << std::endl;
+    std::cout << "Initial Cost: " << std::scientific << result.solver_stats_.solver_initial_cost_ << std::fixed << std::endl;
+    std::cout << "Final Cost: " << std::scientific << result.solver_stats_.solver_final_cost_ << std::fixed << std::endl;
+
+    // Print opposite markers data
+    if (!result.opposite_markers_.empty()) {
+        std::cout << "\nOpposite Markers Data:" << std::endl;
+        std::cout << "---------------------" << std::endl;
+        for (const auto& oppositeMarker : result.opposite_markers_) {
+            std::cout << "First Marker ID: " << oppositeMarker.first_id_ << std::endl;
+            std::cout << "Second Marker ID: " << oppositeMarker.second_id_ << std::endl;
+            std::cout << "Angle (degrees): " << oppositeMarker.angle_deg_ << std::endl;
+            std::cout << "Distance (mm): " << oppositeMarker.distance_m_  * 1000 << std::endl;
+            std::cout << "---------------------" << std::endl;
+        }
+    }
+}
+
+
+
 int main(int argc, char* argv[]) {
     if (argc != 3)
     {
@@ -170,7 +231,7 @@ int main(int argc, char* argv[]) {
         {
             cv::putText(result, "SUCCESS", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 3);
             cv::imshow("result", result);
-            cv::waitKey(300);
+            cv::waitKey(100);
         }
         else
         {
@@ -179,10 +240,11 @@ int main(int argc, char* argv[]) {
             cv::waitKey(1000);
         }
     }
+    cv::destroyAllWindows();
 
 
     aergo::pen_calibration::PenCalibrationResult result = pen_calibration.calibratePen();
-
+    printCalibrationResults(result);
 
     return 0;
 }

@@ -94,6 +94,7 @@ namespace aergo::pen_calibration
         float marker_size_;
         double ignore_markers_above_angle_;
         int fixed_marker_id_;
+        std::vector<cv::Point3f> marker_points_;
 
         int camera_count_;
         int camera_first_id_;
