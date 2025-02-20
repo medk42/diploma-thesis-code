@@ -9,6 +9,7 @@
 
 #include "logging.h"
 #include "defaults.h"
+#include "pen_calibration.h"
 
 using namespace aergo;
 
@@ -106,148 +107,7 @@ bool loadCameraCalibration(const std::string& filename, cv::Mat& camera_matrix, 
     return true;
 }
 
-void displayError(cv::Mat& image, cv::Point2f pos1, cv::Point2f pos2)
-{
-    int x = (int)pos1.x;
-    int y = (int)pos1.y;
 
-    cv::Rect2i roi(x - 25, y - 25, 50, 50);
-    cv::Mat cropped = image(roi);
-    cv::Mat scaled;
-    cv::resize(cropped, scaled, cv::Size(1000, 1000), cv::INTER_CUBIC);
-
-    float p1x = (pos1.x - x + 25) * 20;
-    float p1y = (pos1.y - y + 25) * 20;
-    float p2x = (pos2.x - x + 25) * 20;
-    float p2y = (pos2.y - y + 25) * 20;
-
-    cv::line(scaled, cv::Point2f(p1x - 20, p1y - 20), cv::Point2f(p1x + 20, p1y + 20), cv::Scalar(0, 0, 255));
-    cv::line(scaled, cv::Point2f(p1x - 20, p1y + 20), cv::Point2f(p1x + 20, p1y - 20), cv::Scalar(0, 0, 255));
-
-    cv::line(scaled, cv::Point2f(p2x - 20, p2y - 20), cv::Point2f(p2x + 20, p2y + 20), cv::Scalar(0, 255, 0));
-    cv::line(scaled, cv::Point2f(p2x - 20, p2y + 20), cv::Point2f(p2x + 20, p2y - 20), cv::Scalar(0, 255, 0)); 
-
-    cv::imshow("Error", scaled);
-    cv::waitKey(0);
-    cv::destroyAllWindows();
-}
-
-struct observed_marker
-{
-    std::array<cv::Point2f, 4> markers_points_;
-    int marker_id_;
-};
-
-struct Transformation {
-    cv::Mat rotation;    // 3x3 rotation matrix
-    cv::Mat translation; // 3x1 translation vector
-
-    Transformation() : rotation(cv::Mat::eye(3, 3, CV_64F)), translation(cv::Mat::zeros(3, 1, CV_64F)) {}
-
-    Transformation(const cv::Mat& rvec, const cv::Mat& tvec) 
-    {
-        cv::Rodrigues(rvec, rotation);
-        translation = tvec.clone();
-
-        rotation.clone().convertTo(rotation, CV_64F);
-        translation.clone().convertTo(translation, CV_64F);
-    }
-
-    Transformation(double rvec0, double rvec1, double rvec2, double tvec0, double tvec1, double tvec2)
-    {
-        cv::Mat rvec(3, 1, CV_64F); 
-        rvec.at<double>(0) = rvec0;
-        rvec.at<double>(1) = rvec1;
-        rvec.at<double>(2) = rvec2;
-
-        cv::Mat tvec(3, 1, CV_64F); 
-        tvec.at<double>(0) = tvec0;
-        tvec.at<double>(1) = tvec1;
-        tvec.at<double>(2) = tvec2;
-
-        cv::Rodrigues(rvec, rotation);
-        translation = tvec;
-        
-        rotation.clone().convertTo(rotation, CV_64F);
-        translation.clone().convertTo(translation, CV_64F);
-    }
-
-    std::pair<cv::Mat, cv::Mat> asRvecTvec()
-    {
-        cv::Mat rvec;
-        cv::Rodrigues(rotation, rvec);  // Convert rotation matrix back to rotation vector
-        cv::Mat tvec = translation.clone();  // Clone the translation vector
-        return std::make_pair(rvec, tvec);
-    }
-
-    /// Overload the multiply operator to perform the transformation compositions
-    Transformation operator*(const Transformation& other) const
-    {
-        Transformation result;
-        result.rotation = this->rotation * other.rotation;
-        result.translation = this->rotation * other.translation + this->translation;
-        return result;
-    }
-
-    cv::Point3d operator*(const cv::Point3f& other) const
-    {
-        cv::Mat other_mat(3, 1, CV_64F); 
-        other_mat.at<double>(0) = other.x;
-        other_mat.at<double>(1) = other.y;
-        other_mat.at<double>(2) = other.z;
-        
-        cv::Mat res = rotation * other_mat;
-        res += translation;
-
-        return cv::Point3d(res.at<double>(0), res.at<double>(1), res.at<double>(2));
-    }
-
-    Transformation inverse() const
-    {
-        Transformation inv;
-        cv::transpose(this->rotation, inv.rotation);
-        inv.translation = -inv.rotation * this->translation;
-        return inv;
-    }
-
-    void print() const
-    {
-        std::cout << "Rotation:\n" << this->rotation << std::endl;
-        std::cout << "Translation:\n" << this->translation << std::endl;
-    }
-};
-
-class TransformationGraph
-{
-    typedef std::list<std::pair<int, Transformation>> edge_list;
-
-public:
-
-    void addEdge(int start_node, int end_node, Transformation transformation)
-    {
-        graph_data_[start_node].push_back(std::make_pair(end_node, transformation));
-        graph_data_[end_node].push_back(std::make_pair(start_node, transformation.inverse()));
-    }
-
-    const edge_list& getEdges(int node) const
-    {
-        if (!graph_data_.contains(node))
-        {
-            return empty_list;
-        }
-        
-        return graph_data_.at(node);
-    }
-
-    bool containsNode(int node) const
-    {
-        return graph_data_.contains(node);
-    }
-
-private:
-    std::map<int, edge_list> graph_data_;
-    edge_list empty_list;
-};
 
 cv::aruco::ArucoDetector getArucoDetector()
 {
@@ -262,359 +122,7 @@ cv::aruco::ArucoDetector getArucoDetector()
     return std::move(aruco_detector);
 }
 
-std::vector<std::vector<observed_marker>> getObservedMarkers(std::string pathname, bool display=false)
-{
-    std::vector<std::string> image_paths;
-    cv::glob(pathname, image_paths);
 
-    cv::aruco::ArucoDetector aruco_detector = getArucoDetector();
-
-    std::vector<std::vector<observed_marker>> observed_markers;
-
-    for (auto&& path : image_paths)
-    {
-        cv::Mat image = cv::imread(path);
-
-        cv::Mat gray;
-        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-
-        std::vector<std::vector<cv::Point2f>> corners;
-        std::vector<int> ids;
-
-        aruco_detector.detectMarkers(gray, corners, ids);
-
-        std::vector<observed_marker> image_markers;
-        for (int i = 0; i < corners.size(); ++i)
-        {
-            if (defaults::pen::USED_MARKER_IDS.contains(ids[i]))
-            {
-                observed_marker marker;
-                marker.marker_id_ = ids[i];
-                marker.markers_points_[0] = corners[i][0];
-                marker.markers_points_[1] = corners[i][1];
-                marker.markers_points_[2] = corners[i][2];
-                marker.markers_points_[3] = corners[i][3];
-                
-                image_markers.emplace_back(std::move(marker));
-            }
-        }
-        observed_markers.emplace_back(std::move(image_markers));
-
-        if (display)
-        {
-            cv::aruco::drawDetectedMarkers(image, corners, ids);
-            cv::imshow("Image", image);
-            cv::waitKey(0);
-            cv::destroyAllWindows();
-        }
-    }
-
-    return observed_markers;
-}
-
-void traverseGraph(const TransformationGraph& transf_graph, std::map<int, Transformation>& fixed_marker_to_other_transformations, int start_node)
-{
-    fixed_marker_to_other_transformations.clear();
-
-    std::queue<std::pair<int, Transformation>> node_queue;
-    std::set<int> seen_nodes;
-    node_queue.push(std::make_pair(start_node, Transformation()));
-    seen_nodes.insert(start_node);
-    
-    while (!node_queue.empty())
-    {
-        auto [node, fixed_to_node] = node_queue.front();
-        node_queue.pop();
-
-        fixed_marker_to_other_transformations[node] = fixed_to_node;
-
-        for (auto [other, node_to_other] : transf_graph.getEdges(node))
-        {
-            if (!seen_nodes.contains(other))
-            {
-                seen_nodes.insert(other);
-                Transformation fixed_to_other = fixed_to_node * node_to_other;
-                node_queue.push(std::make_pair(other, fixed_to_other));
-            }
-        }
-    }
-}
-
-std::vector<cv::Point3f> getMarkerPoints3d()
-{
-    std::vector<cv::Point3f> marker_points = 
-    {
-        cv::Point3f(-defaults::pen::MARKER_SIZE / 2,  defaults::pen::MARKER_SIZE / 2, 0),
-        cv::Point3f( defaults::pen::MARKER_SIZE / 2,  defaults::pen::MARKER_SIZE / 2, 0),
-        cv::Point3f( defaults::pen::MARKER_SIZE / 2, -defaults::pen::MARKER_SIZE / 2, 0),
-        cv::Point3f(-defaults::pen::MARKER_SIZE / 2, -defaults::pen::MARKER_SIZE / 2, 0)
-    };
-
-    return std::move(marker_points);
-}
-
-struct CameraMarkerCostFunctor
-{
-    CameraMarkerCostFunctor(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, observed_marker marker)
-    : camera_matrix_(camera_matrix), distortion_coefficients_(distortion_coefficients), marker_(marker) 
-    {
-        marker_points_ = getMarkerPoints3d();
-    }
-
-    /// @brief Calculate the residual error for a specific camera-marker pair. 
-    /// @param camera_rvec_tvec 6 doubles, rvec and tvec for camera, fixed_to_camera transformation
-    /// @param marker_rvec_tvec 6 doubles, rvec and tvec for marker, fixed_to_marker transformation
-    /// @param residuals 8 doubles, error in u and v in the image plane for each of the 4 marker corners
-    bool operator()(const double* camera_rvec_tvec, const double* marker_rvec_tvec, double* residuals) const
-    {
-        cv::Mat cam_rvec = (cv::Mat_<double>(3, 1) << camera_rvec_tvec[0], camera_rvec_tvec[1], camera_rvec_tvec[2]);
-        cv::Mat cam_tvec = (cv::Mat_<double>(3, 1) << camera_rvec_tvec[3], camera_rvec_tvec[4], camera_rvec_tvec[5]);
-
-        cv::Mat mark_rvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[0], marker_rvec_tvec[1], marker_rvec_tvec[2]);
-        cv::Mat mark_tvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[3], marker_rvec_tvec[4], marker_rvec_tvec[5]);
-
-        Transformation fixed_to_camera(cam_rvec, cam_tvec);
-        Transformation fixed_to_marker(mark_rvec, mark_tvec);
-
-        Transformation camera_to_marker = fixed_to_camera.inverse() * fixed_to_marker;
-        auto [rvec, tvec] = camera_to_marker.asRvecTvec();
-        
-        std::vector<cv::Point2f> projected_points;
-
-        cv::projectPoints(marker_points_, rvec, tvec, camera_matrix_, distortion_coefficients_, projected_points);
-
-        for (int i = 0; i < 4; ++i)
-        {
-            cv::Point2f diff = projected_points[i] - marker_.markers_points_[i];
-            residuals[2 * i] = diff.x;
-            residuals[2 * i + 1] = diff.y;
-        }
-
-        return true;
-    }
-
-    cv::Mat& camera_matrix_;
-    cv::Mat& distortion_coefficients_;
-    observed_marker marker_;
-    std::vector<cv::Point3f> marker_points_;
-};
-
-struct camera_marker_pair
-{
-    int camera_id;
-    observed_marker marker;
-};
-
-void runOptimizer(
-    cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<camera_marker_pair> camera_marker_pairs, 
-    std::map<int, Transformation> fixed_marker_to_other_transformations)
-{
-    LOG(camera_matrix)
-    LOG(distortion_coefficients)
-    ceres::Problem problem;
-
-    std::vector<double> rvec_tvec_markers;
-    std::vector<double> rvec_tvec_cameras;
-
-    std::map<int, int> marker_id_to_i;
-    std::map<int, int> camera_id_to_i;
-
-    int g = 0;
-    for (int marker_id : defaults::pen::USED_MARKER_IDS)
-    {
-        Transformation fixed_to_marker = fixed_marker_to_other_transformations[marker_id];
-        auto [rvec, tvec] = fixed_to_marker.asRvecTvec();
-
-        rvec_tvec_markers.insert(rvec_tvec_markers.end(), {
-            rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2), 
-            tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2)
-        });
-
-        marker_id_to_i[marker_id] = g;
-        ++g;
-    }
-
-    g = 0;
-    for (auto pair : camera_marker_pairs)
-    {
-        if (!camera_id_to_i.contains(pair.camera_id))
-        {
-            Transformation fixed_to_camera = fixed_marker_to_other_transformations[pair.camera_id];
-            auto [rvec, tvec] = fixed_to_camera.asRvecTvec();
-
-            rvec_tvec_cameras.insert(rvec_tvec_cameras.end(), {
-                rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2), 
-                tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2)
-            });
-
-            camera_id_to_i[pair.camera_id] = g;
-            ++g;
-        }
-    }
-    
-
-    for (auto pair : camera_marker_pairs)
-    {
-        problem.AddResidualBlock(
-            new ceres::NumericDiffCostFunction<CameraMarkerCostFunctor, ceres::CENTRAL, 8, 6, 6>(
-                new CameraMarkerCostFunctor(camera_matrix, distortion_coefficients, pair.marker)
-            ), 
-            new ceres::SoftLOneLoss(1), 
-            rvec_tvec_cameras.data() + 6 * camera_id_to_i[pair.camera_id],
-            rvec_tvec_markers.data() + 6 * marker_id_to_i[pair.marker.marker_id_]
-        );
-    }
-
-    // Keep fixed marker position fixed
-    problem.SetParameterBlockConstant(rvec_tvec_markers.data() + 6 * marker_id_to_i[defaults::pen::PEN_FIXED_MARKER_ID]);
-
-    ceres::Solver::Options options;
-    options.linear_solver_type = ceres::DENSE_QR;
-    options.minimizer_progress_to_stdout = true;
-    options.max_num_iterations = 100;
-    ceres::Solver::Summary summary;
-    ceres::Solve(options, &problem, &summary);
-    std::cout << summary.FullReport() << std::endl;
-
-    std::map<int, Transformation> fixed_to_markers;
-
-    std::vector<cv::Point3f> marker_points = getMarkerPoints3d();
-    for (int marker_id : defaults::pen::USED_MARKER_IDS)
-    {
-        double* marker_rvec_tvec = rvec_tvec_markers.data() + 6 * marker_id_to_i[marker_id];
-        cv::Mat mark_rvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[0], marker_rvec_tvec[1], marker_rvec_tvec[2]);
-        cv::Mat mark_tvec = (cv::Mat_<double>(3, 1) << marker_rvec_tvec[3], marker_rvec_tvec[4], marker_rvec_tvec[5]);
-
-        Transformation fixed_to_marker(mark_rvec, mark_tvec);
-        fixed_to_markers[marker_id] = fixed_to_marker;
-        LOG("{\n\t'name': '" << marker_id << "',\n\t'points': np.array([\n\t\t" << (fixed_to_marker * marker_points[0]) << ",\n\t\t" << (fixed_to_marker * marker_points[1]) << ",\n\t\t" << (fixed_to_marker * marker_points[2]) << ",\n\t\t" << (fixed_to_marker * marker_points[3]) << "\n\t])\n},")
-    }
-
-    std::vector<std::pair<int, int>> opposites = {{92, 94}, {93,95}, {96, 98}, {97,99}};
-    for (auto [first, second] : opposites)
-    {
-        auto fixed_to_first = fixed_to_markers[first];
-        auto fixed_to_second = fixed_to_markers[second];
-        auto first_to_second = fixed_to_first.inverse() * fixed_to_second;
-        auto [rvec, tvec] = first_to_second.asRvecTvec();
-        LOG(first << "->" << second << ": " << tvec << " = " << cv::norm(tvec) * 1000 << "mm; " << (cv::norm(rvec) * 180.0 / CV_PI) << "deg\n")
-    }
-}
-
-bool calibrateMarkers(cv::Mat& camera_matrix, cv::Mat& distortion_coefficients, std::vector<std::vector<observed_marker>> observed_markers)
-{
-    std::vector<int> ids;
-    std::vector<std::vector<cv::Point2f>> positions;
-
-    std::vector<cv::Point3f> marker_points = getMarkerPoints3d();
-
-    int max_id = *std::max_element(defaults::pen::USED_MARKER_IDS.begin(), defaults::pen::USED_MARKER_IDS.end());
-    int camera_first_id = max_id + 1000;
-    int camera_count = 0;
-    
-    TransformationGraph transf_graph;
-
-    std::set<int> active_cameras;
-
-    // camera marker pairs for optimization
-    std::vector<camera_marker_pair> camera_marker_pairs;
-
-    for (auto& single_image : observed_markers)
-    {
-        std::map<int, Transformation> camera_to_marker_transformations;
-
-        for (auto& marker : single_image)
-        {
-            cv::Mat rvec, tvec;
-            cv::solvePnP(marker_points, marker.markers_points_, camera_matrix, distortion_coefficients, rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE);
-
-            double angle_off_axis = cv::abs(180 - cv::norm(rvec) * 180.0 / CV_PI);
-
-            if (angle_off_axis < defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG)
-            {
-                Transformation camera_to_marker = Transformation(rvec, tvec);
-                camera_to_marker_transformations[marker.marker_id_] = camera_to_marker;
-                camera_marker_pairs.push_back({
-                    .camera_id = camera_count + camera_first_id,
-                    .marker = marker
-                });
-            }
-            else
-            {
-                LOG("CAMERA " << camera_count << " ignoring " << marker.marker_id_ << " due to angle " << angle_off_axis << " > " << defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG)
-            }
-            
-        }
-
-        if (camera_to_marker_transformations.size() >= 2)
-        {
-            
-            active_cameras.insert(camera_count);
-            for (const auto& first : camera_to_marker_transformations)
-            {
-                int first_key = first.first;
-                Transformation camera_to_first = first.second;
-                
-                transf_graph.addEdge(camera_first_id + camera_count, first_key, camera_to_first);
-
-                for (const auto& second : camera_to_marker_transformations)
-                {
-                    int second_key = second.first;
-                    Transformation camera_to_second = second.second;
-
-                    if (first_key != second_key)
-                    {
-                        Transformation first_to_second = camera_to_first.inverse() * camera_to_second;
-                        transf_graph.addEdge(first_key, second_key, first_to_second);
-                    }
-                }
-            }
-        }
-        else
-        {
-            LOG("Not enough markers detected on camera " << camera_count + 1)
-        }
-            
-        ++camera_count;
-    }
-         
-    std::map<int, Transformation> fixed_marker_to_other_transformations;
-    traverseGraph(transf_graph, fixed_marker_to_other_transformations, defaults::pen::PEN_FIXED_MARKER_ID);
-
-    std::vector<std::pair<int, int>> opposites = {{92, 94}, {93,95}, {96, 98}, {97,99}};
-    for (auto [first, second] : opposites)
-    {
-        auto fixed_to_first = fixed_marker_to_other_transformations[first];
-        auto fixed_to_second = fixed_marker_to_other_transformations[second];
-        auto first_to_second = fixed_to_first.inverse() * fixed_to_second;
-        auto [rvec, tvec] = first_to_second.asRvecTvec();
-        LOG(first << "->" << second << ": " << tvec << " = " << cv::norm(tvec) * 1000 << "mm; " << (cv::norm(rvec) * 180.0 / CV_PI) << "deg\n")
-    }
-
-    // check that user photos contain all markers
-    for (int marker_id : defaults::pen::USED_MARKER_IDS)
-    {
-        if (!fixed_marker_to_other_transformations.contains(marker_id))
-        {
-            LOG("Failed to detect marker " << marker_id << " in the provided photos.")
-            return false;
-        }
-    }
-
-    // sanity check, this should never fail
-    for (int camera_id : active_cameras)
-    {
-        if (!fixed_marker_to_other_transformations.contains(camera_first_id + camera_id))
-        {
-            LOG("Sanity check failed. Camera " << camera_id + 1 << " not in graph.")
-            return false;
-        }
-    }
-
-    runOptimizer(camera_matrix, distortion_coefficients, camera_marker_pairs, fixed_marker_to_other_transformations);
-    
-    return true;
-}
 
 int main(int argc, char* argv[]) {
     if (argc != 3)
@@ -641,8 +149,39 @@ int main(int argc, char* argv[]) {
 
 
 
-    std::vector<std::vector<observed_marker>> observed_markers = getObservedMarkers(argv[1]);
-    calibrateMarkers(camera_matrix, distortion_coefficients, observed_markers);
+    pen_calibration::PenCalibration pen_calibration(
+        camera_matrix, distortion_coefficients, 
+        std::move(getArucoDetector()), defaults::pen::USED_MARKER_IDS,
+        defaults::pen::MARKER_SIZE, defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG,
+        defaults::pen::PEN_FIXED_MARKER_ID
+    );
+
+    std::vector<std::string> image_paths;
+    cv::glob(argv[1], image_paths);
+
+    for (auto&& path : image_paths)
+    {
+        cv::Mat image = cv::imread(path);
+        
+        cv::Mat result;
+        bool success = pen_calibration.addImage(image, &result);
+
+        if (success)
+        {
+            cv::putText(result, "SUCCESS", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 3);
+            cv::imshow("result", result);
+            cv::waitKey(300);
+        }
+        else
+        {
+            cv::putText(result, "FAIL", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
+            cv::imshow("result", image);
+            cv::waitKey(1000);
+        }
+    }
+
+
+    aergo::pen_calibration::PenCalibrationResult result = pen_calibration.calibratePen();
 
 
     return 0;

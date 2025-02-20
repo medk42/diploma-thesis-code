@@ -5,6 +5,8 @@ find_package(Ceres CONFIG REQUIRED)
 # Add the executable
 add_executable(pen_calib 
     src/main.cpp
+    src/pen_calibration.cpp
+    src/pen_calibration_helper.cpp
 )
 
 # Link against OpenCV (already found by the root CMakeLists.txt)
