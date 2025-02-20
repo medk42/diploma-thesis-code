@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
     }
     cv::destroyAllWindows();
 
-
+    LOG("\n\nStarting solver...")
     aergo::pen_calibration::PenCalibrationResult result = pen_calibration.calibratePen();
     printCalibrationResults(result);
 
