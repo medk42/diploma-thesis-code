@@ -248,7 +248,9 @@ PenCalibrationResult PenCalibration::calibratePen()
         result.metrics_.final_mre_ = final_mre;
         result.metrics_.final_rmsre_ = final_rmsre;
 
-        determineOppositeSides(fixed_marker_to_other_transformations_optimized, result);
+        determineMarkerPositions(fixed_marker_to_other_transformations_optimized, result);
+
+        result.fixed_marker_to_other_transformations = std::move(fixed_marker_to_other_transformations_optimized);
     }
 
     return result;
@@ -387,50 +389,117 @@ void PenCalibration::runOptimizer(std::map<int, helper::Transformation>& fixed_m
 
 
 
-void PenCalibration::determineOppositeSides(std::map<int, Transformation>& fixed_to_other_transformations, PenCalibrationResult& result)
+double PenCalibration::calculateVectorVectorAngleDeg(cv::Point3d vector_1, cv::Point3d vector_2)
 {
-    std::vector<PenCalibrationResult::OppositeData> opposites;
-    std::set<int> used_markers;
+    double cos_theta = vector_1.dot(vector_2) / (cv::norm(vector_1) * cv::norm(vector_2));
+    double theta = std::acos(cos_theta);
+    double theta_deg = theta * 180.0 / CV_PI;
+
+    return theta_deg;
+}
+
+
+
+std::optional<cv::Point3d> PenCalibration::estimateZAxis(std::map<int, Transformation>& fixed_to_other_transformations)
+{
+    cv::Point3d fixed_normal = fixed_to_other_transformations[fixed_marker_id_].normal();
+
+    std::vector<cv::Point3d> top_cube;
+    std::vector<cv::Point3d> bottom_cube;
 
     for (int marker_id : used_marker_ids_)
     {
-        if (!used_markers.contains(marker_id))
+        Transformation marker_transformation = fixed_to_other_transformations[marker_id];
+        double theta_deg = calculateVectorVectorAngleDeg(fixed_normal, marker_transformation.normal());
+        double differentiator = std::min(theta_deg, std::min(std::abs(90 - theta_deg), std::abs(180 - theta_deg)));
+
+        if (differentiator < 22.5)
         {
-            int best_id = -1;
-            double best_angle = -1;
-            double distance = -1;
-            for (int other_id : used_marker_ids_)
-            {
-                if (!used_markers.contains(other_id))
-                {
-                    Transformation fixed_to_marker = fixed_to_other_transformations[marker_id];
-                    Transformation fixed_to_other = fixed_to_other_transformations[other_id];
-                    Transformation marker_to_other = fixed_to_marker.inverse() * fixed_to_other;
-                    double angle = cv::abs(marker_to_other.angleDeg());
-                    if (angle > best_angle)
-                    {
-                        best_angle = angle;
-                        best_id = other_id;
-                        distance = cv::norm(marker_to_other.translation);
-                    }
-                }
-            }
-
-            if (best_id == -1)
-            {
-                result.result_ = PenCalibrationResult::Result::OPPOSITE_FAIL;
-                return;
-            }
-
-            opposites.push_back({
-                .first_id_ = marker_id, 
-                .second_id_ = best_id,
-                .angle_deg_ = best_angle,
-                .distance_m_ = distance
-            });
-            used_markers.insert({marker_id, best_id});
+            bottom_cube.push_back(cv_extensions::asPoint(marker_transformation.translation));
+        }
+        else
+        {
+            top_cube.push_back(cv_extensions::asPoint(marker_transformation.translation));
         }
     }
 
-    result.opposite_markers_ = std::move(opposites);
+    if (top_cube.size() != 4 || bottom_cube.size() != 4)
+    {
+        return std::nullopt;
+    }
+
+    cv::Point3d top_middle = std::accumulate(top_cube.begin(), top_cube.end(), cv::Point3d(0, 0, 0)) / 4;
+    cv::Point3d bottom_middle = std::accumulate(bottom_cube.begin(), bottom_cube.end(), cv::Point3d(0, 0, 0)) / 4;
+
+    return bottom_middle - top_middle;
+}
+
+
+
+int PenCalibration::findClosestMarker(std::map<int, Transformation>& fixed_to_other_transformations, double angle_deg, cv::Point3d z_estimate)
+{
+    cv::Point3d fixed_normal = fixed_to_other_transformations[fixed_marker_id_].normal();
+
+    double min_difference_deg = 360;
+    int found_id = -1;
+
+    for (int marker_id : used_marker_ids_)
+    {
+        cv::Point3d marker_normal = fixed_to_other_transformations[marker_id].normal();
+        double theta_deg = calculateVectorVectorAngleDeg(fixed_normal, marker_normal);
+
+        if (calculateVectorVectorAngleDeg(z_estimate, fixed_normal.cross(marker_normal)) > 90)
+        {
+            theta_deg = 360-theta_deg;
+        }
+        
+        double angle_diff = cv::abs(theta_deg - angle_deg);
+        if (angle_diff < min_difference_deg)
+        {
+            min_difference_deg = angle_diff;
+            found_id = marker_id;
+        }
+    }
+
+    return found_id;
+}
+
+
+
+void PenCalibration::determineMarkerPositions(std::map<int, Transformation>& fixed_to_other_transformations, PenCalibrationResult& result)
+{
+    std::optional<cv::Point3d> z_estimate = estimateZAxis(fixed_to_other_transformations);
+    if (!z_estimate)
+    {
+        result.result_ = PenCalibrationResult::Result::MARKER_POSITION_FAIL;
+        return;
+    }
+
+    result.marker_position_data_.marker_id_0_ = findClosestMarker(fixed_to_other_transformations, 0, *z_estimate);
+    result.marker_position_data_.marker_id_90_ = findClosestMarker(fixed_to_other_transformations, 90, *z_estimate);
+    result.marker_position_data_.marker_id_180_ = findClosestMarker(fixed_to_other_transformations, 180, *z_estimate);
+    result.marker_position_data_.marker_id_270_ = findClosestMarker(fixed_to_other_transformations, 270, *z_estimate);
+
+    result.marker_position_data_.marker_id_45_ = findClosestMarker(fixed_to_other_transformations, 45, *z_estimate);
+    result.marker_position_data_.marker_id_135_ = findClosestMarker(fixed_to_other_transformations, 135, *z_estimate);
+    result.marker_position_data_.marker_id_225_ = findClosestMarker(fixed_to_other_transformations, 225, *z_estimate);
+    result.marker_position_data_.marker_id_315_ = findClosestMarker(fixed_to_other_transformations, 315, *z_estimate);
+
+    std::set<int> found_marker_ids({
+        result.marker_position_data_.marker_id_0_, 
+        result.marker_position_data_.marker_id_90_, 
+        result.marker_position_data_.marker_id_180_, 
+        result.marker_position_data_.marker_id_270_, 
+        result.marker_position_data_.marker_id_45_, 
+        result.marker_position_data_.marker_id_135_, 
+        result.marker_position_data_.marker_id_225_, 
+        result.marker_position_data_.marker_id_315_, 
+    });
+
+    // check that we have used every id and only once
+    if (found_marker_ids.size() != 8)
+    {
+        result.result_ = PenCalibrationResult::Result::MARKER_POSITION_FAIL;
+        return;
+    }
 }

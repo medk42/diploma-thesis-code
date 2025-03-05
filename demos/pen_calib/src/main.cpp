@@ -144,8 +144,8 @@ void printCalibrationResults(const PenCalibrationResult& result) {
         case PenCalibrationResult::Result::SOLVER_FAIL:
             std::cout << "SOLVER FAILED" << std::endl;
             break;
-        case PenCalibrationResult::Result::OPPOSITE_FAIL:
-            std::cout << "FAILED TO DETERMINE OPPOSITE MARKERS" << std::endl;
+        case PenCalibrationResult::Result::MARKER_POSITION_FAIL:
+            std::cout << "FAILED TO DETERMINE MARKER POSITIONS" << std::endl;
             break;
     }
 
@@ -169,17 +169,33 @@ void printCalibrationResults(const PenCalibrationResult& result) {
     std::cout << "Initial Cost: " << std::scientific << result.solver_stats_.solver_initial_cost_ << std::fixed << std::endl;
     std::cout << "Final Cost: " << std::scientific << result.solver_stats_.solver_final_cost_ << std::fixed << std::endl;
 
-    // Print opposite markers data
-    if (!result.opposite_markers_.empty()) {
-        std::cout << "\nOpposite Markers Data:" << std::endl;
-        std::cout << "---------------------" << std::endl;
-        for (const auto& oppositeMarker : result.opposite_markers_) {
-            std::cout << "First Marker ID: " << oppositeMarker.first_id_ << std::endl;
-            std::cout << "Second Marker ID: " << oppositeMarker.second_id_ << std::endl;
-            std::cout << "Angle (degrees): " << oppositeMarker.angle_deg_ << std::endl;
-            std::cout << "Distance (mm): " << oppositeMarker.distance_m_  * 1000 << std::endl;
-            std::cout << "---------------------" << std::endl;
-        }
+    // Print marker position data
+    std::cout << "\nMarker Position Data:" << std::endl;
+    std::cout << "---------------------" << std::endl;
+    std::cout << "Marker ID at 0deg: " << result.marker_position_data_.marker_id_0_ << std::endl;
+    std::cout << "Marker ID at 45deg: " << result.marker_position_data_.marker_id_45_ << std::endl;
+    std::cout << "Marker ID at 90deg: " << result.marker_position_data_.marker_id_90_ << std::endl;
+    std::cout << "Marker ID at 135deg: " << result.marker_position_data_.marker_id_135_ << std::endl;
+    std::cout << "Marker ID at 180deg: " << result.marker_position_data_.marker_id_180_ << std::endl;
+    std::cout << "Marker ID at 225deg: " << result.marker_position_data_.marker_id_225_ << std::endl;
+    std::cout << "Marker ID at 270deg: " << result.marker_position_data_.marker_id_270_ << std::endl;
+    std::cout << "Marker ID at 315deg: " << result.marker_position_data_.marker_id_315_ << std::endl;
+
+    std::cout << "\nOpposites data:" << std::endl;
+    std::cout << "---------------------" << std::endl;
+    std::vector<std::pair<int, int>> opposite_ids = {
+        {result.marker_position_data_.marker_id_0_, result.marker_position_data_.marker_id_180_},
+        {result.marker_position_data_.marker_id_90_, result.marker_position_data_.marker_id_270_},
+        {result.marker_position_data_.marker_id_45_, result.marker_position_data_.marker_id_225_},
+        {result.marker_position_data_.marker_id_135_, result.marker_position_data_.marker_id_315_}
+    };
+    for (auto [first, second] : opposite_ids)
+    {
+        auto fixed_to_first = result.fixed_marker_to_other_transformations.at(first);
+        auto fixed_to_second = result.fixed_marker_to_other_transformations.at(second);
+        auto first_to_second = fixed_to_first.inverse() * fixed_to_second;
+        
+        std::cout << first << "/" << second << ": " << cv::norm(first_to_second.translation) * 1000 << "mm   at " << first_to_second.angleDeg() << "deg" << std::endl;
     }
 }
 

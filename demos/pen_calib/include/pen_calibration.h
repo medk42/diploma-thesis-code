@@ -19,7 +19,7 @@ namespace aergo::pen_calibration
             SANITY_CHECK_FAIL,     // One of the sanity checks failed - not all cameras could be reached in the transformation graph
             SOLVER_NO_CONVERGENCE, // Solver did not converge
             SOLVER_FAIL,           // Solved failed in other way aside from failure to converge
-            OPPOSITE_FAIL          // Failed to determine opposite markers
+            MARKER_POSITION_FAIL   // Failed to determine marker positions
         };
 
         Result result_;
@@ -42,15 +42,19 @@ namespace aergo::pen_calibration
         } solver_stats_;
         
 
-        struct OppositeData
+        struct
         {
-            int first_id_;
-            int second_id_;
-            double angle_deg_;
-            double distance_m_;
-        };
+            int marker_id_0_;
+            int marker_id_45_;
+            int marker_id_90_;
+            int marker_id_135_;
+            int marker_id_180_;
+            int marker_id_225_;
+            int marker_id_270_;
+            int marker_id_315_;
+        } marker_position_data_;        // IDs of markers at specific rotation to default marker
 
-        std::vector<OppositeData> opposite_markers_; // Markers recognized as opposite;
+        std::map<int, helper::Transformation> fixed_marker_to_other_transformations;
     };
 
     class PenCalibration
@@ -85,7 +89,14 @@ namespace aergo::pen_calibration
         void optimizerPrepareProblem(ceres::Problem& problem, std::vector<double>& rvec_tvec_markers, std::map<int, int>& marker_id_to_i, std::vector<double>& rvec_tvec_cameras, std::map<int, int>& camera_id_to_i);
         void optimizerCollectResults(std::map<int, helper::Transformation>& fixed_marker_to_other_transformations_out, std::vector<double>& rvec_tvec_markers, std::map<int, int>& marker_id_to_i, std::vector<double>& rvec_tvec_cameras, std::map<int, int>& camera_id_to_i);
 
-        void determineOppositeSides(std::map<int, helper::Transformation>& fixed_to_other_transformations, PenCalibrationResult& result);
+        /// @brief Find the closest marker to specified angle with z axis as reference (pointing towards the tip of the pen) for rotation direction.
+        /// @param angle_deg positive direction is anti-clockwise when looking into z.
+        int findClosestMarker(std::map<int, helper::Transformation>& fixed_to_other_transformations, double angle_deg, cv::Point3d z_estimate);
+        void determineMarkerPositions(std::map<int, helper::Transformation>& fixed_to_other_transformations, PenCalibrationResult& result);
+        double calculateVectorVectorAngleDeg(cv::Point3d vector_1, cv::Point3d vector_2);
+
+        /// @brief Estimate the z axis (pointing towards the tip) using detected marker positions.
+        std::optional<cv::Point3d> estimateZAxis(std::map<int, helper::Transformation>& fixed_to_other_transformations);
 
         cv::Mat camera_matrix_;
         cv::Mat distortion_coefficients_;

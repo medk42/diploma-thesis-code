@@ -7,6 +7,11 @@
 
 namespace aergo::pen_calibration::helper
 {
+    namespace cv_extensions
+    {
+        cv::Point3d asPoint(const cv::Mat& mat);
+        cv::Mat asMat(const cv::Point3d& point);
+    };
 
     struct Transformation {
         cv::Mat rotation;    // 3x3 rotation matrix
@@ -18,18 +23,20 @@ namespace aergo::pen_calibration::helper
     
         Transformation(double rvec0, double rvec1, double rvec2, double tvec0, double tvec1, double tvec2);
     
-        std::pair<cv::Mat, cv::Mat> asRvecTvec();
+        std::pair<cv::Mat, cv::Mat> asRvecTvec() const;
     
         /// Overload the multiply operator to perform the transformation compositions
         Transformation operator*(const Transformation& other) const;
     
-        cv::Point3d operator*(const cv::Point3f& other) const;
+        cv::Point3d operator*(const cv::Point3d& other) const;
     
         Transformation inverse() const;
 
-        double angleDeg();
+        double angleDeg() const;
     
         void print() const;
+        
+        cv::Point3d normal(cv::Point3d normal_dir = cv::Point3d(0, 0, 1)) const;
     };
 
     struct observed_marker

@@ -2,6 +2,31 @@
 
 using namespace aergo::pen_calibration::helper;
 
+cv::Point3d cv_extensions::asPoint(const cv::Mat& mat)
+{
+    return std::move(
+        cv::Point3d(
+            mat.at<double>(0),
+            mat.at<double>(1),
+            mat.at<double>(2)
+        )
+    );
+}
+
+
+
+cv::Mat cv_extensions::asMat(const cv::Point3d& point)
+{
+    cv::Mat mat(3, 1, CV_64F); 
+    mat.at<double>(0) = point.x;
+    mat.at<double>(1) = point.y;
+    mat.at<double>(2) = point.z;
+
+    return std::move(mat);
+}
+
+
+
 Transformation::Transformation()
 : rotation(cv::Mat::eye(3, 3, CV_64F)), translation(cv::Mat::zeros(3, 1, CV_64F)) {}
 
@@ -39,7 +64,7 @@ Transformation::Transformation(double rvec0, double rvec1, double rvec2, double 
 
 
 
-std::pair<cv::Mat, cv::Mat> Transformation::asRvecTvec()
+std::pair<cv::Mat, cv::Mat> Transformation::asRvecTvec() const
 {
     cv::Mat rvec;
     cv::Rodrigues(rotation, rvec);  // Convert rotation matrix back to rotation vector
@@ -59,17 +84,14 @@ Transformation Transformation::operator*(const Transformation& other) const
 
 
 
-cv::Point3d Transformation::operator*(const cv::Point3f& other) const
+cv::Point3d Transformation::operator*(const cv::Point3d& other) const
 {
-    cv::Mat other_mat(3, 1, CV_64F); 
-    other_mat.at<double>(0) = other.x;
-    other_mat.at<double>(1) = other.y;
-    other_mat.at<double>(2) = other.z;
+    cv::Mat other_mat = cv_extensions::asMat(other);
     
     cv::Mat res = rotation * other_mat;
     res += translation;
 
-    return cv::Point3d(res.at<double>(0), res.at<double>(1), res.at<double>(2));
+    return cv_extensions::asPoint(res);
 }
 
 
@@ -84,7 +106,7 @@ Transformation Transformation::inverse() const
 
 
 
-double Transformation::angleDeg()
+double Transformation::angleDeg() const
 {
     auto [rvec, tvec] = asRvecTvec();
     return cv::norm(rvec) * 180.0 / CV_PI;
@@ -97,6 +119,16 @@ void Transformation::print() const
     std::cout << "Rotation:\n" << this->rotation << std::endl;
     std::cout << "Translation:\n" << this->translation << std::endl;
 }
+
+
+
+cv::Point3d Transformation::normal(cv::Point3d normal_dir) const
+{
+    cv::Mat normal_dir_mat = cv_extensions::asMat(normal_dir);
+    cv::Mat fixed_normal_mat = rotation * normal_dir_mat;
+    return cv_extensions::asPoint(fixed_normal_mat);
+}
+
 
 
 void TransformationGraph::addEdge(int start_node, int end_node, Transformation transformation)
