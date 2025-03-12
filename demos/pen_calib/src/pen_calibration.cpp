@@ -249,11 +249,113 @@ PenCalibrationResult PenCalibration::calibratePen()
         result.metrics_.final_rmsre_ = final_rmsre;
 
         determineMarkerPositions(fixed_marker_to_other_transformations_optimized, result);
+    }
 
-        result.fixed_marker_to_other_transformations = std::move(fixed_marker_to_other_transformations_optimized);
+    if (result.result_ == PenCalibrationResult::Result::SUCCESS)
+    {
+        determinePenOrigin(fixed_marker_to_other_transformations_optimized, result);
     }
 
     return result;
+}
+
+
+
+cv::Point3d PenCalibration::determineMidpoint(std::map<int, Transformation>& fixed_to_other_transformations, int front_id, int back_id, int left_id, int right_id)
+{
+    Transformation fixed_to_front = fixed_to_other_transformations[front_id];
+    Transformation fixed_to_back = fixed_to_other_transformations[back_id];
+    Transformation fixed_to_left = fixed_to_other_transformations[left_id];
+    Transformation fixed_to_right = fixed_to_other_transformations[right_id];
+
+    cv::Point3d p1 = (cv_extensions::asPoint(fixed_to_front.translation) + cv_extensions::asPoint(fixed_to_back.translation)) / 2;
+    cv::Point3d n1 = fixed_to_front.normal() - fixed_to_back.normal();
+    n1 /= cv::norm(n1);
+
+    cv::Point3d p2 = (cv_extensions::asPoint(fixed_to_left.translation) + cv_extensions::asPoint(fixed_to_right.translation)) / 2;
+    cv::Point3d n2 = fixed_to_left.normal() - fixed_to_right.normal();
+    n2 /= cv::norm(n2);
+
+    double h1 = n1.dot(p1);   // plane 1:   n1 * p = n1 * p1 = h1
+    double h2 = n2.dot(p2);   // plane 2:   n2 * p = n2 * p2 = h2
+    double n1_dot_n2 = n1.dot(n2);
+
+    double c1 = (h1 - h2 * n1_dot_n2) / (1 - n1_dot_n2 * n1_dot_n2);  // https://en.wikipedia.org/wiki/Plane%E2%80%93plane_intersection
+    double c2 = (h2 - h1 * n1_dot_n2) / (1 - n1_dot_n2 * n1_dot_n2);
+    cv::Point3d p_line = c1 * n1 + c2 * n2;
+    cv::Point3d n_line = n1.cross(n2);
+    n_line /= cv::norm(n_line);
+
+    double multiplier = n_line.dot(cv_extensions::asPoint(fixed_to_front.translation) - p_line);
+    cv::Point3d midpoint = p_line + multiplier * n_line;
+
+    return midpoint;
+}
+
+
+
+void PenCalibration::determinePenOrigin(std::map<int, Transformation>& fixed_to_other_transformations, PenCalibrationResult& result)
+{
+    cv::Point3d normal_x1 = fixed_to_other_transformations[result.marker_position_data_.marker_id_0_].normal();
+    cv::Point3d normal_x2 = -fixed_to_other_transformations[result.marker_position_data_.marker_id_180_].normal();
+    cv::Point3d normal_x = normal_x1 + normal_x2;
+
+    cv::Point3d normal_y1 = fixed_to_other_transformations[result.marker_position_data_.marker_id_90_].normal();
+    cv::Point3d normal_y2 = -fixed_to_other_transformations[result.marker_position_data_.marker_id_270_].normal();
+    cv::Point3d normal_y = normal_y1 + normal_y2;
+
+    cv::Point3d normal_z = normal_x.cross(normal_y);
+    normal_y = normal_z.cross(normal_x);
+
+    normal_x /= cv::norm(normal_x);
+    normal_y /= cv::norm(normal_y);
+    normal_z /= cv::norm(normal_z);
+
+
+
+    cv::Point3d midpoint_bottom = determineMidpoint(
+        fixed_to_other_transformations, 
+        result.marker_position_data_.marker_id_0_, 
+        result.marker_position_data_.marker_id_180_, 
+        result.marker_position_data_.marker_id_90_, 
+        result.marker_position_data_.marker_id_270_
+    );
+
+    cv::Point3d midpoint_top = determineMidpoint(
+        fixed_to_other_transformations, 
+        result.marker_position_data_.marker_id_45_, 
+        result.marker_position_data_.marker_id_225_, 
+        result.marker_position_data_.marker_id_135_, 
+        result.marker_position_data_.marker_id_315_
+    );
+
+    cv::Point3d midpoint_bottom_proj = midpoint_bottom - normal_z.dot(midpoint_bottom) * normal_z;
+    cv::Point3d midpoint_top_proj = midpoint_top - normal_z.dot(midpoint_top) * normal_z;
+    cv::Point3d origin = (midpoint_bottom_proj + midpoint_top_proj) / 2;
+
+    Transformation fixed_to_origin;
+    fixed_to_origin.rotation.at<double>(0, 0) = normal_x.x;
+    fixed_to_origin.rotation.at<double>(1, 0) = normal_x.y;
+    fixed_to_origin.rotation.at<double>(2, 0) = normal_x.z;
+
+    fixed_to_origin.rotation.at<double>(0, 1) = normal_y.x;
+    fixed_to_origin.rotation.at<double>(1, 1) = normal_y.y;
+    fixed_to_origin.rotation.at<double>(2, 1) = normal_y.z;
+
+    fixed_to_origin.rotation.at<double>(0, 2) = normal_z.x;
+    fixed_to_origin.rotation.at<double>(1, 2) = normal_z.y;
+    fixed_to_origin.rotation.at<double>(2, 2) = normal_z.z;
+
+    fixed_to_origin.translation.at<double>(0) = origin.x;
+    fixed_to_origin.translation.at<double>(1) = origin.y;
+    fixed_to_origin.translation.at<double>(2) = origin.z;
+
+    Transformation origin_to_fixed = fixed_to_origin.inverse();
+
+    for (int marker_id : used_marker_ids_)
+    {
+        result.origin_to_other_transformations[marker_id] = origin_to_fixed * fixed_to_other_transformations[marker_id];
+    }
 }
 
 

@@ -54,7 +54,7 @@ namespace aergo::pen_calibration
             int marker_id_315_;
         } marker_position_data_;        // IDs of markers at specific rotation to default marker
 
-        std::map<int, helper::Transformation> fixed_marker_to_other_transformations;
+        std::map<int, helper::Transformation> origin_to_other_transformations;
     };
 
     class PenCalibration
@@ -97,6 +97,9 @@ namespace aergo::pen_calibration
 
         /// @brief Estimate the z axis (pointing towards the tip) using detected marker positions.
         std::optional<cv::Point3d> estimateZAxis(std::map<int, helper::Transformation>& fixed_to_other_transformations);
+
+        void determinePenOrigin(std::map<int, helper::Transformation>& fixed_to_other_transformations, PenCalibrationResult& result);
+        cv::Point3d determineMidpoint(std::map<int, helper::Transformation>& fixed_to_other_transformations, int front_id, int back_id, int left_id, int right_id);
 
         cv::Mat camera_matrix_;
         cv::Mat distortion_coefficients_;

@@ -191,11 +191,21 @@ void printCalibrationResults(const PenCalibrationResult& result) {
     };
     for (auto [first, second] : opposite_ids)
     {
-        auto fixed_to_first = result.fixed_marker_to_other_transformations.at(first);
-        auto fixed_to_second = result.fixed_marker_to_other_transformations.at(second);
-        auto first_to_second = fixed_to_first.inverse() * fixed_to_second;
+        auto origin_to_first = result.origin_to_other_transformations.at(first);
+        auto origin_to_second = result.origin_to_other_transformations.at(second);
+        auto first_to_second = origin_to_first.inverse() * origin_to_second;
         
         std::cout << first << "/" << second << ": " << cv::norm(first_to_second.translation) * 1000 << "mm   at " << first_to_second.angleDeg() << "deg" << std::endl;
+    }
+
+    std::cout << "\nRelation to origin:" << std::endl;
+    std::cout << "---------------------" << std::endl;
+    for (int marker_id : defaults::pen::USED_MARKER_IDS)
+    {
+        auto origin_to_marker = result.origin_to_other_transformations.at(marker_id);
+        auto pos = origin_to_marker * cv::Point3d(0,0,0);
+        auto normal = origin_to_marker * cv::Point3d(0,0,1) - pos;
+        std::cout << marker_id << ": " << pos * 1000 << "mm   normal: " << normal << std::endl; 
     }
 }
 
