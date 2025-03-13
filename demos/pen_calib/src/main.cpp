@@ -246,7 +246,7 @@ int main(int argc, char* argv[]) {
 
     if (loadCameraCalibration(filename, camera_matrix, distortion_coefficients))
     {
-        LOG("Loaded Camera Matrix:\n" << camera_matrix << "\n\nLoaded Distortion Coefficients:\n" << distortion_coefficients << "\n")
+        AERGO_LOG("Loaded Camera Matrix:\n" << camera_matrix << "\n\nLoaded Distortion Coefficients:\n" << distortion_coefficients << "\n")
     } 
     else 
     {
@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
     }
     cv::destroyAllWindows();
 
-    LOG("\n\nStarting solver...")
+    AERGO_LOG("\n\nStarting solver...")
     aergo::pen_calibration::PenCalibrationResult result = pen_calibration.calibratePen();
     printCalibrationResults(result);
 

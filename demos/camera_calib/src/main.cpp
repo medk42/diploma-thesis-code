@@ -71,7 +71,7 @@ int main(int argc, char** argv)
 
     camera_calibration::CalibrationResult result = charuco_calibration.calibrateCamera();
 
-    LOG("\n\nSuccess: " << result.success << "\n" << "Camera:\n" << result.camera_matrix << "\n\nDistortion:\n" << result.distortion_coefficients << "\n\nRMS error: " << result.rms_error << "\n\n")
+    AERGO_LOG("\n\nSuccess: " << result.success << "\n" << "Camera:\n" << result.camera_matrix << "\n\nDistortion:\n" << result.distortion_coefficients << "\n\nRMS error: " << result.rms_error << "\n\n")
 
     std::string export_filename = "camera_parameters.xml";
 
@@ -87,7 +87,7 @@ int main(int argc, char** argv)
             fs << "CAMERA_MATRIX" << result.camera_matrix;
             fs << "DISTORTION_COEFFICIENTS" << result.distortion_coefficients;
             fs.release();
-            LOG("Successfully wrote calibration to file \"" << export_filename << "\"");
+            AERGO_LOG("Successfully wrote calibration to file \"" << export_filename << "\"");
         }
         catch(const cv::Exception& e)
         {

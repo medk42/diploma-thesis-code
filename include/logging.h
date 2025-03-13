@@ -3,8 +3,8 @@
 
 #include <iostream>
 
-#define LOG(__x) std::cout << __x << std::endl;
-#define LOG_ERROR(__x) LOG("[ERROR] " << __x)
+#define AERGO_LOG(__x) std::cout << __x << std::endl;
+#define LOG_ERROR(__x) AERGO_LOG("[ERROR] " << __x)
 
 
 
