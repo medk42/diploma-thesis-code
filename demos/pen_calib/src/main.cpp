@@ -255,10 +255,11 @@ int main(int argc, char* argv[]) {
 
 
 
+    std::vector<cv::Point3f> marker_points = defaults::pen::getMarkerPoints3d();
     pen_calibration::PenCalibration pen_calibration(
         camera_matrix, distortion_coefficients, 
         std::move(getArucoDetector()), defaults::pen::USED_MARKER_IDS,
-        defaults::pen::MARKER_SIZE, defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG,
+        marker_points, defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG,
         defaults::pen::PEN_FIXED_MARKER_ID
     );
 

@@ -7,17 +7,16 @@ using namespace helper;
 PenCalibration::PenCalibration(
     cv::Mat camera_matrix, cv::Mat distortion_coefficients, 
     cv::aruco::ArucoDetector aruco_detector, const std::set<int>& used_marker_ids,
-    float marker_size, double ignore_markers_above_angle, int fixed_marker_id
+    std::vector<cv::Point3f>& marker_points, double ignore_markers_above_angle, int fixed_marker_id
 ) 
 : camera_matrix_(std::move(camera_matrix)), 
 distortion_coefficients_(std::move(distortion_coefficients)), 
 aruco_detector_(std::move(aruco_detector)),
 used_marker_ids_(used_marker_ids),
-marker_size_(marker_size),
 ignore_markers_above_angle_(ignore_markers_above_angle),
 fixed_marker_id_(fixed_marker_id),
 camera_count_(0),
-marker_points_(std::move(getMarkerPoints3d()))
+marker_points_(marker_points)
 {
     int max_marker_id = *std::max_element(used_marker_ids_.begin(), used_marker_ids_.end());
     camera_first_id_ = (max_marker_id / 1000) * 1000 + 1000;
@@ -88,21 +87,6 @@ bool PenCalibration::addImage(cv::Mat image, cv::Mat* return_visualization)
     }
     
     return true;
-}
-
-
-
-std::vector<cv::Point3f> PenCalibration::getMarkerPoints3d()
-{
-    std::vector<cv::Point3f> marker_points = 
-    {
-        cv::Point3f(-marker_size_ / 2,  marker_size_ / 2, 0),
-        cv::Point3f( marker_size_ / 2,  marker_size_ / 2, 0),
-        cv::Point3f( marker_size_ / 2, -marker_size_ / 2, 0),
-        cv::Point3f(-marker_size_ / 2, -marker_size_ / 2, 0)
-    };
-
-    return std::move(marker_points);
 }
 
 

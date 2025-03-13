@@ -64,7 +64,7 @@ namespace aergo::pen_calibration
         PenCalibration(
             cv::Mat camera_matrix, cv::Mat distortion_coefficients, 
             cv::aruco::ArucoDetector aruco_detector, const std::set<int>& used_marker_ids,
-            float marker_size, double ignore_markers_above_angle, int fixed_marker_id
+            std::vector<cv::Point3f>& marker_points, double ignore_markers_above_angle, int fixed_marker_id
         );
 
         ~PenCalibration() = default;
@@ -79,7 +79,6 @@ namespace aergo::pen_calibration
 
     private:
 
-        std::vector<cv::Point3f> getMarkerPoints3d();
         void buildTransformationGraph(helper::TransformationGraph& graph);
         void traverseGraph(const helper::TransformationGraph& transf_graph, std::map<int, helper::Transformation>& fixed_marker_to_other_transformations, int start_node);
         std::pair<double, double> calculateMRE_RMSRE(std::map<int, helper::Transformation>& fixed_marker_to_others);
@@ -105,7 +104,6 @@ namespace aergo::pen_calibration
         cv::Mat distortion_coefficients_;
         cv::aruco::ArucoDetector aruco_detector_;
         const std::set<int>& used_marker_ids_;
-        float marker_size_;
         double ignore_markers_above_angle_;
         int fixed_marker_id_;
         std::vector<cv::Point3f> marker_points_;

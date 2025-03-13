@@ -25,6 +25,19 @@ namespace aergo::defaults
         const float MARKER_SIZE = 0.013f;
         const float IGNORE_MARKERS_ABOVE_ANGLE_DEG = 40;
         const float ORIGIN_TO_TIP_DISTANCE = 0.125746f;
+
+        inline std::vector<cv::Point3f> getMarkerPoints3d()
+        {
+            std::vector<cv::Point3f> marker_points = 
+            {
+                cv::Point3f(-MARKER_SIZE / 2,  MARKER_SIZE / 2, 0),
+                cv::Point3f( MARKER_SIZE / 2,  MARKER_SIZE / 2, 0),
+                cv::Point3f( MARKER_SIZE / 2, -MARKER_SIZE / 2, 0),
+                cv::Point3f(-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0)
+            };
+
+            return std::move(marker_points);
+        }
     };
 };
 
