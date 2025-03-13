@@ -211,6 +211,25 @@ void printCalibrationResults(const PenCalibrationResult& result) {
 
 
 
+void exportPenCalibration(std::string filename, std::map<int, aergo::pen_calibration::helper::Transformation> origin_to_other_transformations)
+{
+    cv::FileStorage fs(filename, cv::FileStorage::WRITE);
+
+    fs << "origin_to_other" << "{";
+    for (const auto& [key, origin_to_key] : origin_to_other_transformations)
+    {
+        fs << "key_" + std::to_string(key) << "{";
+        fs << "translation" << origin_to_key.translation;
+        fs << "rotation" << origin_to_key.rotation;
+        fs << "}";
+    }
+    fs << "}";
+
+    fs.release();
+}
+
+
+
 int main(int argc, char* argv[]) {
     if (argc != 3)
     {
@@ -271,6 +290,12 @@ int main(int argc, char* argv[]) {
     LOG("\n\nStarting solver...")
     aergo::pen_calibration::PenCalibrationResult result = pen_calibration.calibratePen();
     printCalibrationResults(result);
+
+    if (result.result_ == aergo::pen_calibration::PenCalibrationResult::Result::SUCCESS)
+    {
+        std::string export_filename = "pen_calibration.xml";
+        exportPenCalibration(export_filename, result.origin_to_other_transformations);
+    }
 
     return 0;
 }
