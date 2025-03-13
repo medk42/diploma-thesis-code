@@ -24,6 +24,7 @@ namespace aergo::defaults
         const std::set<int> USED_MARKER_IDS = {92, 93, 94, 95, 96, 97, 98, 99};
         const float MARKER_SIZE = 0.013f;
         const float IGNORE_MARKERS_ABOVE_ANGLE_DEG = 40;
+        const float ORIGIN_TO_TIP_DISTANCE = 0.125746f;
     };
 };
 
