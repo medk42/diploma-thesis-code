@@ -4,7 +4,7 @@
       {
         "type": "cmake",
         "label": "Project: Build",
-        "command": "cleanRebuild",
+        "command": "build",
         "targets": [
           "all"
         ],
