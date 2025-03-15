@@ -22,6 +22,8 @@ origin_to_other_transformations_(std::move(origin_to_other_transformations))
 
 MarkerTracker::Result MarkerTracker::processImage(cv::Mat image, cv::Mat* return_visualization)
 {
+    auto time_start = cv::getTickCount();
+
     MarkerTracker::Result result { .success = false };
 
     if (image.empty())
@@ -36,12 +38,14 @@ MarkerTracker::Result MarkerTracker::processImage(cv::Mat image, cv::Mat* return
     std::vector<int> ids;
     aruco_detector_.detectMarkers(gray, corners, ids);
     
+    auto time_detect = cv::getTickCount();
                 
     if (return_visualization)
     {
         *return_visualization = image.clone();
         cv::aruco::drawDetectedMarkers(*return_visualization, corners, ids);
     }
+    auto time_vis_1 = cv::getTickCount();
 
     std::vector<cv::Point3d> world_points;
     std::vector<cv::Point2d> image_points;
@@ -79,11 +83,12 @@ MarkerTracker::Result MarkerTracker::processImage(cv::Mat image, cv::Mat* return
 
                 if (return_visualization)
                 {
-                    cv::drawFrameAxes(*return_visualization, camera_matrix_, distortion_coefficients_, rvec, tvec, 0.01);
+                    cv::drawFrameAxes(*return_visualization, camera_matrix_, distortion_coefficients_, rvec, tvec, 0.01f);
                 }
             }
         }
     }
+    auto time_solve_all = cv::getTickCount();
 
     if (world_points.empty())
     {
@@ -96,6 +101,7 @@ MarkerTracker::Result MarkerTracker::processImage(cv::Mat image, cv::Mat* return
         camera_matrix_, distortion_coefficients_, 
         rvec, tvec, false, cv::SOLVEPNP_ITERATIVE
     );
+    auto time_single_solve = cv::getTickCount();
     if (!success)
     {
         return result;
@@ -103,8 +109,15 @@ MarkerTracker::Result MarkerTracker::processImage(cv::Mat image, cv::Mat* return
 
     if (return_visualization)
     {
-        cv::drawFrameAxes(*return_visualization, camera_matrix_, distortion_coefficients_, rvec, tvec, 0.02);
+        cv::drawFrameAxes(*return_visualization, camera_matrix_, distortion_coefficients_, rvec, tvec, 0.02f);
     }
+    auto time_end = cv::getTickCount();
+
+    std::cout << (time_detect - time_start) / cv::getTickFrequency() * 1000 << " / "
+     << (time_vis_1 - time_detect) / cv::getTickFrequency() * 1000 << " / "
+      << (time_solve_all - time_vis_1) / cv::getTickFrequency() * 1000 << " / "
+       << (time_single_solve - time_solve_all) / cv::getTickFrequency() * 1000 << " / "
+        << (time_end - time_single_solve) / cv::getTickFrequency() * 1000 << std::endl;
 
     result.camera_to_origin = Transformation(rvec, tvec);
     result.success = true;
