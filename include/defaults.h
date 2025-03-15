@@ -25,7 +25,7 @@ namespace aergo::defaults
         const float MARKER_SIZE = 0.013f;
         const float IGNORE_MARKERS_ABOVE_ANGLE_DEG = 40;
         const float ORIGIN_TO_TIP_DISTANCE = 0.125746f;
-
+        
         inline std::vector<cv::Point3f> getMarkerPoints3d()
         {
             std::vector<cv::Point3f> marker_points = 
@@ -37,6 +37,19 @@ namespace aergo::defaults
             };
 
             return std::move(marker_points);
+        }
+
+        inline cv::aruco::ArucoDetector getArucoDetector()
+        {
+            cv::aruco::DetectorParameters detector_parameters;
+            detector_parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+
+            cv::aruco::ArucoDetector aruco_detector(
+                defaults::pen::DICTIONARY, 
+                detector_parameters
+            );
+
+            return std::move(aruco_detector);
         }
     };
 };

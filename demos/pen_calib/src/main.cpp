@@ -110,21 +110,6 @@ bool loadCameraCalibration(const std::string& filename, cv::Mat& camera_matrix, 
 
 
 
-cv::aruco::ArucoDetector getArucoDetector()
-{
-    cv::aruco::DetectorParameters detector_parameters;
-    detector_parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
-
-    cv::aruco::ArucoDetector aruco_detector(
-        defaults::pen::DICTIONARY, 
-        detector_parameters
-    );
-
-    return std::move(aruco_detector);
-}
-
-
-
 void printCalibrationResults(const PenCalibrationResult& result) {
     // Print result status
     std::cout << "Calibration Result: ";
@@ -258,7 +243,7 @@ int main(int argc, char* argv[]) {
     std::vector<cv::Point3f> marker_points = defaults::pen::getMarkerPoints3d();
     pen_calibration::PenCalibration pen_calibration(
         camera_matrix, distortion_coefficients, 
-        std::move(getArucoDetector()), defaults::pen::USED_MARKER_IDS,
+        std::move(defaults::pen::getArucoDetector()), defaults::pen::USED_MARKER_IDS,
         marker_points, defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG,
         defaults::pen::PEN_FIXED_MARKER_ID
     );
