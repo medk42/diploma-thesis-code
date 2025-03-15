@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
         }
         else
         {
-            cv::putText(result, "FAIL", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
+            cv::putText(image, "FAIL", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
             cv::imshow("result", image);
             cv::waitKey(1000);
         }
