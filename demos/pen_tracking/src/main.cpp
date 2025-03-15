@@ -178,19 +178,33 @@ int main(int argc, char** argv)
             return -1;
         }
 
-        cv::Mat visualization;
-        marker_tracker.processImage(frame, &visualization);
-
-
         curr_time = cv::getTickCount();
         double frame_time_ms = (curr_time - prev_time) / cv::getTickFrequency() * 1000;
         prev_time = curr_time;
 
         std::ostringstream stream;
         stream << std::fixed << std::setprecision(1) << frame_time_ms << "ms";
-        cv::putText(visualization, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
 
-        cv::imshow("Pen tracking demo", visualization);
+        cv::Mat visualization;
+        marker_tracker.processImage(frame, &visualization);
+        auto result = marker_tracker.processImage(frame, &visualization);
+
+        if (result.success)
+        {
+            Transformation camera_to_tip = result.camera_to_origin * tip_to_origin.inverse();
+            auto [rvec, tvec] = camera_to_tip.asRvecTvec();
+            cv::drawFrameAxes(visualization, camera_matrix, distortion_coefficients, rvec, tvec, 0.01);
+
+            cv::putText(visualization, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
+            cv::imshow("Pen tracking demo", visualization);
+        }
+        else
+        {
+            cv::putText(frame, "FAIL", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
+            cv::imshow("Pen tracking demo", frame);
+        }
+        
+        
         if (cv::waitKey(1) == 'q')
         {
             break;
