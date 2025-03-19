@@ -15,6 +15,7 @@ namespace aergo::pen_tracking
         struct Result
         {
             bool success;
+            bool lost_tracking;
             Transformation camera_to_origin;
             std::map<int, Transformation> camera_to_visible_marker;
         };
@@ -23,12 +24,14 @@ namespace aergo::pen_tracking
             cv::Mat camera_matrix, cv::Mat distortion_coefficients, 
             cv::aruco::ArucoDetector aruco_detector, const std::set<int> used_marker_ids,
             std::vector<cv::Point3f> marker_points, double ignore_markers_above_angle,
-            std::map<int, Transformation> origin_to_other_transformations
+            std::map<int, Transformation> origin_to_other_transformations, double search_window_perc
         );
         
         Result processImage(cv::Mat image, cv::Mat* return_visualization);
 
     private:
+
+        std::optional<cv::Rect> getRoi(Transformation last_position, cv::Size2i image_dimensions, double search_window_perc, cv::Mat* return_visualization);
 
         cv::Mat camera_matrix_;
         cv::Mat distortion_coefficients_;
@@ -37,6 +40,8 @@ namespace aergo::pen_tracking
         double ignore_markers_above_angle_;
         std::vector<cv::Point3f> marker_points_;
         std::map<int, Transformation> origin_to_other_transformations_;
+        std::optional<Transformation> last_camera_to_origin_;
+        double search_window_perc_;
     };
 
 } // namespace aergo::pen_tracking
