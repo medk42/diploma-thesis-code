@@ -36,6 +36,18 @@
             "environment": [],
             "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"
+        },
+        {
+            "name": "pentracking_perftest",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/demos/binaries/pen_tracking_performance_test.exe",
+            "args": ["${workspaceFolder}/demos/pen_tracking/data/pen_video/pen_video_test.mp4", "camera_parameters.xml", "pen_calibration.xml"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/demos/binaries",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "Project: Build and Install"
         }
     ]
 }

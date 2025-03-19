@@ -192,7 +192,7 @@ int main(int argc, char** argv)
         {
             Transformation camera_to_tip = result.camera_to_origin * tip_to_origin.inverse();
             auto [rvec, tvec] = camera_to_tip.asRvecTvec();
-            cv::drawFrameAxes(visualization, camera_matrix, distortion_coefficients, rvec, tvec, 0.01);
+            cv::drawFrameAxes(visualization, camera_matrix, distortion_coefficients, rvec, tvec, 0.01f);
 
             cv::putText(visualization, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
             cv::imshow("Pen tracking demo", visualization);
