@@ -11,4 +11,5 @@ add_executable(pen_tracking
 # Link against OpenCV (already found by the root CMakeLists.txt)
 target_link_libraries(pen_tracking ${OpenCV_LIBS})
 
+cmake_policy(SET CMP0177 NEW)
 install(TARGETS pen_tracking DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)

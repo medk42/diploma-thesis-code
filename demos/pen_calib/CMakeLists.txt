@@ -12,4 +12,5 @@ add_executable(pen_calib
 # Link against OpenCV (already found by the root CMakeLists.txt)
 target_link_libraries(pen_calib ${OpenCV_LIBS} Ceres::ceres)
 
+cmake_policy(SET CMP0177 NEW)
 install(TARGETS pen_calib DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
