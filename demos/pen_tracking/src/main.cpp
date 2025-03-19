@@ -186,7 +186,6 @@ int main(int argc, char** argv)
         stream << std::fixed << std::setprecision(1) << frame_time_ms << "ms";
 
         cv::Mat visualization;
-        marker_tracker.processImage(frame, &visualization);
         auto result = marker_tracker.processImage(frame, &visualization);
 
         if (result.success)
