@@ -349,7 +349,7 @@ int main(int argc, char** argv)
 
 
     std::vector<test_results> all_results;
-    for (double search_window_perc : std::vector<double>{0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3})
+    for (double search_window_perc : std::vector<double>{0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3})
     {
         for (bool visualize : std::vector<bool>{true, false})
         {
