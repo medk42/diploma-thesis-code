@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-df = pd.read_csv("demos/pen_tracking/data/test_results/test__2025_03_19__23_44.csv")
+df = pd.read_csv("demos/pen_tracking/data/test_results/test_laptop__2025_03_20__17_37.csv")
 df_filtered = df[df['with_visualization'] == 1]
 
 fig, axs = plt.subplots(2, 2, figsize=(10,10))
