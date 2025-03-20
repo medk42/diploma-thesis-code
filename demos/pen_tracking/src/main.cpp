@@ -189,20 +189,55 @@ int main(int argc, char** argv)
         cv::Mat visualization;
         auto result = marker_tracker.processImage(frame, &visualization);
 
+        cv::Mat output = (visualization.empty()) ? frame : visualization;
+
         if (result.success)
         {
             Transformation camera_to_tip = result.camera_to_origin * tip_to_origin.inverse();
             auto [rvec, tvec] = camera_to_tip.asRvecTvec();
             cv::drawFrameAxes(visualization, camera_matrix, distortion_coefficients, rvec, tvec, 0.01f);
 
-            cv::putText(visualization, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
-            cv::imshow("Pen tracking demo", visualization);
+            cv::putText(output, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
         }
         else
         {
-            cv::putText(frame, "FAIL", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
-            cv::imshow("Pen tracking demo", frame);
+            cv::putText(output, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
+            
         }
+
+
+        if (result.success)
+        {
+            std::vector<cv::Point2f> image_point;
+            std::vector<cv::Point3f> origin_point = { cv::Point3f(0, 0, 0) };
+            auto [rv,tv] = result.camera_to_origin.asRvecTvec();
+            cv::projectPoints(origin_point, rv, tv, camera_matrix, distortion_coefficients, image_point);
+            cv::Point2i center((int)image_point[0].x, (int)image_point[0].y);
+
+            int req_size = 100;
+            int goal_size = 1000;
+            cv::Rect cut_rect(
+                center.x - req_size/2,
+                center.y - req_size/2,
+                req_size, 
+                req_size
+            );
+            cut_rect.x = std::min(std::max(cut_rect.x, 0), output.cols - 10);
+            cut_rect.y = std::min(std::max(cut_rect.y, 0), output.rows - 10);
+            cut_rect.width = std::max(std::min(cut_rect.width, output.cols - cut_rect.x - 1), 1);
+            cut_rect.height = std::max(std::min(cut_rect.height, output.rows - cut_rect.y - 1), 1);
+
+            cv::Mat output_cut = output(cut_rect);
+            cv::Mat output_cut_resize;
+            cv::resize(output_cut, output_cut_resize, cv::Size(goal_size, goal_size));
+            cv::imshow("Zoomed demo", output_cut_resize);
+        }
+
+
+
+        cv::imshow("Pen tracking demo", output);
+
+
         
         
         if (cv::waitKey(1) == 'q')
