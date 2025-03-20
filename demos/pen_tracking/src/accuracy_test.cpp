@@ -191,7 +191,7 @@ int main(int argc, char** argv)
     aergo::pen_tracking::MarkerTracker marker_tracker(
         camera_matrix, distortion_coefficients, defaults::pen::getArucoDetector(), 
         defaults::pen::USED_MARKER_IDS, defaults::pen::getMarkerPoints3d(), 
-        180, origin_to_other_transformations, search_window_perc
+        origin_to_other_transformations, search_window_perc
     );
 
     std::string video_path = argv[1];
@@ -215,24 +215,25 @@ int main(int argc, char** argv)
         video_full.push_back(frame);
     }
     cap.release();
-    std::cout << "LOADED " << video_full.size() << " frames" << std::endl;
+    int frame_count = video_full.size();
+    std::cout << "LOADED " << frame_count << " frames" << std::endl;
 
 
     int current_frame = 0;
     bool running_forward = false;
     bool last_forward_key = false;
-    show_frame(video_full[0], current_frame, video_full.size(), target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
+    show_frame(video_full[0], current_frame, frame_count, target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
     while (true)
     {
         if (running_forward)
         {
             ++current_frame;
-            if (current_frame == video_full.size())
+            if (current_frame == frame_count)
             {
                 --current_frame;
                 running_forward = false;
             }
-            show_frame(video_full[current_frame], current_frame, video_full.size(), target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
+            show_frame(video_full[current_frame], current_frame, frame_count, target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
             
         }
 
@@ -253,11 +254,11 @@ int main(int argc, char** argv)
         if (pressed_key == 'l')
         {
             ++current_frame;
-            if (current_frame >= video_full.size())
+            if (current_frame >= frame_count)
             {
-                current_frame = video_full.size() - 1;
+                current_frame = frame_count - 1;
             }
-            show_frame(video_full[current_frame], current_frame, video_full.size(), target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
+            show_frame(video_full[current_frame], current_frame, frame_count, target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
         }
         if (pressed_key == 'j')
         {
@@ -266,16 +267,16 @@ int main(int argc, char** argv)
             {
                 current_frame = 0;
             }
-            show_frame(video_full[current_frame], current_frame, video_full.size(), target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
+            show_frame(video_full[current_frame], current_frame, frame_count, target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
         }
         if (pressed_key == 'o')
         {
             current_frame += 10;
-            if (current_frame >= video_full.size())
+            if (current_frame >= frame_count)
             {
-                current_frame = video_full.size() - 1;
+                current_frame = frame_count - 1;
             }
-            show_frame(video_full[current_frame], current_frame, video_full.size(), target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
+            show_frame(video_full[current_frame], current_frame, frame_count, target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
         }
         if (pressed_key == 'u')
         {
@@ -284,7 +285,7 @@ int main(int argc, char** argv)
             {
                 current_frame = 0;
             }
-            show_frame(video_full[current_frame], current_frame, video_full.size(), target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
+            show_frame(video_full[current_frame], current_frame, frame_count, target_fps, marker_tracker, camera_matrix, distortion_coefficients, tip_to_origin);
         }
         if (pressed_key == 'q')
         {

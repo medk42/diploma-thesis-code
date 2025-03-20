@@ -145,7 +145,7 @@ int main(int argc, char** argv)
     aergo::pen_tracking::MarkerTracker marker_tracker(
         camera_matrix, distortion_coefficients, defaults::pen::getArucoDetector(), 
         defaults::pen::USED_MARKER_IDS, defaults::pen::getMarkerPoints3d(), 
-        defaults::pen::IGNORE_MARKERS_ABOVE_ANGLE_DEG, origin_to_other_transformations, search_window_perc
+        origin_to_other_transformations, search_window_perc
     );
     
     // for (auto&& path : image_paths)

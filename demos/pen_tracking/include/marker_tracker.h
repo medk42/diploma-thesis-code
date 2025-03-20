@@ -20,10 +20,11 @@ namespace aergo::pen_tracking
             std::map<int, Transformation> camera_to_visible_marker;
         };
 
+        /// @param ignore_markers_above_angle use non-positive value to disable (-1 for example)
         MarkerTracker(
             cv::Mat camera_matrix, cv::Mat distortion_coefficients, 
             cv::aruco::ArucoDetector aruco_detector, const std::set<int> used_marker_ids,
-            std::vector<cv::Point3f> marker_points, double ignore_markers_above_angle,
+            std::vector<cv::Point3f> marker_points,
             std::map<int, Transformation> origin_to_other_transformations, double search_window_perc
         );
         
@@ -37,7 +38,6 @@ namespace aergo::pen_tracking
         cv::Mat distortion_coefficients_;
         cv::aruco::ArucoDetector aruco_detector_;
         const std::set<int> used_marker_ids_;
-        double ignore_markers_above_angle_;
         std::vector<cv::Point3f> marker_points_;
         std::map<int, Transformation> origin_to_other_transformations_;
         std::optional<Transformation> last_camera_to_origin_;

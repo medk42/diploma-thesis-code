@@ -6,7 +6,7 @@ using namespace aergo::pen_tracking;
 MarkerTracker::MarkerTracker(
     cv::Mat camera_matrix, cv::Mat distortion_coefficients, 
     cv::aruco::ArucoDetector aruco_detector, const std::set<int> used_marker_ids,
-    std::vector<cv::Point3f> marker_points, double ignore_markers_above_angle,
+    std::vector<cv::Point3f> marker_points,
     std::map<int, Transformation> origin_to_other_transformations, double search_window_perc
 ) 
 : camera_matrix_(std::move(camera_matrix)), 
@@ -14,7 +14,6 @@ distortion_coefficients_(std::move(distortion_coefficients)),
 aruco_detector_(std::move(aruco_detector)),
 used_marker_ids_(used_marker_ids),
 marker_points_(marker_points),
-ignore_markers_above_angle_(ignore_markers_above_angle),
 origin_to_other_transformations_(std::move(origin_to_other_transformations)),
 search_window_perc_(search_window_perc)
 {}
@@ -93,39 +92,34 @@ MarkerTracker::Result MarkerTracker::processImage(cv::Mat image, cv::Mat* return
     {
         if (used_marker_ids_.contains(ids[i]))
         {
-            cv::Mat rvec, tvec;
-            bool success = cv::solvePnP(
-                marker_points_, corners[i], 
-                camera_matrix_, distortion_coefficients_, 
-                rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE
-            );
-            if (!success)
+            if (return_visualization)
             {
-                continue;
-            }
-
-            double angle_off_axis = cv::abs(180 - cv::norm(rvec) * 180.0 / CV_PI);
-
-            if (angle_off_axis < ignore_markers_above_angle_)
-            {
-                Transformation origin_to_marker = origin_to_other_transformations_[ids[i]];
+                cv::Mat rvec, tvec;
+                bool success = cv::solvePnP(
+                    marker_points_, corners[i], 
+                    camera_matrix_, distortion_coefficients_, 
+                    rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE
+                );
+                if (!success)
+                {
+                    continue;
+                }
                 result.camera_to_visible_marker[ids[i]] = Transformation(rvec, tvec);
                 
-                world_points.push_back(origin_to_marker * marker_points_[0]);
-                world_points.push_back(origin_to_marker * marker_points_[1]);
-                world_points.push_back(origin_to_marker * marker_points_[2]);
-                world_points.push_back(origin_to_marker * marker_points_[3]);
-                
-                image_points.push_back(corners[i][0]);
-                image_points.push_back(corners[i][1]);
-                image_points.push_back(corners[i][2]);
-                image_points.push_back(corners[i][3]);
-
-                if (return_visualization)
-                {
-                    cv::drawFrameAxes(*return_visualization, camera_matrix_, distortion_coefficients_, rvec, tvec, 0.01f);
-                }
+                cv::drawFrameAxes(*return_visualization, camera_matrix_, distortion_coefficients_, rvec, tvec, 0.01f);
             }
+
+            Transformation origin_to_marker = origin_to_other_transformations_[ids[i]];
+            
+            world_points.push_back(origin_to_marker * marker_points_[0]);
+            world_points.push_back(origin_to_marker * marker_points_[1]);
+            world_points.push_back(origin_to_marker * marker_points_[2]);
+            world_points.push_back(origin_to_marker * marker_points_[3]);
+            
+            image_points.push_back(corners[i][0]);
+            image_points.push_back(corners[i][1]);
+            image_points.push_back(corners[i][2]);
+            image_points.push_back(corners[i][3]);
         }
     }
     auto time_solve_all = cv::getTickCount();
