@@ -5,6 +5,7 @@ include_directories(../pen_calib/include)
 add_executable(pen_tracking 
     src/main.cpp
     src/marker_tracker.cpp
+    src/kalman_filter.cpp
     ../pen_calib/src/pen_calibration_helper.cpp
 )
 
@@ -21,7 +22,7 @@ add_executable(pen_tracking_accuracy_test
 )
 
 # Link against OpenCV (already found by the root CMakeLists.txt)
-target_link_libraries(pen_tracking ${OpenCV_LIBS})
+target_link_libraries(pen_tracking ${OpenCV_LIBS} Eigen3::Eigen)
 target_link_libraries(pen_tracking_performance_test ${OpenCV_LIBS})
 target_link_libraries(pen_tracking_accuracy_test ${OpenCV_LIBS})
 

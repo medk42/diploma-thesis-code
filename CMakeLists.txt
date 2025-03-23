@@ -11,6 +11,10 @@ include(C:/lib/vcpkg/scripts/buildsystems/vcpkg.cmake)
 find_package(OpenCV 4 REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+# Find Eigen
+find_package (Eigen3 3.4 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
+
 # Include directories
 include_directories(include)
 

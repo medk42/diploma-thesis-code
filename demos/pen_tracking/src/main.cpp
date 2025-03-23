@@ -5,6 +5,7 @@
 #include "defaults.h"
 #include "pen_calibration_helper.h"
 #include "marker_tracker.h"
+#include "kalman_filter.h"
 
 
 using namespace aergo;
@@ -169,6 +170,14 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    aergo::pen_tracking::KalmanFilterPosition kf_position(1 / 60.0f);
+
+    std::vector<cv::Mat> position_history;
+    int history_size = 10;
+
+    cv::Mat smoothing_filter_position;
+    double alpha = 0.2;
+
     int64_t curr_time = 0, prev_time = 0;
     while (true)
     {
@@ -197,6 +206,32 @@ int main(int argc, char** argv)
             auto [rvec, tvec] = camera_to_tip.asRvecTvec();
             cv::drawFrameAxes(visualization, camera_matrix, distortion_coefficients, rvec, tvec, 0.01f);
 
+            cv::Point3d measured_position = cv_extensions::asPoint(tvec);
+            Eigen::Vector3f measured_position_eigen((float)measured_position.x, (float)measured_position.y, (float)measured_position.z);
+            Eigen::Vector3f filtered_position_eigen = kf_position.update(measured_position_eigen);
+            cv::Point3d filtered_position(filtered_position_eigen.x(), filtered_position_eigen.y(), filtered_position_eigen.z());
+            cv::Mat filtered_tvec = cv_extensions::asMat(filtered_position);
+
+            position_history.push_back(tvec);
+            if (position_history.size() > history_size)
+            {
+                position_history.erase(position_history.begin());
+            }
+            cv::Mat averaged_tvec = position_history[0];
+            for (int i = 1; i < position_history.size(); ++i) averaged_tvec += position_history[i];
+            averaged_tvec /= position_history.size();
+
+            if (smoothing_filter_position.empty())
+            {
+                smoothing_filter_position = tvec;
+            }
+            smoothing_filter_position = (1 - alpha) * smoothing_filter_position + alpha * tvec;
+
+            std::vector<cv::Point3f> positions_project = { cv::Point3f(0, 0, 0) };
+            std::vector<cv::Point2f> image_points;
+            cv::projectPoints(positions_project, rvec, averaged_tvec, camera_matrix, distortion_coefficients, image_points);
+            cv::circle(output, image_points[0], 5, cv::Scalar(0, 255, 0), 4);
+
             cv::putText(output, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
         }
         else
@@ -210,7 +245,14 @@ int main(int argc, char** argv)
         {
             std::vector<cv::Point2f> image_point;
             std::vector<cv::Point3f> origin_point = { cv::Point3f(0, 0, 0) };
-            auto [rv,tv] = result.camera_to_origin.asRvecTvec();
+            // auto [rv,tv] = result.camera_to_origin.asRvecTvec();
+            Transformation camera_to_tip = result.camera_to_origin * tip_to_origin.inverse();
+            auto [rv, tv] = camera_to_tip.asRvecTvec();
+            tv = smoothing_filter_position;
+            cv::Mat averaged_tvec = position_history[0];
+            for (int i = 1; i < position_history.size(); ++i) averaged_tvec += position_history[i];
+            averaged_tvec /= position_history.size();
+            tv = averaged_tvec;
             cv::projectPoints(origin_point, rv, tv, camera_matrix, distortion_coefficients, image_point);
             cv::Point2i center((int)image_point[0].x, (int)image_point[0].y);
 
