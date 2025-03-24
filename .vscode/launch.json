@@ -60,6 +60,18 @@
             "environment": [],
             "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"
+        },
+        {
+            "name": "pentracking_bletest",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/demos/binaries/ble_test.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/demos/binaries",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "Project: Build and Install"
         }
     ]
 }

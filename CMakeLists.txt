@@ -11,6 +11,9 @@ include(C:/lib/vcpkg/scripts/buildsystems/vcpkg.cmake)
 find_package(OpenCV 4 REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+# Find SimpleBLE
+find_package(simpleble REQUIRED CONFIG)
+
 # Include directories
 include_directories(include)
 
