@@ -25,6 +25,9 @@ namespace aergo::defaults
         const float MARKER_SIZE = 0.013f;
         const float IGNORE_MARKERS_ABOVE_ANGLE_DEG = 40;
         const float ORIGIN_TO_TIP_DISTANCE = 0.125746f;
+        const std::string SERVICE_UUID = "2bfae565-df4e-45b6-b1fa-a6f75c1be2b3";
+        const std::string CHARACTERISTIC_UUID = "e76d106d-a549-4b3a-afbd-8879582943fe";
+        
         
         inline std::vector<cv::Point3f> getMarkerPoints3d()
         {
