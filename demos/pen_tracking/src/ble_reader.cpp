@@ -8,15 +8,126 @@ using namespace aergo::pen_tracking;
 
 
 
+DeviceScanner::DeviceScanner(SimpleBLE::Adapter&& adapter, SimpleBLE::BluetoothUUID service_uuid)
+: adapter_(std::move(adapter)), service_uuid_(service_uuid), state_(State::IDLE) {}
+
+
+
+bool DeviceScanner::start()
+{
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (state_ != State::IDLE)
+        {
+            return false;
+        }
+    }
+
+    if (!adapter_.bluetooth_enabled() || !adapter_.initialized())
+    {
+        return false;
+    }
+
+    state_ = State::SCANNING;
+    adapter_.set_callback_on_scan_found([this](SimpleBLE::Peripheral peripheral) { onScanFound(peripheral); });
+    adapter_.set_callback_on_scan_stop([this]() { onScanStop(); });
+    adapter_.scan_start();
+
+    return true;
+}
+
+
+
+bool DeviceScanner::running()
+{
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    return state_ != State::IDLE;
+}
+
+
+
+std::optional<SimpleBLE::Peripheral> DeviceScanner::getResult()
+{
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (state_ != State::FINISHED)
+    {
+        return std::nullopt;
+    }
+    else
+    {
+        state_ = State::IDLE;
+        return peripheral_;
+    }
+}
+
+
+
+void DeviceScanner::cancel()
+{
+    while (true)
+    {
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            switch (state_)
+            {
+                case State::SCANNING:
+                    state_ = State::FINISHING_SCAN;
+                    adapter_.scan_stop();
+                    break;
+                case State::FINISHED:
+                case State::IDLE:
+                    state_ = State::IDLE;
+                    return;
+            }
+        }
+
+        std::this_thread::sleep_for(10ms);
+    }
+}
+
+
+
+void DeviceScanner::onScanFound(SimpleBLE::Peripheral peripheral)
+{
+    std::vector<SimpleBLE::Service> services = peripheral.services();
+    auto it = std::find_if(services.begin(), services.end(), [this](SimpleBLE::Service& service){
+        return service.uuid() == service_uuid_;
+    });
+
+    if (it != services.end())
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (state_ == State::SCANNING)
+        {
+            peripheral_ = peripheral;
+            state_ = State::FINISHING_SCAN;
+            adapter_.scan_stop();
+        }   
+    }
+}
+
+
+
+void DeviceScanner::onScanStop()
+{
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    state_ = State::FINISHED;
+}
+
+
+
 BleReader::BleReader(SimpleBLE::BluetoothUUID service_uuid, SimpleBLE::BluetoothUUID characteristic_uuid, std::function<void(PenDataPacket)> on_packet_callback) 
-: thread_stop_request_(false), reader_running_(false), scan_stopped_(false), last_callback_ms(0), service_uuid_(service_uuid), characteristic_uuid_(characteristic_uuid), on_packet_callback_(on_packet_callback)
+: thread_stop_request_(false), reader_running_(false), last_callback_ms(0), service_uuid_(service_uuid), characteristic_uuid_(characteristic_uuid), on_packet_callback_(on_packet_callback)
 {}
 
 
 
 bool BleReader::start()
 {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (reader_running_)
+    {
+        return false;
+    }
 
     if (!SimpleBLE::Adapter::bluetooth_enabled())
     {
@@ -29,13 +140,12 @@ bool BleReader::start()
         return false;
     }
 
-    adapter_ = adapters[0];
-    if (!adapter_.initialized())
+    SimpleBLE::Adapter adapter = adapters[0];
+    if (!adapter.initialized())
     {
         return false;
     }
-    adapter_.set_callback_on_scan_found([this](SimpleBLE::Peripheral peripheral){ scanFoundCallback(peripheral); });
-
+    device_scanner_ = std::make_unique<DeviceScanner>(std::move(adapter), service_uuid_);
     peripheral_ = std::nullopt;
 
     thread_stop_request_ = false;
@@ -46,86 +156,50 @@ bool BleReader::start()
     return true;
 }
 
-#include "logging.h"
-
-void BleReader::scanFoundCallback(SimpleBLE::Peripheral peripheral)
-{
-    AERGO_LOG("FOUND DEV: " << peripheral.address())
-    std::vector<SimpleBLE::Service> services = peripheral.services();
-    auto it = std::find_if(services.begin(), services.end(), [this](SimpleBLE::Service& service){
-        return service.uuid() == service_uuid_;
-    });
-    
-    if (it != services.end())
-    {
-        AERGO_LOG("found pen!")
-        std::lock_guard<std::mutex> lock(data_mutex_);
-        AERGO_LOG("NOTIFY LOCK")
-        peripheral_ = peripheral;
-        AERGO_LOG("NOTIFY UNLOCK")
-    }
-}
-
 
 
 bool BleReader::stop()
 {
-    reader_running_ = false;
+    if (!reader_running_)
+    {
+        return false;
+    }
 
-    AERGO_LOG("Request thread stop: " << millis())
+
+
     thread_stop_request_ = true;
     int64_t start_ms = millis();
     while (millis() < start_ms + 5000 && thread_stop_request_)
     {
         std::this_thread::sleep_for(10ms);
     }
-
-
+    if (!thread_stop_request_ && background_thread_.joinable())
     {
-        AERGO_LOG("stop LOCK: " << millis())
-        std::lock_guard<std::mutex> lock(data_mutex_);
-        AERGO_LOG("Checking for peripheral")
-        if (peripheral_ && peripheral_->is_connected())
-        {
-            AERGO_LOG("Peripheral connected, disconnecting")
-            peripheral_->disconnect();
-            peripheral_ = std::nullopt;
-            AERGO_LOG("Peripheral disconnected")
-        }
-        AERGO_LOG("stop UNLOCK: " << millis())
-
-        AERGO_LOG("Thread stop check: " << thread_stop_request_)
-        AERGO_LOG("adapter scan active: " << (adapter_.initialized() ? adapter_.scan_is_active() : false))
-
-        
-        if (adapter_.initialized() && adapter_.scan_is_active())
-        {
-            AERGO_LOG("Stopping scan")
-            scan_stopped_ = false;
-            adapter_.set_callback_on_scan_stop([this](){ scan_stopped_ = true; });
-            adapter_.scan_stop();
-            
-            start_ms = millis();
-            while (millis() < start_ms + 5000 && !scan_stopped_)
-            {
-                std::this_thread::sleep_for(10ms);
-            }
-            AERGO_LOG("Stopped: " << scan_stopped_)
-
-            if (!scan_stopped_)
-            {
-                return false;
-            }
-        }
+        background_thread_.join();
     }
+
+
+
+    if (peripheral_ && peripheral_->is_connected())
+    {
+        peripheral_->disconnect();
+        peripheral_ = std::nullopt;
+    }
+
+
+
+    device_scanner_->cancel();
+    device_scanner_ = nullptr;
+
+
+
+    reader_running_ = false;
+
+
 
     if (thread_stop_request_)
     {
         return false;
-    }
-    else if (background_thread_.joinable())
-    {
-        background_thread_.join();
     }
 
     return true;
@@ -144,55 +218,39 @@ void BleReader::backgroundThread()
 {
      while (!thread_stop_request_)
      {
+        if (!peripheral_)
         {
-            std::lock_guard<std::mutex> lock(data_mutex_);
-            AERGO_LOG("THREAD LOCK: " << millis())
-            if (!peripheral_)
+            if (!device_scanner_->running())
             {
-                if (!adapter_.scan_is_active())
-                {
-                    AERGO_LOG("Starting scan")
-                    adapter_.scan_start();
-                    AERGO_LOG("SCAN STARTED")
-                }
+                device_scanner_->start();
             }
             else
             {
-                if (adapter_.scan_is_active())
-                {
-                    AERGO_LOG("Stopping scan")
-                    adapter_.scan_stop();
-                    AERGO_LOG("SCAN STOPPED")
-                }
-
-                if (!peripheral_->is_connectable())
-                {
-                    AERGO_LOG("device not connectable :(")
-                    peripheral_ = std::nullopt;
-                }
-                else if (!peripheral_->is_connected())
-                {
-                    AERGO_LOG("device not connected, connecting")
-                    peripheral_->connect();
-                    AERGO_LOG("DEVICE CONNECTED")
-                    peripheral_->notify(service_uuid_, characteristic_uuid_, [this](SimpleBLE::ByteArray payload) { notifyCallback(payload); });
-                    AERGO_LOG("DEVICE NOTIFY")
-                }
-                else if (millis() > last_callback_ms + CALLBACK_TIMEOUT_MS)
-                {
-                    AERGO_LOG("device connected, but failed to provide update, time: " << millis() << "   last: " << last_callback_ms)
-                    peripheral_->disconnect();
-                    AERGO_LOG("DEVICE DISCONNECTED")
-                    peripheral_ = std::nullopt;
-                }
+                peripheral_ = device_scanner_->getResult();
             }
-
-            AERGO_LOG("THREAD UNLOCK " << millis())
         }
+        else if (!peripheral_->is_connectable())
+        {
+            peripheral_ = std::nullopt;
+        }
+        else if (!peripheral_->is_connected())
+        {
+            peripheral_->connect();
+            if (!peripheral_->is_connected())
+            {
+                peripheral_ = std::nullopt;
+            }
+            peripheral_->notify(service_uuid_, characteristic_uuid_, [this](SimpleBLE::ByteArray payload) { notifyCallback(payload); });
+        }
+        else if (millis() > last_callback_ms + CALLBACK_TIMEOUT_MS)
+        {
+            peripheral_->disconnect();
+            peripheral_ = std::nullopt;
+        }
+        
         std::this_thread::sleep_for(100ms);
      }
 
-     AERGO_LOG("THREAD STOPPED")
      
      thread_stop_request_ = false;
 }
@@ -211,12 +269,7 @@ int64_t BleReader::millis()
 
 void BleReader::notifyCallback(SimpleBLE::ByteArray payload)
 {
-    {
-        std::lock_guard<std::mutex> lock(data_mutex_);
-        AERGO_LOG("NOTIFY2 LOCK")
-        last_callback_ms = millis();
-        AERGO_LOG("NOTIFY2 UNLOCK")
-    }
+    last_callback_ms = millis();
 
     if (payload.size() == sizeof(PenDataPacket))
     {

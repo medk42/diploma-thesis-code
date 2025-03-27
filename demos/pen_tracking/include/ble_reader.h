@@ -4,6 +4,8 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <optional>
+#include <memory>
 #include <simpleble/SimpleBLE.h>
 
 namespace aergo::pen_tracking
@@ -13,7 +15,33 @@ namespace aergo::pen_tracking
         int16_t gyro[3];
         uint16_t flags; // 1 = valid, 2 = button primary, 4 = button secondary
     };
+
+
+
+    class DeviceScanner
+    {
+    public:
+        DeviceScanner(SimpleBLE::Adapter&& adapter, SimpleBLE::BluetoothUUID service_uuid);
+        bool start();
+        std::optional<SimpleBLE::Peripheral> getResult();
+        void cancel();
+        bool running();
+
+    private:
+        enum class State { IDLE, SCANNING, FINISHING_SCAN, FINISHED };
+
+        SimpleBLE::Adapter adapter_;
+        const SimpleBLE::BluetoothUUID service_uuid_;
+        std::mutex data_mutex_;
+        
+        SimpleBLE::Peripheral peripheral_;
+        State state_;
+
+        void onScanFound(SimpleBLE::Peripheral peripheral);
+        void onScanStop();
+    };
      
+
     
     class BleReader
     {
@@ -28,19 +56,16 @@ namespace aergo::pen_tracking
     private:
 
         void backgroundThread();
-        void scanFoundCallback(SimpleBLE::Peripheral peripheral);
         int64_t millis();
         void notifyCallback(SimpleBLE::ByteArray payload);
 
-        std::mutex data_mutex_;
         std::atomic<bool> thread_stop_request_;
-        std::atomic<bool> scan_stopped_;
         std::thread background_thread_;
 
         std::optional<SimpleBLE::Peripheral> peripheral_;
-        SimpleBLE::Adapter adapter_;
+        std::unique_ptr<DeviceScanner> device_scanner_;
         bool reader_running_;
-        int64_t last_callback_ms;
+        std::atomic<int64_t> last_callback_ms;
         std::function<void(PenDataPacket)> on_packet_callback_;
 
         const SimpleBLE::BluetoothUUID service_uuid_;
