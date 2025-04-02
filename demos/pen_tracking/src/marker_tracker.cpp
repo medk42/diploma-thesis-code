@@ -200,7 +200,7 @@ std::optional<cv::Rect> MarkerTracker::getRoi(Transformation last_position, cv::
 
     double a = 1;
     double b = smallest_window.width + smallest_window.height;
-    double c = smallest_window.area() - search_window_perc * image_dimensions.area();
+    double c = smallest_window.area() - search_window_perc * smallest_window.area();
 
     double ins = b * b - 4 * a * c;
     if (ins < 0)

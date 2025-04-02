@@ -141,8 +141,7 @@ int main(int argc, char** argv)
     //     image_paths.erase(image_paths.begin() + max_image, image_paths.end());
     // }
 
-    // double search_window_perc = 0.05;
-    double search_window_perc = 0.15;
+    double search_window_perc = 9;
     aergo::pen_tracking::MarkerTracker marker_tracker(
         camera_matrix, distortion_coefficients, defaults::pen::getArucoDetector(), 
         defaults::pen::USED_MARKER_IDS, defaults::pen::getMarkerPoints3d(), 
