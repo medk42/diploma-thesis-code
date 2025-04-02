@@ -215,7 +215,7 @@ int main(int argc, char** argv)
         video_full.push_back(frame);
     }
     cap.release();
-    int frame_count = video_full.size();
+    int frame_count = (int)video_full.size();
     std::cout << "LOADED " << frame_count << " frames" << std::endl;
 
 

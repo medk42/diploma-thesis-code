@@ -8,6 +8,22 @@ using namespace aergo::pen_tracking;
 
 
 
+cv::Vec3d PenDataPacket::getGyroScaled(int gyro_range) const
+{
+    cv::Vec3d gyro_data((double)gyro[0], (double)gyro[1], (double)gyro[2]);
+    return gyro_data * 4.375 * (gyro_range / 125.0) / 1000.0;
+}
+
+
+
+cv::Vec3d PenDataPacket::getAccelScaled(int accel_range) const
+{
+    cv::Vec3d accel_data((double)accel[0], (double)accel[1], (double)accel[2]);
+    return accel_data * 0.061 * (accel_range / 2.0) / 1000.0;
+}
+
+
+
 DeviceScanner::DeviceScanner(SimpleBLE::Adapter&& adapter, SimpleBLE::BluetoothUUID service_uuid)
 : adapter_(std::move(adapter)), service_uuid_(service_uuid), state_(State::IDLE) {}
 

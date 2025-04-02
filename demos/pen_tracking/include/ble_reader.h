@@ -7,6 +7,7 @@
 #include <optional>
 #include <memory>
 #include <simpleble/SimpleBLE.h>
+#include <opencv2/opencv.hpp>
 
 namespace aergo::pen_tracking
 {
@@ -14,6 +15,15 @@ namespace aergo::pen_tracking
         int16_t accel[3];
         int16_t gyro[3];
         uint16_t flags; // 1 = valid, 2 = button primary, 4 = button secondary
+
+
+        /// @brief Return the gyro value scaled (in radians)
+        /// @param gyro_range should match the gyro range in MCU code
+        cv::Vec3d getGyroScaled(int gyro_range) const;
+
+        /// @brief Return the acceleration value scaled (normalized to 1 = 1 gravity)
+        /// @param accel_range should match accel range in MCU code
+        cv::Vec3d getAccelScaled(int accel_range) const;
     };
 
 

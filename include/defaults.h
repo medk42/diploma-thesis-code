@@ -27,6 +27,8 @@ namespace aergo::defaults
         const float ORIGIN_TO_TIP_DISTANCE = 0.125746f;
         const std::string SERVICE_UUID = "2bfae565-df4e-45b6-b1fa-a6f75c1be2b3";
         const std::string CHARACTERISTIC_UUID = "e76d106d-a549-4b3a-afbd-8879582943fe";
+        const int ACCEL_RANGE = 4;
+        const int GYRO_RANGE = 500;
         
         
         inline std::vector<cv::Point3f> getMarkerPoints3d()
