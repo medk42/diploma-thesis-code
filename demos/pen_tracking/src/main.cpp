@@ -193,6 +193,11 @@ int main(int argc, char** argv)
         auto result = marker_tracker.processImage(frame, &visualization);
         double processing_time_ms = (cv::getTickCount() - start_time) / cv::getTickFrequency() * 1000;
 
+        if (processing_time_ms > 50)
+        {
+            LOG_ERROR("PROCESSING TOOK " << processing_time_ms << "ms!")
+        }
+
         std::ostringstream processing_time_stream;
         processing_time_stream << std::fixed << std::setprecision(1) << processing_time_ms << "ms";
 

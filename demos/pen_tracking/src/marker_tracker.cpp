@@ -136,7 +136,7 @@ MarkerTracker::Result MarkerTracker::processImage(cv::Mat image, cv::Mat* return
         rvec, tvec, false, cv::SOLVEPNP_ITERATIVE
     );
     // auto time_single_solve = cv::getTickCount();
-    if (!success)
+    if (!success || tvec.at<double>(2) < 0.01)
     {
         return result;
     }
