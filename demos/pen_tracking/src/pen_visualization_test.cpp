@@ -26,7 +26,9 @@ int main() {
         {
             ss << " ";
         }
-        ss << "  gyro: " << gyro[0] << ", " << gyro[1] << ", " << gyro[2] << "                       \r";
+
+        double max_gyro = 573;
+        ss << "  gyro: " << gyro[0] << ", " << gyro[1] << ", " << gyro[2] << ((std::abs(gyro[0]) > max_gyro || std::abs(gyro[1]) > max_gyro || std::abs(gyro[2]) > max_gyro) ? " MAX_REACH" : "") << "                       \r";
         std::cout << ss.str() << std::flush;
 
 
