@@ -141,7 +141,8 @@ int main(int argc, char** argv)
     //     image_paths.erase(image_paths.begin() + max_image, image_paths.end());
     // }
 
-    double search_window_perc = 0.05;
+    // double search_window_perc = 0.05;
+    double search_window_perc = 0.15;
     aergo::pen_tracking::MarkerTracker marker_tracker(
         camera_matrix, distortion_coefficients, defaults::pen::getArucoDetector(), 
         defaults::pen::USED_MARKER_IDS, defaults::pen::getMarkerPoints3d(), 
@@ -163,7 +164,9 @@ int main(int argc, char** argv)
         
     // }
 
-    cv::VideoCapture cap(0);
+    cv::VideoCapture cap(0, cv::CAP_DSHOW);
+    // cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+
     if (!cap.isOpened())
     {
         return -1;
@@ -187,7 +190,12 @@ int main(int argc, char** argv)
         stream << std::fixed << std::setprecision(1) << frame_time_ms << "ms";
 
         cv::Mat visualization;
+        int64_t start_time = cv::getTickCount();
         auto result = marker_tracker.processImage(frame, &visualization);
+        double processing_time_ms = (cv::getTickCount() - start_time) / cv::getTickFrequency() * 1000;
+
+        std::ostringstream processing_time_stream;
+        processing_time_stream << std::fixed << std::setprecision(1) << processing_time_ms << "ms";
 
         cv::Mat output = (visualization.empty()) ? frame : visualization;
 
@@ -202,8 +210,9 @@ int main(int argc, char** argv)
         else
         {
             cv::putText(output, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 3);
-            
         }
+        
+        cv::putText(output, processing_time_stream.str(), cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 1, (processing_time_ms < 15) ? cv::Scalar(100, 255, 100) : cv::Scalar(0, 0, 255), 3);
 
 
         if (result.success)
