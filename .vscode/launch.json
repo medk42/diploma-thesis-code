@@ -84,6 +84,18 @@
             "environment": [],
             "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"
+        },
+        {
+            "name": "pen_drawing_test",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/demos/binaries/pen_drawing_test.exe",
+            "args": ["camera_parameters.xml", "pen_calibration.xml"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/demos/binaries",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "Project: Build and Install"
         }
     ]
 }

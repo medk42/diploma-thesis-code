@@ -14,6 +14,9 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # Find SimpleBLE
 find_package(simpleble REQUIRED CONFIG)
 
+# Find Pangolin
+find_package(Pangolin CONFIG REQUIRED)
+
 # Include directories
 include_directories(include)
 
