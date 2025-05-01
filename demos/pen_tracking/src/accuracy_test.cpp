@@ -1,4 +1,5 @@
 #include <opencv2/opencv.hpp>
+#include <filesystem>
 
 
 #include "logging.h"
@@ -131,12 +132,18 @@ void show_frame(cv::Mat& frame, int frame_id, int frame_count, double target_fps
     {
         Transformation camera_to_tip = result.camera_to_origin * tip_to_origin.inverse();
         auto [rvec, tvec] = camera_to_tip.asRvecTvec();
-        cv::drawFrameAxes(output, camera_matrix, distortion_coefficients, rvec, tvec, 0.01f);
+        cv::drawFrameAxes(output, camera_matrix, distortion_coefficients, rvec, tvec, 0.01f, 10);
+    }
+    
+    if (output.rows > 720) {
+        double scale = 720.0 / output.rows;
+        cv::resize(output, output, cv::Size(), scale, scale);
     }
 
     cv::putText(output, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
     cv::putText(output, stream_perc.str(), cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 1, perc_color, 3);
     cv::putText(output, stream_3.str(), cv::Point(10, 90), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
+
     cv::imshow("Pen tracking demo", output);
 
     
@@ -219,6 +226,7 @@ int main(int argc, char** argv)
     std::cout << "LOADED " << frame_count << " frames" << std::endl;
 
 
+    int save_count = 0;
     int current_frame = 0;
     bool running_forward = false;
     bool last_forward_key = false;
@@ -251,6 +259,12 @@ int main(int argc, char** argv)
             last_forward_key = false;
         }
 
+        if (pressed_key == 's')
+        {
+            std::filesystem::create_directory("output");
+            std::string filename = "output/frame" + std::to_string(save_count++) + ".png";
+            cv::imwrite(filename, video_full[current_frame]);
+        }
         if (pressed_key == 'l')
         {
             ++current_frame;
