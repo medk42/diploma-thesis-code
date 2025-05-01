@@ -125,7 +125,7 @@ void show_frame(cv::Mat& frame, int frame_id, int frame_count, double target_fps
 
     
 
-    cv::Mat output = (visualization.empty()) ? frame : visualization;
+    cv::Mat output = (visualization.empty()) ? frame.clone() : visualization;
 
     if (result.success)
     {
@@ -136,7 +136,7 @@ void show_frame(cv::Mat& frame, int frame_id, int frame_count, double target_fps
 
     cv::putText(output, stream.str(), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
     cv::putText(output, stream_perc.str(), cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 1, perc_color, 3);
-    cv::putText(frame, stream_3.str(), cv::Point(10, 90), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
+    cv::putText(output, stream_3.str(), cv::Point(10, 90), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(100, 255, 100), 3);
     cv::imshow("Pen tracking demo", output);
 
     
@@ -187,7 +187,7 @@ int main(int argc, char** argv)
     std::vector<std::string> image_paths;
     cv::glob(argv[1], image_paths);
 
-    double search_window_perc = 0.05;
+    double search_window_perc = 9;
     aergo::pen_tracking::MarkerTracker marker_tracker(
         camera_matrix, distortion_coefficients, defaults::pen::getArucoDetector(), 
         defaults::pen::USED_MARKER_IDS, defaults::pen::getMarkerPoints3d(), 
