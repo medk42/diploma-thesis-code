@@ -1,0 +1,12 @@
+@startuml
+abstract "IModule"
+abstract "IUsecaseModule"
+Camera <|.. IModule
+CameraCalib <|.. IModule
+PenTracking <|.. IModule
+PenIntent <|.. IModule
+SceneDetection <|.. IModule
+Welding <|.. IUsecaseModule
+PickAndPlace <|.. IUsecaseModule
+Trajectory <|.. IUsecaseModule
+@enduml

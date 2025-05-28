@@ -1,0 +1,19 @@
+@startuml
+Camera --> CameraCalib: CameraData
+CameraCalib --> PenTracking: CalibratedCameraData
+PenTracking --> PenIntent: PenData
+PenIntent --> PenSink: PenIntentResp
+PenIntent <.. PenSink: PenIntentReq
+
+CameraCalib --> SceneDetection: CalibratedCameraData
+SceneDetection --> SceneSink: SceneDataResp
+SceneDetection <.. SceneSink: SceneDataReq
+
+CameraCalib --> KassowVisualization: Data3D
+PenTracking --> KassowVisualization: Data3D
+PenIntent --> KassowVisualization: Data3D
+SceneDetection --> KassowVisualization: Data3D
+
+SceneDetection --> KassowVisualization: SceneDataResp
+SceneDetection <.. KassowVisualization: SceneDataReq
+@enduml
