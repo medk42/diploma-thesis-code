@@ -29,6 +29,10 @@ namespace aergo::defaults
         const std::string CHARACTERISTIC_UUID = "e76d106d-a549-4b3a-afbd-8879582943fe";
         const int ACCEL_RANGE = 4;
         const int GYRO_RANGE = 500;
+
+        const int FLAG_VALID = 1;
+        const int FLAG_BUT_PRIM_PRESSED = 2;
+        const int FLAG_BUT_SEC_PRESSED = 4;
         
         
         inline std::vector<cv::Point3f> getMarkerPoints3d()
