@@ -1,0 +1,42 @@
+@startuml
+
+Visualization -> Core: Query initialized modules
+Core --> Visualization: Return list of initialized modules (IDs)
+Visualization -> Core: Query ID 2 ("Calibration" Module)
+Core --> Visualization: Send Activation Params
+Visualization -> CBun: Display Activation Params
+CBun -> CBun: User Updates Value
+CBun --> Visualization: Update Value in the backend
+Visualization -> CBun: Propagate update to frontend
+CBun -> CBun: User Records "Image"
+CBun --> Visualization: Request Record "Image"
+Visualization -> Visualization: Wait for next "Image" update
+Visualization -> Visualization: Record "Image" to the variable
+Visualization -> CBun: Propagate update to frontend
+CBun -> CBun: User clicks "Activate"
+CBun --> Visualization: Activation request sent
+Visualization -> Core: Send activation request + params + ID 2
+Core -> Core: Check parameters match requested
+Core -> Module_2: onActivate(param tree)
+Module_2 --> Core: IN_PROGRESS, (ACTIVATION_FAIL, ACTIVATION_SUCCESS, ALREADY_ACTIVE)
+Core --> Visualization: IN_PROGRESS
+Visualization -> CBun: Activating...
+CBun -> CBun: Activating...
+...first progress update...
+Module_2 --> Core: PROGRESS_UPDATE "Minimizing 1.2"
+Core --> Visualization: PROGRESS_UPDATE "Minimizing 1.2"
+Visualization -> CBun: PROGRESS_UPDATE "Minimizing 1.2"
+CBun -> CBun: "Activating: Minimizing 1.2"
+...second progress update...
+Module_2 --> Core: PROGRESS_UPDATE "Minimizing 0.7"
+Core --> Visualization: PROGRESS_UPDATE "Minimizing 0.7"
+Visualization -> CBun: PROGRESS_UPDATE "Minimizing 0.7"
+CBun -> CBun: "Activating: Minimizing 0.7"
+...after some time...
+
+Module_2 --> Core: ACTIVATION_SUCCESS
+Core --> Visualization: ACTIVATION_SUCCESS
+Visualization -> CBun: ACTIVATION_SUCCESS
+CBun -> CBun: Activated
+
+@enduml
