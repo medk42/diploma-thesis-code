@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(my_project)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 # Add VCPKG package manager
 include(C:/lib/vcpkg/scripts/buildsystems/vcpkg.cmake)

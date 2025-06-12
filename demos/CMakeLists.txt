@@ -1,3 +1,4 @@
 add_subdirectory(camera_calib)
 add_subdirectory(pen_calib)
 add_subdirectory(pen_tracking)
+add_subdirectory(modules)
