@@ -18,6 +18,7 @@ set_target_properties(demo_module_a PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN 1
 )
+target_link_options(demo_module_a PRIVATE /NOIMPLIB)
 
 
 cmake_policy(SET CMP0177 NEW)
