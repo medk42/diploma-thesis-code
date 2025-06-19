@@ -1,12 +1,13 @@
 include_directories(
     include
-    ../modules_include
 )
 
 # Add the executable
 add_library(demo_module_a SHARED
     src/main.cpp
 )
+
+target_link_libraries(demo_module_a PRIVATE module_common)
 
 # MSVC: force dynamic CRT
 if (MSVC)

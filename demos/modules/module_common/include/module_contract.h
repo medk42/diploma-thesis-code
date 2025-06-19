@@ -1,11 +1,41 @@
 #pragma once
-#include <stdint.h>
+
+
+#define PLUGIN_API_VERSION 1
+
 
 #if defined(_WIN32)
   #define DLL_API extern "C" __declspec(dllexport)
 #else
   #define DLL_API extern "C" __attribute__((visibility("default")))
 #endif
+
+
+#include <stdint.h>
+
+#include "module_interface.h"
+#include "module_wrapper.h"
+
+
+using namespace aergo::module;
+
+
+
+/// @brief Read version of module api to prevent loading modules with incompatible api.
+DLL_API uint64_t readPluginApiVersion()
+{
+  return PLUGIN_API_VERSION;
+};
+
+/// @brief Return pointer to statically allocated module info.
+DLL_API const ModuleInfo* readModuleInfo();
+
+/// @brief Create a new module, using allocated memory. Take care of disposing of the memory using destroyModule call.
+DLL_API IModule* createModule(logging::ILogger logger);
+
+/// @brief Destroy previously created module.  
+DLL_API void destroyModule(IModule* module);
+
 
 // struct MessageHeader               // travels through the bus
 // {
@@ -51,6 +81,3 @@
 // DLL_API void       GetRequiredParameters(ParameterList*);
 // DLL_API bool       SetProvidedParameters(const ParameterList*);
 // DLL_API IModule*   CreateModule(const CoreAPI*) noexcept; // new Wrapper
-
-DLL_API const char* readPluginName();
-DLL_API uint64_t readPluginApiVersion();
