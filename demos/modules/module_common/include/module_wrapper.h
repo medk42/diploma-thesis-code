@@ -14,7 +14,8 @@ namespace aergo::module
     {
     public:
         /// @param thread_sleep_ms sleep time for thread cycle, use 0 for no sleep (sleep handled by module).
-        ModuleWrapper(const logging::ILogger* logger, uint32_t thread_sleep_ms);
+        /// @param module_id ID of this module received from the core
+        ModuleWrapper(ICore* core, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms);
 
         ~ModuleWrapper() override;
 
@@ -69,6 +70,10 @@ namespace aergo::module
         /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
         virtual void processResponseImpl(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message) = 0;
 
+        /// @brief Cycle method of the module. Called in each period after all messages/request/responses are handled. 
+        /// If cycleImpl contains sleep, consider disabling sleep in ModuleWrapper by passing thread_sleep_ms = 0 in ModuleWrapper's constructor.
+        virtual void cycleImpl() = 0;
+
         void _threadInit() override final;
 
         void _threadCycle() override final;
@@ -96,6 +101,8 @@ namespace aergo::module
         std::queue<ProcessingData> processing_data_queue_;
 
 
+        const uint64_t module_id_;
+        ICore* core_;
         const logging::ILogger* logger_;
     };
 }

@@ -1,11 +1,19 @@
 #include "module_wrapper.h"
 
+#include <optional>
+
+#define TRY_CATCH_LOG(__method, __code) try {\
+    __code \
+} catch(const std::exception& e) { \
+    logger_->log(logging::LogType::ERROR, (std::string("Module implementation of function \"") + __method + "\" raised the following exception: " + e.what()).c_str());\
+}
+
 using namespace aergo::module;
 
 
 
-ModuleWrapper::ModuleWrapper(const logging::ILogger* logger, uint32_t thread_sleep_ms)
-: PeriodicThread(thread_sleep_ms), logger_(logger) {}
+ModuleWrapper::ModuleWrapper(ICore* core, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms)
+: PeriodicThread(thread_sleep_ms), module_id_(module_id), core_(core), logger_(logger) {}
 
 ModuleWrapper::~ModuleWrapper() {}
 
@@ -21,6 +29,27 @@ bool ModuleWrapper::threadStart(uint32_t timeout_ms)
 bool ModuleWrapper::threadStop(uint32_t timeout_ms)
 {
     return _threadStop(timeout_ms);
+}
+
+
+
+void ModuleWrapper::sendMessage(uint64_t publish_producer_id, message::MessageHeader message)
+{
+    core_->sendMessage(module_id_, publish_producer_id, message);
+}
+
+
+
+void ModuleWrapper::sendResponse(uint64_t response_producer_id, message::MessageHeader message)
+{
+    core_->sendResponse(module_id_, response_producer_id, message);
+}
+
+
+
+void ModuleWrapper::sendRequest(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message)
+{
+    core_->sendRequest(module_id_, request_consumer_id, module_id, message);
 }
 
 
@@ -79,7 +108,44 @@ void ModuleWrapper::_threadDeinit() {}
 
 void ModuleWrapper::_threadCycle()
 {
+    // Process messages/requests/responses
+    while (true)
+    {
+        bool request_available = false;
+        ProcessingData processing_data;
+        {
+            std::lock_guard<std::mutex> lock(processing_data_queue_mutex_);
+            if (!processing_data_queue_.empty())
+            {
+                processing_data = std::move(processing_data_queue_.front());
+                processing_data_queue_.pop();
+                request_available = true;
+            }
+        }
 
+        if (request_available)
+        {
+            switch (processing_data.type_)
+            {
+                case ProcessingData::Type::MESSAGE:
+                    TRY_CATCH_LOG("processMessageImpl", processMessageImpl(processing_data.source_id_, processing_data.module_id_, processing_data.message_);)
+                    break;
+                case ProcessingData::Type::REQUEST:
+                    TRY_CATCH_LOG("processRequestImpl", processRequestImpl(processing_data.source_id_, processing_data.message_);)
+                    break;
+                case ProcessingData::Type::RESPONSE:
+                    TRY_CATCH_LOG("processResponseImpl", processResponseImpl(processing_data.source_id_, processing_data.module_id_, processing_data.message_);)
+                    break;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    // Call module's cycle function
+    TRY_CATCH_LOG("cycleImpl", cycleImpl();)
 }
 
 

@@ -8,7 +8,9 @@ namespace aergo::module
     {
         struct Producer
         {
-            const char* channel_name_;  // name of the communication channel
+            const char* channel_type_identifier_;   // uniquely identifies channel type (for inter-module communication), e.g. "image_rgb"
+            const char* display_name_;              // human-friendly displayed channel name, e.g. "Camera #1"
+            const char* display_description_;       // human-friendly displayed channel description, e.g. "First camera, raw video without any image processing"
         };
 
         // publishes data, binds to SubscribeConsumer
@@ -70,8 +72,11 @@ namespace aergo::module
 
     struct ModuleInfo
     {
-        const char* name_;
-        const char* description_;
+        // human-friendly displayed module name, e.g. "Camera"
+        const char* display_name_;
+
+        // human-friendly displayed module description, e.g. "Provides raw camera data from a connected camera"
+        const char* display_description_;
 
         // list of publish producers provided by module (module provides pen position)
         const communication_channel::PublishProducer* publish_producers_;
@@ -91,6 +96,27 @@ namespace aergo::module
 
         /// @brief If true, automatically create a single instance of module. Can be used for example for visualizer modules that need to exist to set up other modules.
         bool auto_create_;
+    };
+
+    class ICore
+    {
+    public:
+        inline virtual ~ICore() {}
+
+        /// @brief Publish message to channel "publish_producer_id".
+        /// @param source_module_id id of the sending module
+        virtual void sendMessage(uint64_t source_module_id, uint64_t publish_producer_id, message::MessageHeader message) = 0;
+
+        /// @brief Send response to channel "response_producer_id". 
+        /// Message request/response pair is identified by ID in MessageHeader. 
+        /// @param source_module_id id of the sending module
+        virtual void sendResponse(uint64_t source_module_id, uint64_t response_producer_id, message::MessageHeader message) = 0;
+
+        /// @brief Send request to channel "request_consumer_id" to module "module_id".
+        /// Message request/response pair is identified by ID in MessageHeader. 
+        /// @param source_module_id id of the sending module
+        /// @param target_module_id there may be multiple consumers in one channel, they can be differentiated by "target_module_id"
+        virtual void sendRequest(uint64_t source_module_id, uint64_t request_consumer_id, uint64_t target_module_id, message::MessageHeader message) = 0;
     };
 
     class IModule
