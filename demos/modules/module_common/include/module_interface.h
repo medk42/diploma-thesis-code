@@ -98,6 +98,24 @@ namespace aergo::module
         bool auto_create_;
     };
 
+    struct InputChannelMapInfo
+    {
+        struct IndividualChannelInfo
+        {
+            // ids of modules mapped to the input channel
+            uint64_t* module_ids_;
+            uint32_t module_ids_count_;
+        };
+
+        // ids of modules bound to each subscribe channel
+        IndividualChannelInfo* subscribe_consumer_info_;
+        uint32_t subscribe_consumer_info_count_;
+
+        // ids of modules bound to each request channel
+        IndividualChannelInfo* request_consumer_info_;
+        uint32_t request_consumer_info_count_;
+    };
+
     class ICore
     {
     public:

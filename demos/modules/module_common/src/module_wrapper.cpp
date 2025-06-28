@@ -12,8 +12,31 @@ using namespace aergo::module;
 
 
 
-ModuleWrapper::ModuleWrapper(ICore* core, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms)
-: PeriodicThread(thread_sleep_ms), module_id_(module_id), core_(core), logger_(logger) {}
+ModuleWrapper::ModuleWrapper(ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms)
+: PeriodicThread(thread_sleep_ms), module_id_(module_id), core_(core), logger_(logger), request_id_(0)
+{
+    // subscribe side
+    subscribe_consumer_info_.reserve(channel_map_info.subscribe_consumer_info_count_);
+    for (uint32_t i = 0; i < channel_map_info.subscribe_consumer_info_count_; ++i)
+    {
+        auto& info = channel_map_info.subscribe_consumer_info_[i];
+        subscribe_consumer_info_.emplace_back(
+            info.module_ids_,
+            info.module_ids_ + info.module_ids_count_
+        );
+    }
+
+    // request side
+    request_consumer_info_.reserve(channel_map_info.request_consumer_info_count_);
+    for (uint32_t i = 0; i < channel_map_info.request_consumer_info_count_; ++i)
+    {
+        auto& info = channel_map_info.request_consumer_info_[i];
+        request_consumer_info_.emplace_back(
+            info.module_ids_,
+            info.module_ids_ + info.module_ids_count_
+        );
+    }
+}
 
 ModuleWrapper::~ModuleWrapper() {}
 
@@ -35,6 +58,7 @@ bool ModuleWrapper::threadStop(uint32_t timeout_ms)
 
 void ModuleWrapper::sendMessage(uint64_t publish_producer_id, message::MessageHeader message)
 {
+    message.timestamp_ns_ = nowNs();
     core_->sendMessage(module_id_, publish_producer_id, message);
 }
 
@@ -42,14 +66,18 @@ void ModuleWrapper::sendMessage(uint64_t publish_producer_id, message::MessageHe
 
 void ModuleWrapper::sendResponse(uint64_t response_producer_id, message::MessageHeader message)
 {
+    message.timestamp_ns_ = nowNs();
     core_->sendResponse(module_id_, response_producer_id, message);
 }
 
 
 
-void ModuleWrapper::sendRequest(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message)
+uint64_t ModuleWrapper::sendRequest(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message)
 {
+    message.id_ = request_id_++;
+    message.timestamp_ns_ = nowNs();
     core_->sendRequest(module_id_, request_consumer_id, module_id, message);
+    return message.id_;
 }
 
 
@@ -153,4 +181,40 @@ void ModuleWrapper::_threadCycle()
 void ModuleWrapper::log(logging::LogType type, const char* message)
 {
     logger_->log(type, message);
+}
+
+
+
+InputChannelMapInfo::IndividualChannelInfo ModuleWrapper::getSubscribeChannelInfo(uint32_t channel_id)
+{
+    if (channel_id >= subscribe_consumer_info_.size())
+    {
+        return InputChannelMapInfo::IndividualChannelInfo {
+            .module_ids_ = nullptr,
+            .module_ids_count_ = 0
+        };
+    }
+
+    return InputChannelMapInfo::IndividualChannelInfo {
+        .module_ids_ = subscribe_consumer_info_[channel_id].data(),
+        .module_ids_count_ = (uint32_t)subscribe_consumer_info_[channel_id].size()
+    };
+}
+
+
+
+InputChannelMapInfo::IndividualChannelInfo ModuleWrapper::getRequestChannelInfo(uint32_t channel_id)
+{
+    if (channel_id >= request_consumer_info_.size())
+    {
+        return InputChannelMapInfo::IndividualChannelInfo {
+            .module_ids_ = nullptr,
+            .module_ids_count_ = 0
+        };
+    }
+
+    return InputChannelMapInfo::IndividualChannelInfo {
+        .module_ids_ = request_consumer_info_[channel_id].data(),
+        .module_ids_count_ = (uint32_t)request_consumer_info_[channel_id].size()
+    };
 }

@@ -4,6 +4,7 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <chrono>
 
 #include "module_interface.h"
 #include "periodic_thread.h"
@@ -15,7 +16,7 @@ namespace aergo::module
     public:
         /// @param thread_sleep_ms sleep time for thread cycle, use 0 for no sleep (sleep handled by module).
         /// @param module_id ID of this module received from the core
-        ModuleWrapper(ICore* core, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms);
+        ModuleWrapper(ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms);
 
         ~ModuleWrapper() override;
 
@@ -45,6 +46,12 @@ namespace aergo::module
         /// @brief Log message of specific type (info, warning, error).
         void log(logging::LogType type, const char* message);
 
+        /// @brief get mapped module IDs for a subscribe channel
+        InputChannelMapInfo::IndividualChannelInfo getSubscribeChannelInfo(uint32_t channel_id);
+
+        /// @brief get mapped module IDs for a request channel
+        InputChannelMapInfo::IndividualChannelInfo getRequestChannelInfo(uint32_t channel_id);
+
         /// @brief Publish message to channel "publish_producer_id".
         void sendMessage(uint64_t publish_producer_id, message::MessageHeader message);
 
@@ -55,7 +62,7 @@ namespace aergo::module
         /// @brief Send request to channel "request_consumer_id" to module "module_id".
         /// Message request/response pair is identified by ID in MessageHeader. 
         /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
-        void sendRequest(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message);
+        uint64_t sendRequest(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message);
 
         /// @brief Process a message that came to subscribed channel "subscribe_consumer_id" from module "module_id".
         /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
@@ -96,13 +103,23 @@ namespace aergo::module
         };
 
         void pushProcessingData(ProcessingData::Type type, uint64_t source_id, uint64_t module_id, message::MessageHeader message);
+        inline uint64_t nowNs() noexcept
+        {
+            using namespace std::chrono;
+            return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+        }
 
         std::mutex processing_data_queue_mutex_;
         std::queue<ProcessingData> processing_data_queue_;
 
 
-        const uint64_t module_id_;
-        ICore* core_;
-        const logging::ILogger* logger_;
+        uint64_t request_id_;
+
+
+        const uint64_t module_id_;                                      // ID of this module
+        std::vector<std::vector<uint64_t>> subscribe_consumer_info_;    // module IDs for each subscribe channel
+        std::vector<std::vector<uint64_t>> request_consumer_info_;      // module IDs for each request channel
+        ICore* core_;                                                   // reference to the core object
+        const logging::ILogger* logger_;                                // reference to a logger object
     };
 }

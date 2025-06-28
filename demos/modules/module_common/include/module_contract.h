@@ -31,7 +31,7 @@ DLL_API uint64_t readPluginApiVersion()
 DLL_API const ModuleInfo* readModuleInfo();
 
 /// @brief Create a new module, using allocated memory. Take care of disposing of the memory using destroyModule call.
-DLL_API IModule* createModule(ICore* core, logging::ILogger* logger, uint64_t module_id);
+DLL_API IModule* createModule(ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id);
 
 /// @brief Destroy previously created module.  
 DLL_API void destroyModule(IModule* module);
