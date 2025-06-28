@@ -218,3 +218,19 @@ InputChannelMapInfo::IndividualChannelInfo ModuleWrapper::getRequestChannelInfo(
         .module_ids_count_ = (uint32_t)request_consumer_info_[channel_id].size()
     };
 }
+
+
+
+std::unique_ptr<Allocator> ModuleWrapper::createDynamicAllocator()
+{
+    IAllocatorCore* allocator = core_->createDynamicAllocator();
+    return std::make_unique<Allocator>(core_, allocator);
+}
+
+
+
+std::unique_ptr<Allocator> ModuleWrapper::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots)
+{
+    IAllocatorCore* allocator = core_->createBufferAllocator(slot_size_bytes, number_of_slots);
+    return std::make_unique<Allocator>(core_, allocator);
+}

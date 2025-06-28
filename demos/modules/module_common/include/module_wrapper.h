@@ -5,9 +5,11 @@
 #include <queue>
 #include <mutex>
 #include <chrono>
+#include <memory>
 
 #include "module_interface.h"
 #include "periodic_thread.h"
+#include "module_interface_threads.h"
 
 namespace aergo::module
 {
@@ -51,6 +53,15 @@ namespace aergo::module
 
         /// @brief get mapped module IDs for a request channel
         InputChannelMapInfo::IndividualChannelInfo getRequestChannelInfo(uint32_t channel_id);
+
+        /// @brief Create dynamic allocator for shared data (to avoid copying large data). Each allocate call creates new memory.
+        std::unique_ptr<Allocator> createDynamicAllocator();
+
+        /// @brief Create buffered allocator for shared data (to avoid copying large data). Allocation happens on a buffer.
+        /// Memory is pre-allocated. Allocation can fail if all buffer space is used.
+        /// @param slot_size_bytes Fixed allocation size in bytes.
+        /// @param number_of_slots Number of "size_bytes" sized slots.
+        std::unique_ptr<Allocator> createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots);
 
         /// @brief Publish message to channel "publish_producer_id".
         void sendMessage(uint64_t publish_producer_id, message::MessageHeader message);

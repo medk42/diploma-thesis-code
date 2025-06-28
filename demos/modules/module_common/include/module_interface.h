@@ -1,9 +1,15 @@
 #pragma once
 
-#include "stdint.h"
+#include <stdint.h>
 
 namespace aergo::module
 {
+    class IAllocatorCore;
+    class ICore;
+    class ISharedData;
+
+
+    
     namespace communication_channel
     {
         struct Producer
@@ -44,7 +50,28 @@ namespace aergo::module
     {
         class SharedDataBlob
         {
-            void* data_;                  // TODO think how to do this
+        public:
+            SharedDataBlob();
+            SharedDataBlob(ISharedData* data, IAllocatorCore* allocator);
+
+            ~SharedDataBlob();
+            SharedDataBlob(const SharedDataBlob& other);
+            SharedDataBlob& operator=(SharedDataBlob& other);
+            SharedDataBlob(SharedDataBlob&& other) noexcept;
+            SharedDataBlob& operator=(SharedDataBlob&& other) noexcept;
+
+            /// @brief Is data valid. Do not call other functions/methods if data is invalid.
+            bool valid();
+
+            /// @brief Return pointer to the data. Behavior not specified when invalid.
+            uint8_t* data();
+
+            /// @brief Size of the data. Behavior not specified when invalid.
+            uint64_t size();
+             
+        private:
+            ISharedData* data_;
+            IAllocatorCore* allocator_;
         };
 
         struct MessageHeader
@@ -56,17 +83,6 @@ namespace aergo::module
             uint64_t data_len_;
             SharedDataBlob* blobs_;       // array of blobs, use for big data that should not be copied
             uint64_t blob_count_;
-        };
-    };
-
-    namespace logging {
-        enum class LogType { INFO, WARNING, ERROR };
-
-        class ILogger
-        {
-        public:
-            /// @brief Log message of specific type (info, warning, error).
-            virtual void log(LogType type, const char* message) const = 0;
         };
     };
 
@@ -116,52 +132,23 @@ namespace aergo::module
         uint32_t request_consumer_info_count_;
     };
 
-    class ICore
+
+    class Allocator
     {
     public:
-        inline virtual ~ICore() {}
+        explicit Allocator(ICore* core, IAllocatorCore* allocator);
+        ~Allocator();
 
-        /// @brief Publish message to channel "publish_producer_id".
-        /// @param source_module_id id of the sending module
-        virtual void sendMessage(uint64_t source_module_id, uint64_t publish_producer_id, message::MessageHeader message) = 0;
+        Allocator(const Allocator&)            = delete;
+        Allocator& operator=(const Allocator&) = delete;
+        Allocator(Allocator&&)                 = delete;
+        Allocator& operator=(Allocator&&)      = delete;
 
-        /// @brief Send response to channel "response_producer_id". 
-        /// Message request/response pair is identified by ID in MessageHeader. 
-        /// @param source_module_id id of the sending module
-        virtual void sendResponse(uint64_t source_module_id, uint64_t response_producer_id, message::MessageHeader message) = 0;
+        /// @brief Allocate "number_of_bytes" bytes of shared memory. If the allocator has fixed byte size, "number_of_bytes" parameter is ignored.
+        message::SharedDataBlob allocate(uint64_t number_of_bytes);
 
-        /// @brief Send request to channel "request_consumer_id" to module "module_id".
-        /// Message request/response pair is identified by ID in MessageHeader. 
-        /// @param source_module_id id of the sending module
-        /// @param target_module_id there may be multiple consumers in one channel, they can be differentiated by "target_module_id"
-        virtual void sendRequest(uint64_t source_module_id, uint64_t request_consumer_id, uint64_t target_module_id, message::MessageHeader message) = 0;
-    };
-
-    class IModule
-    {
-    public:
-        inline virtual ~IModule() {}
-
-        /// @brief Start the background thread.
-        /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the thread to start.
-        /// @return true if started within timeout_ms. false on fail to start / timeout. Thread may exist if false.
-        virtual bool threadStart(uint32_t timeout_ms) = 0;
-
-        /// @brief Stop and join the background thread.
-        /// @return true if the thread was running, stopped within "timeout_ms" milliseconds and joined. false otherwise. 
-        virtual bool threadStop(uint32_t timeout_ms) = 0;
-
-        /// @brief Process a message that came to subscribed channel "subscribe_consumer_id" from module "module_id".
-        /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
-        virtual void processMessage(uint64_t subscribe_consumer_id, uint64_t module_id, message::MessageHeader message) = 0;
-
-        /// @brief Process request that came for response producer channel "response_producer_id".
-        /// Message request/response pair is identified by ID in MessageHeader. 
-        virtual void processRequest(uint64_t response_producer_id, message::MessageHeader message) = 0;
-
-        /// @brief Process response that came from request consumer channel "request_consumer_id" from module "module_id".
-        /// Message request/response pair is identified by ID in MessageHeader. 
-        /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
-        virtual void processResponse(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message) = 0;
+    private:
+        ICore* core_;
+        IAllocatorCore* allocator_;
     };
 }
