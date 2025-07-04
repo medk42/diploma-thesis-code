@@ -13,12 +13,12 @@ using namespace aergo::module;
 
 static constexpr communication_channel::PublishProducer module_a_publish_producers[] = {
     { 
-        .channel_type_identifier_ = "message_1_small", 
+        .channel_type_identifier_ = "message_1_small/v1:struct{int32_t counter1;uint8_t counter2}", 
         .display_name_ = "Small message", 
         .display_description_ = "Small message containing just an int32_t and uint8_t." 
     },
     { 
-        .channel_type_identifier_ = "message_2_large_fixed", 
+        .channel_type_identifier_ = "message_2_large_fixed/v1:struct{uint8_t counter_start} + blob[1000;counter]", 
         .display_name_ = "Large fixed messages", 
         .display_description_ = "Large message, header contains a random number uint8_t, message is 1000B and counts up from header with 255->0 wrapping." 
     }
@@ -26,9 +26,10 @@ static constexpr communication_channel::PublishProducer module_a_publish_produce
 
 static constexpr communication_channel::ResponseProducer module_a_response_producers[] = {
     {
-        .channel_type_identifier_ = "response_1_large_variable",
+        // Request: "request_1_large_variable/v1:struct{int32_t requested_size;uint8_t counter_start}"
+        .channel_type_identifier_ = "response_1_large_variable/v1:struct{} + blob[dynamic, counter]",
         .display_name_ = "Large variable response",
-        .display_description_ = "Request will contain int32_t describing the requested size and uint8_t requesting the starting number"
+        .display_description_ = "Request will contain int32_t describing the requested size and uint8_t requesting the starting number. Response will be an empty struct and blob of requested size starting at the requested number."
     }
 };
 
