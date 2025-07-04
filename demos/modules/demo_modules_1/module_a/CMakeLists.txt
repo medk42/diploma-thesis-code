@@ -4,7 +4,8 @@ include_directories(
 
 # Add the executable
 add_library(demo_module_a SHARED
-    src/main.cpp
+    src/module_a.cpp
+    src/module_a_contract.cpp
 )
 
 target_link_libraries(demo_module_a PRIVATE module_common)
