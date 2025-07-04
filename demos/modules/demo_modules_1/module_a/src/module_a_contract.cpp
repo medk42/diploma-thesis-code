@@ -1,7 +1,8 @@
-#include "module_contract.h"
+#include "module_common/module_contract.h"
 #include "module_a/module_a.h"
 
 using namespace aergo::demo_modules_1::module_a;
+using namespace aergo::module;
 
 static constexpr communication_channel::PublishProducer module_a_publish_producers[] = {
     { 
@@ -24,7 +25,7 @@ static constexpr communication_channel::ResponseProducer module_a_response_produ
     }
 };
 
-static constexpr aergo::module::ModuleInfo module_a_info = {
+static constexpr ModuleInfo module_a_info = {
     .display_name_ = "Module A",
     .display_description_ = "Example module for publishing small messages and large fixed messages and providing large dynamic messages on request.",
     .publish_producers_ = module_a_publish_producers,

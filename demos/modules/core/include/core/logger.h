@@ -1,6 +1,6 @@
 #pragma once
 
-#include "module_interface_threads.h"
+#include "module_common/module_interface_threads.h"
 
 namespace aergo::core::logging
 {

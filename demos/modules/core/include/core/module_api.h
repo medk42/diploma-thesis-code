@@ -2,8 +2,8 @@
 
 #include <stdint.h>
 
-#include "module_interface.h"
-#include "module_interface_threads.h"
+#include "module_common/module_interface.h"
+#include "module_common/module_interface_threads.h"
 
 #define CORE_API_VERSION 1
 

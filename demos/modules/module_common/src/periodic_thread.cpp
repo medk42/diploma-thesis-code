@@ -1,4 +1,4 @@
-#include "periodic_thread.h"
+#include "module_common/periodic_thread.h"
 
 using namespace std::chrono_literals;
 using namespace aergo::module::thread;
