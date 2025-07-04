@@ -1,5 +1,5 @@
-#pragma once
 
+#pragma once
 #include <stdint.h>
 
 namespace aergo::module

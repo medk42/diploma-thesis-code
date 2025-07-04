@@ -1,6 +1,13 @@
 #include "module_common/module_contract.h"
 #include "module_a/module_a.h"
 
+
+#define MODULE_A_API_VERSION 1
+
+static_assert(MODULE_A_API_VERSION == PLUGIN_API_VERSION,
+    "Incompatible plugin API version in module.");
+
+    
 using namespace aergo::demo_modules_1::module_a;
 using namespace aergo::module;
 
