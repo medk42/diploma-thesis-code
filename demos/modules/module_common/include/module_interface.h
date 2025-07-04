@@ -12,20 +12,25 @@ namespace aergo::module
     
     namespace communication_channel
     {
-        struct Producer
+        template <typename Tag>
+        struct TypedProducer
         {
             const char* channel_type_identifier_;   // uniquely identifies channel type (for inter-module communication), e.g. "image_rgb"
             const char* display_name_;              // human-friendly displayed channel name, e.g. "Camera #1"
             const char* display_description_;       // human-friendly displayed channel description, e.g. "First camera, raw video without any image processing"
         };
 
+        struct PublishTag {};
+        struct ResponseTag {};
+
         // publishes data, binds to SubscribeConsumer
-        struct PublishProducer : public Producer {};
+        using PublishProducer = TypedProducer<PublishTag>;
 
         // provides response for requests, binds to RequestConsumer
-        struct ResponseProducer : public Producer {};
+        using ResponseProducer = TypedProducer<ResponseTag>;
 
-        struct Consumer
+        template <typename Tag>
+        struct TypedConsumer
         {
             enum class Count { 
                 SINGLE,   // single consumer
@@ -39,11 +44,14 @@ namespace aergo::module
             const char* channel_name_;   // name of the communication channel
         };
 
+        struct SubscribeTag {};
+        struct RequestTag {};
+
         // subscribes to published data, binds to PublishProducer
-        struct SubscribeConsumer : public Consumer {};
+        using SubscribeConsumer = TypedConsumer<SubscribeTag>;
 
         // send request, expects response, binds to ResponseProducer
-        struct RequestConsumer : public Consumer {};
+        using RequestConsumer = TypedConsumer<RequestTag>;
     };
 
     namespace message
