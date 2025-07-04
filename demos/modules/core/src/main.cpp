@@ -1,7 +1,7 @@
 #include <filesystem>
 
 #include "logging.h"
-#include "module_loader.h"
+#include "core/module_loader.h"
 
 using namespace aergo::core;
 
@@ -35,7 +35,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            AERGO_LOG("\tName: \"" << (*result)->getName() << "\"  API Version: " << (*result)->getApiVersion())
+            // AERGO_LOG("\tName: \"" << (*result)->getName() << "\"  API Version: " << (*result)->getApiVersion())
         }
     }
 }

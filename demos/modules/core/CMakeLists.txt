@@ -4,7 +4,10 @@ include_directories(include)
 add_executable(demo_core 
     src/main.cpp
     src/module_loader.cpp
+    src/console_logger.cpp
 )
+
+target_link_libraries(demo_core PRIVATE module_common)
 
 # MSVC: force dynamic CRT
 if (MSVC)
