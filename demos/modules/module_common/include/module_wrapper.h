@@ -16,8 +16,11 @@ namespace aergo::module
     class ModuleWrapper : public IModule, public thread::PeriodicThread
     {
     public:
+        /// @param core reference to functions of the core (sending messages and allocating memory)
+        /// @param channel_map_info ids of modules bound to subscribe and request channels, so the module knows what is on its input
+        /// @param logger object for logging messages from the core
+        /// @param module_id unique ID of this module received from the core
         /// @param thread_sleep_ms sleep time for thread cycle, use 0 for no sleep (sleep handled by module).
-        /// @param module_id ID of this module received from the core
         ModuleWrapper(ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms);
 
         ~ModuleWrapper() override;

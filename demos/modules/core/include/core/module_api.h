@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+#include "module_interface.h"
+#include "module_interface_threads.h"
+
 #define CORE_API_VERSION 1
 
 #ifdef _WIN32
@@ -19,8 +22,10 @@
 #endif
 
 #define PLUGIN_FUNCS(_) \
-    _(const char*,        readPluginName) \
-    _(uint64_t,       readPluginApiVersion)
+    _(const aergo::module::ModuleInfo*,  readModuleInfo,       ) \
+    _(uint64_t,                          readPluginApiVersion  ) \
+    _(aergo::module::IModule*,           createModule,         aergo::module::ICore*, aergo::module::InputChannelMapInfo, aergo::module::logging::ILogger*, uint64_t) \
+    _(void,                              destroyModule,        aergo::module::IModule*)
 
 struct ModuleLibrary_Api {
     #define _(ret,name,...) ret (*name)(__VA_ARGS__);
