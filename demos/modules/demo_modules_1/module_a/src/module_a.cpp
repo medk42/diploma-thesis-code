@@ -32,6 +32,7 @@ void ModuleA::processRequestImpl(uint64_t response_producer_id, aergo::module::m
         if (message.data_len_ != sizeof(messages::request_response::LargeVariableReq))
         {
             LOG(logging::LogType::WARNING, "Unexpected message data length: " << message.data_len_ << "B (expected " << sizeof(messages::request_response::LargeVariableReq) << "B)")
+            sendResponse(0, message.id_, {.success_ = false});
             return;
         }
         messages::request_response::LargeVariableReq* request = (messages::request_response::LargeVariableReq*)message.data_;
@@ -52,11 +53,13 @@ void ModuleA::processRequestImpl(uint64_t response_producer_id, aergo::module::m
         if (!data_blob.valid())
         {
             log(logging::LogType::WARNING, "Allocated data blob is not valid!");
+            sendResponse(0, message.id_, {.success_ = false});
             return;
         }
         if (data_blob.size() != request->requested_size_)
         {
             LOG(logging::LogType::WARNING, "Data blob size is not " << request->requested_size_ << "B (actual size = " << data_blob.size() << "B)")
+            sendResponse(0, message.id_, {.success_ = false});
             return;
         }
 
@@ -79,6 +82,7 @@ void ModuleA::processRequestImpl(uint64_t response_producer_id, aergo::module::m
     else
     {
         LOG(logging::LogType::WARNING, "Unknown request source: " << response_producer_id)
+        sendResponse(response_producer_id, message.id_, {.success_ = false});
         return;
     }
 }
