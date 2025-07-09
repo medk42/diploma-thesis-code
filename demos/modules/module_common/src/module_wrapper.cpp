@@ -64,8 +64,9 @@ void ModuleWrapper::sendMessage(uint64_t publish_producer_id, message::MessageHe
 
 
 
-void ModuleWrapper::sendResponse(uint64_t response_producer_id, message::MessageHeader message)
+void ModuleWrapper::sendResponse(uint64_t response_producer_id, uint64_t request_id, message::MessageHeader message)
 {
+    message.id_ = request_id;
     message.timestamp_ns_ = nowNs();
     core_->sendResponse(module_id_, response_producer_id, message);
 }

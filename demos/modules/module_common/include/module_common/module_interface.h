@@ -84,13 +84,13 @@ namespace aergo::module
 
         struct MessageHeader
         {
-            uint64_t id_;
-            uint64_t timestamp_ns_;
-
             uint8_t* data_;               // copyable data (POD) only, small size, will be copied
             uint64_t data_len_;
             SharedDataBlob* blobs_;       // array of blobs, use for big data that should not be copied
             uint64_t blob_count_;
+
+            uint64_t id_;
+            uint64_t timestamp_ns_;
         };
     };
 

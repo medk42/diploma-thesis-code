@@ -71,7 +71,8 @@ namespace aergo::module
 
         /// @brief Send response to channel "response_producer_id". 
         /// Message request/response pair is identified by ID in MessageHeader. 
-        void sendResponse(uint64_t response_producer_id, message::MessageHeader message);
+        /// @param request_id ID of the request for which is the response
+        void sendResponse(uint64_t response_producer_id, uint64_t request_id, message::MessageHeader message);
 
         /// @brief Send request to channel "request_consumer_id" to module "module_id".
         /// Message request/response pair is identified by ID in MessageHeader. 
@@ -101,6 +102,12 @@ namespace aergo::module
 
         void _threadDeinit() override final;
 
+        inline uint64_t nowNs() noexcept
+        {
+            using namespace std::chrono;
+            return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+        }
+
 
     private:
         struct ProcessingData
@@ -117,11 +124,6 @@ namespace aergo::module
         };
 
         void pushProcessingData(ProcessingData::Type type, uint64_t source_id, uint64_t module_id, message::MessageHeader message);
-        inline uint64_t nowNs() noexcept
-        {
-            using namespace std::chrono;
-            return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
-        }
 
         std::mutex processing_data_queue_mutex_;
         std::queue<ProcessingData> processing_data_queue_;
