@@ -75,7 +75,8 @@ void ModuleA::processRequestImpl(uint64_t response_producer_id, aergo::module::m
             .data_ = (uint8_t*)(&response),
             .data_len_ = sizeof(response),
             .blobs_ = &data_blob,
-            .blob_count_ = 1
+            .blob_count_ = 1,
+            .success_ = true
         };
         sendResponse(0, message.id_, resp_message);
     }
