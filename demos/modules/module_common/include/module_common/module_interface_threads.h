@@ -10,6 +10,8 @@ namespace aergo::module
     class ISharedData
     {
     public:
+        inline virtual ~ISharedData() {}
+
         /// @brief Is data valid. Do not call other functions/methods if data is invalid.
         virtual bool valid() = 0;
 
@@ -24,6 +26,8 @@ namespace aergo::module
     class IAllocatorCore
     {
     public:
+        inline virtual ~IAllocatorCore() {}
+
         /// @brief Allocate "number_of_bytes" bytes of shared memory. If the allocator has fixed byte size, "number_of_bytes" parameter is ignored.
         virtual ISharedData* allocate(uint64_t number_of_bytes) = 0;
 
@@ -40,6 +44,8 @@ namespace aergo::module
         class ILogger
         {
         public:
+            inline virtual ~ILogger() {}
+
             /// @brief Log message of specific type (info, warning, error).
             virtual void log(LogType type, const char* message) const = 0;
         };

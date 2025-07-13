@@ -12,6 +12,8 @@ namespace aergo::module::thread
     protected:
         PeriodicThread(uint32_t thread_sleep_ms);
 
+        inline virtual ~PeriodicThread() {}
+
         /// @brief Start the background thread.
         /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the thread to start.
         /// @return true if started within timeout_ms. false on fail to start / timeout. Thread may exist if false.
