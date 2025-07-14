@@ -4,7 +4,9 @@ include_directories(include)
 add_executable(demo_core 
     src/main.cpp
     src/module_loader.cpp
-    src/console_logger.cpp
+    src/logging/console_logger.cpp
+    src/memory_allocation/dynamic_allocator.cpp
+    src/memory_allocation/shared_data_core.cpp
 )
 
 target_link_libraries(demo_core PRIVATE module_common)
