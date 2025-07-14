@@ -21,7 +21,7 @@ find_package(Pangolin CONFIG REQUIRED)
 include_directories(include)
 
 # Add subdirectories
-# add_subdirectory(src)
+add_subdirectory(backend)
 # add_subdirectory(modules)
 add_subdirectory(demos)
 # add_subdirectory(tests)
