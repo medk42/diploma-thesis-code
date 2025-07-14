@@ -1,6 +1,12 @@
 include_directories(include)
 include_directories(../pen_calib/include)
 
+# Find SimpleBLE
+find_package(simpleble REQUIRED CONFIG)
+
+# Find Pangolin
+find_package(Pangolin CONFIG REQUIRED)
+
 # Add the executable
 add_executable(pen_tracking 
     src/main.cpp
