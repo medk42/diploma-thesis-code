@@ -14,6 +14,9 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # Include directories
 include_directories(include)
 
+# Enable testing
+enable_testing()
+
 # Add subdirectories
 add_subdirectory(backend)
 # add_subdirectory(modules)
