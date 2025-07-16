@@ -122,6 +122,7 @@ TEST_CASE( "DynamicAllocator, working allocator", "[dynamic_allocator]" )
     REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data));
     REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data));
     REQUIRE(data_core->counter() == 1);
+    REQUIRE(memory_allocator.operations().size() == 1);
     REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data));
     REQUIRE(memory_allocator.operations().size() == 2);
     REQUIRE(memory_allocator.operations()[1].type_ == TestMemoryAllocator::Op::Type::FREE);
@@ -168,6 +169,7 @@ TEST_CASE( "DynamicAllocator, working allocator", "[dynamic_allocator]" )
     REQUIRE(data1_core->counter() == 0);
     REQUIRE(data2_core->counter() == 0);
     REQUIRE(data3_core->counter() == 0);
+    REQUIRE(memory_allocator.operations().size() == 5);
 
     REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data2));
     REQUIRE(memory_allocator.operations().size() == 6);
@@ -193,6 +195,7 @@ TEST_CASE( "DynamicAllocator, working allocator", "[dynamic_allocator]" )
     REQUIRE(data3_core->counter() == 1);
 
     
+    REQUIRE(memory_allocator.operations().size() == 6);
     REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data3));
     REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data3));
     REQUIRE(logger.logs().size() == 1);
@@ -205,6 +208,7 @@ TEST_CASE( "DynamicAllocator, working allocator", "[dynamic_allocator]" )
     REQUIRE(data1_core->counter() == 1);
     REQUIRE(logger.logs().size() == 1);
 
+    REQUIRE(memory_allocator.operations().size() == 7);
     REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data1));
     REQUIRE(logger.logs().size() == 1);
     REQUIRE(memory_allocator.operations().size() == 8);
