@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "core/memory_allocation/dynamic_allocator.h"
+#include "utils/memory_allocation/dynamic_allocator.h"
 #include <vector>
 
 using namespace aergo::core::memory_allocation;
@@ -155,7 +155,7 @@ TEST_CASE( "SharedDataCore, working allocator", "[shared_data_core]" )
         REQUIRE(data3.id() == alloc_id);
         REQUIRE(data3.counter() == 2);
         REQUIRE(data3.size() == alloc_size);
-        REQUIRE((uint64_t)data2.data() == allocator.operations()[0].address_);
+        REQUIRE((uint64_t)data3.data() == allocator.operations()[0].address_);
         REQUIRE(allocator.operations().size() == 1);
     }
 
@@ -181,15 +181,16 @@ TEST_CASE( "SharedDataCore, working allocator", "[shared_data_core]" )
         REQUIRE(allocator.operations()[2].address_ == 2);
         REQUIRE(allocator.operations()[2].address_ == (uint64_t)data.data());
 
+        data.increaseCounter();
 
         SharedDataCore data3(std::move(data));
         REQUIRE(!data.valid());
         REQUIRE(data.data() == nullptr);
         REQUIRE(data3.valid());
         REQUIRE(data3.id() == alloc_id);
-        REQUIRE(data3.counter() == 2);
+        REQUIRE(data3.counter() == 1);
         REQUIRE(data3.size() == alloc_size);
-        REQUIRE((uint64_t)data3.data() == allocator.operations()[0].address_);
+        REQUIRE((uint64_t)data3.data() == allocator.operations()[2].address_);
         REQUIRE(allocator.operations().size() == 3);
     }
     

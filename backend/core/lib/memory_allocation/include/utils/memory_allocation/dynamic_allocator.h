@@ -1,7 +1,7 @@
 #pragma once
 
 #include "module_common/module_interface_threads.h"
-#include "core/logging/logger.h"
+#include "utils/logging/logger.h"
 #include "shared_data_core.h"
 
 #include <map>

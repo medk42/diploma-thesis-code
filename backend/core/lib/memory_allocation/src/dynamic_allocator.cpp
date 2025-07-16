@@ -1,4 +1,4 @@
-#include "core/memory_allocation/dynamic_allocator.h"
+#include "utils/memory_allocation/dynamic_allocator.h"
 
 using namespace aergo::core::memory_allocation;
 
