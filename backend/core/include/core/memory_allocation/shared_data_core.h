@@ -1,6 +1,7 @@
 #pragma once
 
 #include "module_common/module_interface_threads.h"
+#include "memory_allocator.h"
 
 namespace aergo::core::memory_allocation
 {
@@ -27,11 +28,12 @@ namespace aergo::core::memory_allocation
         /// @brief Does not decrease below zero. 
         void decreaseCounter();
 
-        static SharedDataCore allocate(uint64_t size, uint64_t id) noexcept;
+        static SharedDataCore allocate(IMemoryAllocator* memory_allocator, uint64_t size, uint64_t id) noexcept;
 
     private:
-        SharedDataCore(uint8_t* data, uint64_t size, uint64_t id);
+        SharedDataCore(IMemoryAllocator* memory_allocator, uint8_t* data, uint64_t size, uint64_t id);
     
+        IMemoryAllocator* memory_allocator_;
         uint8_t* data_;
         uint64_t size_;
         uint64_t id_;

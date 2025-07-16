@@ -7,6 +7,7 @@ add_executable(core
     src/logging/console_logger.cpp
     src/memory_allocation/dynamic_allocator.cpp
     src/memory_allocation/shared_data_core.cpp
+    src/memory_allocation/memory_allocator.cpp
 )
 
 target_link_libraries(core PRIVATE module_common)
@@ -24,3 +25,5 @@ set_target_properties(core PROPERTIES
 
 cmake_policy(SET CMP0177 NEW)
 install(TARGETS core DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
+
+add_subdirectory(tests)

@@ -1,18 +1,16 @@
 #include "core/memory_allocation/shared_data_core.h"
 
-#include <cstdlib>
-
 using namespace aergo::core::memory_allocation;
 
 
 
 SharedDataCore::SharedDataCore() noexcept
-: data_(nullptr), size_(0), id_(0), valid_(false), counter_(0) {}
+: memory_allocator_(nullptr), data_(nullptr), size_(0), id_(0), valid_(false), counter_(0) {}
 
 
 
-SharedDataCore::SharedDataCore(uint8_t* data, uint64_t size, uint64_t id) 
-: data_(data), size_(size), id_(id), valid_(true), counter_(0) {}
+SharedDataCore::SharedDataCore(IMemoryAllocator* memory_allocator, uint8_t* data, uint64_t size, uint64_t id) 
+: memory_allocator_(memory_allocator), data_(data), size_(size), id_(id), valid_(true), counter_(0) {}
 
 
 
@@ -20,8 +18,9 @@ SharedDataCore::~SharedDataCore()
 {
     if (valid_)
     {
-        std::free(data_);
+        memory_allocator_->free(data_);
         
+        memory_allocator_ = nullptr;
         valid_ = false;
         data_ = nullptr;
         size_ = 0;
@@ -33,8 +32,9 @@ SharedDataCore::~SharedDataCore()
 
 
 SharedDataCore::SharedDataCore(SharedDataCore&& other) noexcept
-: data_(other.data_), size_(other.size_), id_(other.id_), valid_(other.valid_), counter_(other.counter_)
+: memory_allocator_(other.memory_allocator_), data_(other.data_), size_(other.size_), id_(other.id_), valid_(other.valid_), counter_(other.counter_)
 {
+    other.memory_allocator_ = nullptr;
     other.data_ = nullptr;
     other.size_ = 0;
     other.id_ = 0;
@@ -47,11 +47,13 @@ SharedDataCore::SharedDataCore(SharedDataCore&& other) noexcept
 SharedDataCore& SharedDataCore::operator=(SharedDataCore&& other) noexcept
 {
     if (this != &other) {
+        memory_allocator_ = other.memory_allocator_;
         data_ = other.data_;
         size_ = other.size_;
         id_ = other.id_;
         valid_ = other.valid_;
         counter_ = other.counter_;
+        other.memory_allocator_ = nullptr;
         other.data_ = nullptr;
         other.size_ = 0;
         other.id_ = 0;
@@ -100,14 +102,17 @@ uint64_t SharedDataCore::counter()
 
 void SharedDataCore::increaseCounter()
 {
-    ++counter_;
+    if (valid_)
+    {
+        ++counter_;
+    }
 }
 
 
 
 void SharedDataCore::decreaseCounter()
 {
-    if (counter_ > 0)
+    if (counter_ > 0 && valid_)
     {
         --counter_;
     }
@@ -115,12 +120,12 @@ void SharedDataCore::decreaseCounter()
 
 
 
-SharedDataCore SharedDataCore::allocate(uint64_t size, uint64_t id) noexcept
+SharedDataCore SharedDataCore::allocate(IMemoryAllocator* allocator, uint64_t size, uint64_t id) noexcept
 {
-    void* data = std::malloc(size);
+    void* data = allocator->malloc(size);
     if (data)
     {
-        return SharedDataCore((uint8_t*)data, size, id);
+        return SharedDataCore(allocator, (uint8_t*)data, size, id);
     }
     else
     {
