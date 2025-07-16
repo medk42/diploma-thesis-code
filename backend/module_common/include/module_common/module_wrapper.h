@@ -28,24 +28,24 @@ namespace aergo::module
         /// @brief Start the background thread.
         /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the thread to start.
         /// @return true if started within timeout_ms. false on fail to start / timeout. Thread may exist if false.
-        bool threadStart(uint32_t timeout_ms) override final;
+        bool threadStart(uint32_t timeout_ms) noexcept override final;
 
         /// @brief Stop and join the background thread.
         /// @return true if the thread was running, stopped within "timeout_ms" milliseconds and joined. false otherwise. 
-        bool threadStop(uint32_t timeout_ms) override final;
+        bool threadStop(uint32_t timeout_ms) noexcept override final;
 
         /// @brief Process a message that came to subscribed channel "subscribe_consumer_id" from module "module_id".
         /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
-        void processMessage(uint64_t subscribe_consumer_id, uint64_t module_id, message::MessageHeader message) override final;
+        void processMessage(uint64_t subscribe_consumer_id, uint64_t module_id, message::MessageHeader message) noexcept override final;
 
         /// @brief Process request that came for response producer channel "response_producer_id".
         /// Message request/response pair is identified by ID in MessageHeader. 
-        void processRequest(uint64_t response_producer_id, message::MessageHeader message) override final;
+        void processRequest(uint64_t response_producer_id, message::MessageHeader message) noexcept override final;
 
         /// @brief Process response that came from request consumer channel "request_consumer_id" from module "module_id".
         /// Message request/response pair is identified by ID in MessageHeader. 
         /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
-        void processResponse(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message) override final;
+        void processResponse(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message) noexcept override final;
 
     protected:
         /// @brief Log message of specific type (info, warning, error).

@@ -17,9 +17,9 @@ namespace aergo::core::memory_allocation
         SharedDataCore& operator=(const SharedDataCore& other) = delete;
         SharedDataCore& operator=(SharedDataCore&& other) noexcept;
 
-        virtual bool valid() override final;
-        virtual uint8_t* data() override final;
-        virtual uint64_t size() override final;
+        virtual bool valid() noexcept override final;
+        virtual uint8_t* data() noexcept override final;
+        virtual uint64_t size() noexcept override final;
         uint64_t id();
 
         uint64_t counter();

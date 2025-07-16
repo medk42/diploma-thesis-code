@@ -14,9 +14,9 @@ namespace aergo::core::memory_allocation
     public:
         DynamicAllocator(aergo::core::logging::ILogger& logger, IMemoryAllocator* custom_allocator = nullptr);
 
-        virtual aergo::module::ISharedData* allocate(uint64_t number_of_bytes) override final;
-        virtual void addOwner(aergo::module::ISharedData* data) override final;
-        virtual void removeOwner(aergo::module::ISharedData* data) override final;
+        virtual aergo::module::ISharedData* allocate(uint64_t number_of_bytes) noexcept override final;
+        virtual void addOwner(aergo::module::ISharedData* data) noexcept override final;
+        virtual void removeOwner(aergo::module::ISharedData* data) noexcept override final;
 
     private:
         void log(aergo::module::logging::LogType log_type, const char* message);
