@@ -42,14 +42,14 @@ ModuleWrapper::~ModuleWrapper() {}
 
 
 
-bool ModuleWrapper::threadStart(uint32_t timeout_ms)
+bool ModuleWrapper::threadStart(uint32_t timeout_ms) noexcept
 {
     return _threadStart(timeout_ms);
 }
 
 
 
-bool ModuleWrapper::threadStop(uint32_t timeout_ms)
+bool ModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
 {
     return _threadStop(timeout_ms);
 }
@@ -83,21 +83,21 @@ uint64_t ModuleWrapper::sendRequest(uint64_t request_consumer_id, uint64_t modul
 
 
 
-void ModuleWrapper::processMessage(uint64_t subscribe_consumer_id, uint64_t module_id, message::MessageHeader message)
+void ModuleWrapper::processMessage(uint64_t subscribe_consumer_id, uint64_t module_id, message::MessageHeader message) noexcept
 {
     pushProcessingData(ProcessingData::Type::MESSAGE, subscribe_consumer_id, module_id, message);
 }
 
 
 
-void ModuleWrapper::processRequest(uint64_t response_producer_id, message::MessageHeader message)
+void ModuleWrapper::processRequest(uint64_t response_producer_id, message::MessageHeader message) noexcept
 {
     pushProcessingData(ProcessingData::Type::REQUEST, response_producer_id, 0, message);
 }
 
 
 
-void ModuleWrapper::processResponse(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message)
+void ModuleWrapper::processResponse(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message) noexcept
 {
     pushProcessingData(ProcessingData::Type::RESPONSE, request_consumer_id, module_id, message);
 }

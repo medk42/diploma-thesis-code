@@ -19,7 +19,7 @@ DynamicAllocator::DynamicAllocator(aergo::core::logging::ILogger& logger, IMemor
 
 
 
-aergo::module::ISharedData* DynamicAllocator::allocate(uint64_t number_of_bytes)
+aergo::module::ISharedData* DynamicAllocator::allocate(uint64_t number_of_bytes) noexcept
 {
     uint64_t new_id = allocation_id_++;
 
@@ -39,7 +39,7 @@ aergo::module::ISharedData* DynamicAllocator::allocate(uint64_t number_of_bytes)
 
 
 
-void DynamicAllocator::addOwner(aergo::module::ISharedData* data)
+void DynamicAllocator::addOwner(aergo::module::ISharedData* data) noexcept
 {
     SharedDataCore* data_core = dynamic_cast<SharedDataCore*>(data);
 
@@ -71,7 +71,7 @@ void DynamicAllocator::addOwner(aergo::module::ISharedData* data)
 
 
 
-void DynamicAllocator::removeOwner(aergo::module::ISharedData* data)
+void DynamicAllocator::removeOwner(aergo::module::ISharedData* data) noexcept
 {
     SharedDataCore* data_core = dynamic_cast<SharedDataCore*>(data);
 

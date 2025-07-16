@@ -65,21 +65,21 @@ SharedDataCore& SharedDataCore::operator=(SharedDataCore&& other) noexcept
 
 
 
-bool SharedDataCore::valid()
+bool SharedDataCore::valid() noexcept
 {
     return valid_;
 }
 
 
 
-uint8_t* SharedDataCore::data()
+uint8_t* SharedDataCore::data() noexcept
 {
     return data_;
 }
 
 
 
-uint64_t SharedDataCore::size()
+uint64_t SharedDataCore::size() noexcept
 {
     return size_;
 }
