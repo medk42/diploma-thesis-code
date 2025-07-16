@@ -28,24 +28,37 @@ aergo::module::ISharedData* DynamicAllocator::allocateImpl(uint64_t number_of_by
 {
     uint64_t new_id = allocation_id_++;
 
-    auto [it, success] = allocated_data_.emplace(
-        new_id,
-        SharedDataCore::allocate(memory_allocator_, number_of_bytes, new_id)
-    );
+    SharedDataCore new_data(SharedDataCore::allocate(memory_allocator_, number_of_bytes, new_id));
 
-    if (!it->second.valid())
+    if (new_data.valid())
+    {
+        // success is guaranteed true since new_id never existed
+        auto [it, success] = allocated_data_.emplace(
+            new_id,
+            std::move(new_data)  
+        );
+        allocated_memory_slots_.insert((std::size_t)(&it->second));
+
+        return &it->second; 
+    }
+    else
     {
         log(aergo::module::logging::LogType::ERROR, "Failed to allocate memory.");
+        return nullptr;
     }
-
-    // success is guaranteed true since new_id never existed
-    return &it->second; 
+    
 }
 
 
 
 void DynamicAllocator::addOwnerImpl(aergo::module::ISharedData* data)
 {
+    if (!allocated_memory_slots_.contains((std::size_t)data))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Attempting to add owner on invalid or unowned data.");
+        return;
+    }
+
     SharedDataCore* data_core = dynamic_cast<SharedDataCore*>(data);
 
     if (data_core && data_core->valid())
@@ -78,6 +91,12 @@ void DynamicAllocator::addOwnerImpl(aergo::module::ISharedData* data)
 
 void DynamicAllocator::removeOwnerImpl(aergo::module::ISharedData* data)
 {
+    if (!allocated_memory_slots_.contains((std::size_t)data))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Attempting to remove owner from invalid or unowned data.");
+        return;
+    }
+
     SharedDataCore* data_core = dynamic_cast<SharedDataCore*>(data);
 
     if (data_core && data_core->valid())
@@ -89,6 +108,7 @@ void DynamicAllocator::removeOwnerImpl(aergo::module::ISharedData* data)
             if (data_core->counter() == 0)
             {
                 allocated_data_.erase(it);
+                allocated_memory_slots_.erase((std::size_t)data);
             }
         }
         else

@@ -5,6 +5,7 @@
 #include "shared_data_core.h"
 
 #include <map>
+#include <set>
 
 
 namespace aergo::core::memory_allocation
@@ -30,6 +31,7 @@ namespace aergo::core::memory_allocation
         DefaultAllocator default_memory_allocator_;
 
         std::map<uint64_t, SharedDataCore> allocated_data_;
+        std::set<std::size_t> allocated_memory_slots_;
         uint64_t allocation_id_;
         aergo::core::logging::ILogger& logger_;
     };

@@ -23,7 +23,14 @@ Allocator::~Allocator()
 SharedDataBlob Allocator::allocate(uint64_t number_of_bytes)
 {
     ISharedData* data = allocator_->allocate(number_of_bytes);
-    return SharedDataBlob(data, allocator_);
+    if (data)
+    {
+        return SharedDataBlob(data, allocator_);
+    }
+    else
+    {
+        return SharedDataBlob();
+    }
 }
 
 

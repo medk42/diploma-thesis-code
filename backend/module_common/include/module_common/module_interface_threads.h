@@ -29,6 +29,7 @@ namespace aergo::module
         inline virtual ~IAllocatorCore() {}
 
         /// @brief Allocate "number_of_bytes" bytes of shared memory. If the allocator has fixed byte size, "number_of_bytes" parameter is ignored.
+        /// @return pointer to valid allocated data or nullptr if data couldn't have been allocated
         virtual ISharedData* allocate(uint64_t number_of_bytes) noexcept = 0;
 
         /// @brief Add owner for shared data object. Object removed when owners drop to zero.
