@@ -16,6 +16,12 @@ small_message_counter_(0), gen_(), dist_(0, 255)
 {
     large_fixed_allocator_ = createBufferAllocator(1000, 10);
     request_dynamic_allocator_ = createDynamicAllocator();
+
+    if (!large_fixed_allocator_->valid() || !request_dynamic_allocator_->valid())
+    {
+        logger->log(logging::LogType::ERROR, "Failed to create allocators.");
+        throw std::exception("Failed to create allocators.");
+    }
 }
 
 

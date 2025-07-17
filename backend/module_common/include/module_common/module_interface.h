@@ -156,6 +156,10 @@ namespace aergo::module
         /// @brief Allocate "number_of_bytes" bytes of shared memory. If the allocator has fixed byte size, "number_of_bytes" parameter is ignored.
         message::SharedDataBlob allocate(uint64_t number_of_bytes);
 
+        /// @brief Returns true if allocator is valid and ready to be used. Do not use allocator if invalid. 
+        /// Only checks that internal pointers are not null - valid() check can be only performed once.
+        bool valid();
+
     private:
         ICore* core_;
         IAllocatorCore* allocator_;

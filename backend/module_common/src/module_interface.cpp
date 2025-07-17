@@ -34,6 +34,12 @@ SharedDataBlob Allocator::allocate(uint64_t number_of_bytes)
 }
 
 
+bool Allocator::valid()
+{
+    return core_ != nullptr && allocator_ != nullptr;
+}
+
+
 SharedDataBlob::SharedDataBlob()
 : data_(nullptr), allocator_(nullptr) {}
 

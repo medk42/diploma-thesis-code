@@ -74,12 +74,14 @@ namespace aergo::module
         virtual void sendRequest(uint64_t source_module_id, uint64_t request_consumer_id, uint64_t target_module_id, message::MessageHeader message) noexcept = 0;
 
         /// @brief Create dynamic allocator for shared data (to avoid copying large data). Each allocate call creates new memory.
+        /// @return New allocator or nullptr on failure.
         virtual IAllocatorCore* createDynamicAllocator() noexcept = 0;
 
         /// @brief Create buffered allocator for shared data (to avoid copying large data). Allocation happens on a buffer.
         /// Memory is pre-allocated. Allocation can fail if all buffer space is used.
         /// @param slot_size_bytes Fixed allocation size in bytes.
         /// @param number_of_slots Number of "size_bytes" sized slots.
+        /// @return New allocator or nullptr on failure.
         virtual IAllocatorCore* createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept = 0;
 
         /// @brief Delete previously created allocator.
