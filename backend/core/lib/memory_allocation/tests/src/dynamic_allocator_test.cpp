@@ -4,6 +4,8 @@
 #include "utils/memory_allocation/dynamic_allocator.h"
 #include "utils/logging/console_logger.h"
 
+#include <algorithm>
+
 using namespace aergo::core::memory_allocation;
 using namespace aergo::core::logging;
 
@@ -220,4 +222,75 @@ TEST_CASE( "DynamicAllocator, working allocator", "[dynamic_allocator]" )
     REQUIRE_NOTHROW(dynamic_allocator.addOwnerImpl(nullptr));
     REQUIRE(logger.logs().size() == 2);
     REQUIRE(logger.logs()[0] == aergo::module::logging::LogType::ERROR);
+}
+
+TEST_CASE( "DynamicAllocator, real allocation test", "[dynamic_allocator]" )
+{
+    TestLogger logger;
+    DynamicAllocator dynamic_allocator(&logger);
+
+    aergo::module::ISharedData *data100, *data42, *data1100, *data100000;
+    REQUIRE_NOTHROW(data100 = dynamic_allocator.allocateImpl(100));
+    REQUIRE_NOTHROW(data42 = dynamic_allocator.allocateImpl(42));
+    REQUIRE_NOTHROW(data1100 = dynamic_allocator.allocateImpl(1100));
+    REQUIRE_NOTHROW(data100000 = dynamic_allocator.allocateImpl(100000));
+
+    REQUIRE(data100->valid());
+    REQUIRE(data42->valid());
+    REQUIRE(data1100->valid());
+    REQUIRE(data100000->valid());
+
+    REQUIRE(data100->size() == 100);
+    REQUIRE(data42->size() == 42);
+    REQUIRE(data1100->size() == 1100);
+    REQUIRE(data100000->size() == 100000);
+
+    REQUIRE_NOTHROW(std::fill(data100->data(), data100->data() + 100, 100));
+    REQUIRE_NOTHROW(std::fill(data42->data(), data42->data() + 42, 42));
+    REQUIRE_NOTHROW(std::fill(data1100->data(), data1100->data() + 1100, 13));
+    REQUIRE_NOTHROW(std::fill(data100000->data(), data100000->data() + 100000, 191));
+
+    REQUIRE(std::all_of(data100->data(), data100->data() + 100, [](uint8_t x){ return x == 100; }));
+    REQUIRE(std::all_of(data42->data(), data42->data() + 42, [](uint8_t x){ return x == 42; }));
+    REQUIRE(std::all_of(data1100->data(), data1100->data() + 1100, [](uint8_t x){ return x == 13; }));
+    REQUIRE(std::all_of(data100000->data(), data100000->data() + 100000, [](uint8_t x){ return x == 191; }));
+
+    REQUIRE_NOTHROW(dynamic_allocator.addOwnerImpl(data100));
+    REQUIRE_NOTHROW(dynamic_allocator.addOwnerImpl(data100));
+    REQUIRE_NOTHROW(dynamic_allocator.addOwnerImpl(data42));
+    REQUIRE_NOTHROW(dynamic_allocator.addOwnerImpl(data1100));
+    REQUIRE_NOTHROW(dynamic_allocator.addOwnerImpl(data1100));
+    REQUIRE_NOTHROW(dynamic_allocator.addOwnerImpl(data1100));
+    
+
+    REQUIRE(std::all_of(data100->data(), data100->data() + 100, [](uint8_t x){ return x == 100; }));
+    REQUIRE(std::all_of(data42->data(), data42->data() + 42, [](uint8_t x){ return x == 42; }));
+    REQUIRE(std::all_of(data1100->data(), data1100->data() + 1100, [](uint8_t x){ return x == 13; }));
+    REQUIRE(std::all_of(data100000->data(), data100000->data() + 100000, [](uint8_t x){ return x == 191; }));
+
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data100));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data42));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data1100));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data100000));
+
+    REQUIRE(logger.logs().size() == 0);
+
+    REQUIRE(std::all_of(data100->data(), data100->data() + 100, [](uint8_t x){ return x == 100; }));
+    REQUIRE(std::all_of(data1100->data(), data1100->data() + 1100, [](uint8_t x){ return x == 13; }));
+
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data100));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data42));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data1100));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data100000));
+
+    REQUIRE(logger.logs().size() == 2);
+
+    REQUIRE(std::all_of(data1100->data(), data1100->data() + 1100, [](uint8_t x){ return x == 13; }));
+
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data100));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data42));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data1100));
+    REQUIRE_NOTHROW(dynamic_allocator.removeOwnerImpl(data100000));
+
+    REQUIRE(logger.logs().size() == 5);
 }
