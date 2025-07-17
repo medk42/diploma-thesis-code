@@ -1,3 +1,4 @@
 add_subdirectory(logging)
 add_subdirectory(memory_allocation)
 add_subdirectory(core_module_interface)
+add_subdirectory(core)
