@@ -4,7 +4,7 @@ using namespace aergo::core::memory_allocation;
 
 
 
-DynamicAllocator::DynamicAllocator(aergo::core::logging::ILogger& logger, IMemoryAllocator* custom_allocator)
+DynamicAllocator::DynamicAllocator(aergo::core::logging::ILogger* logger, IMemoryAllocator* custom_allocator)
 : allocation_id_(0), logger_(logger)
 {
     if (custom_allocator)
@@ -26,6 +26,8 @@ void DynamicAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { 
 
 aergo::module::ISharedData* DynamicAllocator::allocateImpl(uint64_t number_of_bytes)
 {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
     uint64_t new_id = allocation_id_++;
 
     SharedDataCore new_data(SharedDataCore::allocate(memory_allocator_, number_of_bytes, new_id));
@@ -53,6 +55,8 @@ aergo::module::ISharedData* DynamicAllocator::allocateImpl(uint64_t number_of_by
 
 void DynamicAllocator::addOwnerImpl(aergo::module::ISharedData* data)
 {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     if (!allocated_memory_slots_.contains((std::size_t)data))
     {
         log(aergo::module::logging::LogType::ERROR, "Attempting to add owner on invalid or unowned data.");
@@ -91,6 +95,8 @@ void DynamicAllocator::addOwnerImpl(aergo::module::ISharedData* data)
 
 void DynamicAllocator::removeOwnerImpl(aergo::module::ISharedData* data)
 {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
     if (!allocated_memory_slots_.contains((std::size_t)data))
     {
         log(aergo::module::logging::LogType::ERROR, "Attempting to remove owner from invalid or unowned data.");
@@ -134,5 +140,5 @@ void DynamicAllocator::removeOwnerImpl(aergo::module::ISharedData* data)
 
 void DynamicAllocator::log(aergo::module::logging::LogType log_type, const char* message)
 {
-    logger_.log(aergo::core::logging::SourceType::CORE, "DynamicAllocator", 0, log_type, message);
+    logger_->log(aergo::core::logging::SourceType::CORE, "DynamicAllocator", 0, log_type, message);
 }

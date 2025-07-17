@@ -35,7 +35,7 @@ TEST_CASE( "DynamicAllocator, broken allocator", "[dynamic_allocator]" )
     TestMemoryAllocator memory_allocator(false);
 
     TestLogger logger;
-    DynamicAllocator dynamic_allocator(logger, &memory_allocator);
+    DynamicAllocator dynamic_allocator(&logger, &memory_allocator);
     
     SECTION( "add/remove owner on invalid data" )
     {
@@ -89,7 +89,7 @@ TEST_CASE( "DynamicAllocator, working allocator", "[dynamic_allocator]" )
     TestMemoryAllocator memory_allocator(true);
 
     TestLogger logger;
-    DynamicAllocator dynamic_allocator(logger, &memory_allocator);
+    DynamicAllocator dynamic_allocator(&logger, &memory_allocator);
 
     uint64_t alloc_size = 1000;
     aergo::module::ISharedData* data;

@@ -28,6 +28,8 @@ namespace aergo::core::memory_allocation
         /// @brief Does not decrease below zero. 
         void decreaseCounter();
 
+        /// @brief Attempt to allocate memory using defined allocator. Return reference to new memory if successful. 
+        /// Return invalid (.valid() == false) if not successful.
         static SharedDataCore allocate(IMemoryAllocator* memory_allocator, uint64_t size, uint64_t id) noexcept;
 
     private:
