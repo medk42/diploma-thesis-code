@@ -1,7 +1,7 @@
 #include <filesystem>
 
 #include "logging.h"
-#include "core/module_loader.h"
+#include "utils/module_interface/module_loader.h"
 
 using namespace aergo::core;
 

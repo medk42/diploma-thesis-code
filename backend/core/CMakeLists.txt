@@ -5,10 +5,9 @@ include_directories(include)
 # Add the executable
 add_executable(core 
     src/main.cpp
-    src/module_loader.cpp
 )
 
-target_link_libraries(core PRIVATE module_common)
+target_link_libraries(core PRIVATE module_common utils___core_module_interface)
 
 # MSVC: force dynamic CRT
 if (MSVC)
