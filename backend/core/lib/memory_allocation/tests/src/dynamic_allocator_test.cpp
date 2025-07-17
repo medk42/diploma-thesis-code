@@ -1,34 +1,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "test_memory_allocator.h"
+#include "test_logger.h"
 #include "utils/memory_allocation/dynamic_allocator.h"
-#include "utils/logging/console_logger.h"
 
 #include <algorithm>
 
 using namespace aergo::core::memory_allocation;
 using namespace aergo::core::logging;
 
-
-
-class TestLogger : public ILogger
-{
-public:
-    void log(SourceType source_type, const char* source_name, uint64_t source_module_id, aergo::module::logging::LogType log_type, const char* message) override
-    {
-        console_logger_.log(source_type, source_name, source_module_id, log_type, message);
-        logs_types_.push_back(log_type);
-    }
-
-    std::vector<aergo::module::logging::LogType>& logs()
-    {
-        return logs_types_;
-    }
-
-private:
-    ConsoleLogger console_logger_;
-    std::vector<aergo::module::logging::LogType> logs_types_;
-};
 
 
 
