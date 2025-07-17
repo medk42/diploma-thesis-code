@@ -2,6 +2,7 @@ add_subdirectory(tests)
 
 add_library(utils___memory_allocation
     src/dynamic_allocator.cpp
+    src/static_allocator.cpp
     src/memory_allocator.cpp
     src/shared_data_core.cpp
 )
