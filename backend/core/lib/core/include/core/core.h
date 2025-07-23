@@ -1,13 +1,15 @@
 #pragma once
 
 #include "module_common/module_interface_threads.h"
+#include "utils/module_interface/module_loader.h"
+#include "utils/logging/logger.h"
 
 namespace aergo::core
 {
     class Core : public aergo::module::ICore
     {
     public:
-        Core();
+        Core(logging::ILogger* logger);
 
         void initialize(const char* modules_dir, const char* data_dir);
 
@@ -19,5 +21,18 @@ namespace aergo::core
         virtual void deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept override final;
 
     private:
+        struct ModuleLoaderData
+        {
+            std::unique_ptr<ModuleLoader> module_loader_;
+            std::filesystem::path module_filename_;
+        };
+
+        void log(aergo::module::logging::LogType log_type, const char* message);
+
+
+
+        std::vector<ModuleLoaderData> loaded_modules_;
+
+        logging::ILogger* logger_;
     };
 }
