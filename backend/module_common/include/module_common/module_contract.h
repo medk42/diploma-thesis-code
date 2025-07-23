@@ -28,6 +28,7 @@ DLL_API uint64_t readPluginApiVersion()
 DLL_API const aergo::module::ModuleInfo* readModuleInfo();
 
 /// @brief Create a new module, using allocated memory. Take care of disposing of the memory using destroyModule call.
+/// @param data_path path to the data folder for the module (if it exists, otherwise nullptr)
 /// @param core reference to functions of the core (sending messages and allocating memory)
 /// @param channel_map_info ids of modules bound to subscribe and request channels, so the module knows what is on its input
 /// @param logger object for logging messages from the core

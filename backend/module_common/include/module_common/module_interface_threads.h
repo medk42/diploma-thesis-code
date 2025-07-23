@@ -60,16 +60,19 @@ namespace aergo::module
 
         /// @brief Publish message to channel "publish_producer_id".
         /// @param source_module_id id of the sending module
+        /// @param publish_producer_id id of the channel to publish on
         virtual void sendMessage(uint64_t source_module_id, uint64_t publish_producer_id, message::MessageHeader message) noexcept = 0;
 
         /// @brief Send response to channel "response_producer_id". 
         /// Message request/response pair is identified by ID in MessageHeader. 
         /// @param source_module_id id of the sending module
+        /// @param response_producer_id id of the channel to respond on
         virtual void sendResponse(uint64_t source_module_id, uint64_t response_producer_id, message::MessageHeader message) noexcept = 0;
 
         /// @brief Send request to channel "request_consumer_id" to module "module_id".
         /// Message request/response pair is identified by ID in MessageHeader. 
         /// @param source_module_id id of the sending module
+        /// @param request_consumer_id id of the channel to request on
         /// @param target_module_id there may be multiple consumers in one channel, they can be differentiated by "target_module_id"
         virtual void sendRequest(uint64_t source_module_id, uint64_t request_consumer_id, uint64_t target_module_id, message::MessageHeader message) noexcept = 0;
 

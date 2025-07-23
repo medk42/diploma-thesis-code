@@ -77,6 +77,7 @@ namespace aergo::module
         /// @brief Send request to channel "request_consumer_id" to module "module_id".
         /// Message request/response pair is identified by ID in MessageHeader. 
         /// @param module_id there may be multiple consumers in one channel, they can be differentiated by "module_id"
+        /// @return ID of the request (to match with response ID)
         uint64_t sendRequest(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message);
 
         /// @brief Process a message that came to subscribed channel "subscribe_consumer_id" from module "module_id".
