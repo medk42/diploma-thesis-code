@@ -7,7 +7,7 @@ add_executable(core
     src/main.cpp
 )
 
-target_link_libraries(core PRIVATE module_common utils___core_module_interface)
+target_link_libraries(core PRIVATE core_project utils___logging)
 
 # MSVC: force dynamic CRT
 if (MSVC)

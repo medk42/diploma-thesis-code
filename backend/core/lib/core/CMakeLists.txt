@@ -6,7 +6,7 @@ target_include_directories(core_project PUBLIC
     include
 )
 
-target_link_libraries(core_project PRIVATE module_common utils___logging utils___memory_allocation utils___core_module_interface)
+target_link_libraries(core_project PUBLIC module_common utils___logging utils___memory_allocation utils___core_module_interface)
 
 # MSVC: force dynamic CRT
 if (MSVC)

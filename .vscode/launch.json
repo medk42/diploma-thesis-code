@@ -100,13 +100,13 @@
             "preLaunchTask": "Project: Build and Install"
         },
         {
-            "name": "demo_core",
+            "name": "core",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/demos/binaries/demo_core.exe",
-            "args": ["demo_modules"],
+            "program": "${workspaceFolder}/backend/binaries/core.exe",
+            "args": ["${workspaceFolder}/demos/binaries/demo_modules", "."],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/demos/binaries",
+            "cwd": ".",
             "environment": [],
             "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"

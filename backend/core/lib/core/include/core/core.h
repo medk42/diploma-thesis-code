@@ -25,6 +25,9 @@ namespace aergo::core
         virtual aergo::module::IAllocatorCore* createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept override final;
         virtual void deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept override final;
 
+        const aergo::module::ModuleInfo* getLoadedModulesInfo(size_t loaded_module_id) const;
+        size_t getLoadedModulesCount() const;
+
     private:
         struct ModuleLoaderData
         {

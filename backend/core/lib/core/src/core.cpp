@@ -78,3 +78,68 @@ void Core::log(aergo::module::logging::LogType log_type, const char* message)
 {
     logger_->log(logging::SourceType::CORE, nullptr, 0, log_type, message);
 }
+
+
+
+const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(size_t loaded_module_id) const
+{
+    if (loaded_module_id < loaded_modules_.size())
+    {
+        return loaded_modules_[loaded_module_id].module_loader_->readModuleInfo();
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+
+
+size_t Core::getLoadedModulesCount() const
+{
+    return loaded_modules_.size();
+}
+
+
+
+void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept
+{
+    std::terminate();
+}
+
+
+
+void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
+{
+    std::terminate();
+}
+
+
+
+void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
+{
+    std::terminate();
+}
+
+
+
+aergo::module::IAllocatorCore* Core::createDynamicAllocator() noexcept
+{
+    std::terminate();
+}
+
+
+
+aergo::module::IAllocatorCore* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
+{
+    std::terminate();
+}
+
+
+
+void Core::deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept
+{
+    std::terminate();
+}
+
+
