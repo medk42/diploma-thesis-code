@@ -41,7 +41,10 @@ namespace aergo::module
             Count count_;                // requested count of consumers
             uint64_t min_;               // minimum amount of consumers (for RANGE only)
             uint64_t max_;               // maximum amount of consumers (for RANGE only)
-            const char* channel_name_;   // name of the communication channel
+            
+            const char* channel_type_identifier_;   // uniquely identifies channel type (for inter-module communication), e.g. "image_rgb"
+            const char* display_name_;              // human-friendly displayed channel name, e.g. "Camera #1"
+            const char* display_description_;       // human-friendly displayed channel description, e.g. "First camera, raw video without any image processing"
         };
 
         struct SubscribeTag {};
