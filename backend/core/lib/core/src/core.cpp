@@ -7,12 +7,19 @@ using namespace aergo::core;
 
 
 Core::Core(logging::ILogger* logger)
-: logger_(logger) {}
+: logger_(logger), initialized_(false) {}
 
 
 
 void Core::initialize(const char* modules_dir, const char* data_dir)
 {
+    if (initialized_)
+    {
+        return;
+    }
+
+    initialized_ = true;
+
     for (const auto& entry : std::filesystem::directory_iterator(modules_dir))
     {
         auto module_path = entry.path();

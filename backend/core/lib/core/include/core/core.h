@@ -11,6 +11,9 @@ namespace aergo::core
     public:
         Core(logging::ILogger* logger);
 
+        /// @brief Load all available modules from the modules_dir. Data for each module is in data_dir (with same folder name as the module library filename).
+        /// For example "${modules_dir}/module_a.dll" will have data directory pointed to "${data_dir}/module_a".
+        /// Only call this method once. Subsequent calls are ignored.
         void initialize(const char* modules_dir, const char* data_dir);
 
         virtual void sendMessage(uint64_t source_module_id, uint64_t publish_producer_id, aergo::module::message::MessageHeader message) noexcept override final;
@@ -31,6 +34,7 @@ namespace aergo::core
 
 
 
+        bool initialized_;
         std::vector<ModuleLoaderData> loaded_modules_;
 
         logging::ILogger* logger_;
