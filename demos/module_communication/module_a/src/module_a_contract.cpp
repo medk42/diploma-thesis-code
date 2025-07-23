@@ -2,7 +2,7 @@
 #include "module_a/module_a.h"
 
 
-#define MODULE_A_API_VERSION 1
+#define MODULE_A_API_VERSION 2
 
 static_assert(MODULE_A_API_VERSION == PLUGIN_API_VERSION,
     "Incompatible plugin API version in module.");
@@ -53,7 +53,7 @@ const ModuleInfo* readModuleInfo()
     return &module_a_info;
 }
 
-IModule* createModule(ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id)
+IModule* createModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id)
 {
     return new ModuleA(core, channel_map_info, logger, module_id);
 }

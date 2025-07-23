@@ -5,9 +5,13 @@
 #include "module_common/module_interface.h"
 #include "module_common/module_interface_threads.h"
 
-#define CORE_API_VERSION 1
+#define CORE_API_VERSION 2
 
 #ifdef _WIN32
+  #define WIN32_LEAN_AND_MEAN  // ERROR is a macro. Yes, really. Someone signed off on that.
+  #define NOMINMAX             // Thank you, legacy Windows headers, for redefining ERROR and breaking enums. Truly inspiring.
+  #define NOGDI                // Future generations will study this decision in software design classes.
+  #define NOMB
   #include <windows.h>
   using ModuleLibrary_LibHandle = HMODULE;
   inline ModuleLibrary_LibHandle ModuleLibrary_openLib(const char* p){ return LoadLibraryA(p); }
@@ -24,7 +28,7 @@
 #define PLUGIN_FUNCS(_) \
     _(const aergo::module::ModuleInfo*,  readModuleInfo,       ) \
     _(uint64_t,                          readPluginApiVersion  ) \
-    _(aergo::module::IModule*,           createModule,         aergo::module::ICore*, aergo::module::InputChannelMapInfo, aergo::module::logging::ILogger*, uint64_t) \
+    _(aergo::module::IModule*,           createModule,         const char* data_path, aergo::module::ICore*, aergo::module::InputChannelMapInfo, aergo::module::logging::ILogger*, uint64_t) \
     _(void,                              destroyModule,        aergo::module::IModule*)
 
 struct ModuleLibrary_Api {

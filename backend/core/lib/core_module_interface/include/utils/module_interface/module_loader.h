@@ -35,7 +35,7 @@ namespace aergo::core
         /// @param channel_map_info ids of modules bound to subscribe and request channels, so the module knows what is on its input
         /// @param logger object for logging messages from the core
         /// @param module_id unique ID of this module received from the core
-        ModulePtr createModule(aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id);
+        ModulePtr createModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id);
 
     private:
         ModuleLoader(ModuleLibrary_LibHandle handle, ModuleLibrary_Api api);

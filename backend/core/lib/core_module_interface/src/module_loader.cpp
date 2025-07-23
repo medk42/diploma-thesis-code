@@ -30,10 +30,10 @@ const aergo::module::ModuleInfo* ModuleLoader::readModuleInfo()
 
 
 
-ModuleLoader::ModulePtr ModuleLoader::createModule(aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id)
+ModuleLoader::ModulePtr ModuleLoader::createModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id)
 {
     return std::unique_ptr<aergo::module::IModule, std::function<void(aergo::module::IModule*)>>(
-        api_.createModule(core, channel_map_info, logger, module_id),
+        api_.createModule(data_path, core, channel_map_info, logger, module_id),
         [this](aergo::module::IModule* module_ref) { api_.destroyModule(module_ref); }
     );
 }
