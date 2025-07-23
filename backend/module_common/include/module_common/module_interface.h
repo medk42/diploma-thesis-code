@@ -126,13 +126,20 @@ namespace aergo::module
         bool auto_create_;
     };
 
+    /// @brief Identifies the module and its channel (without distinction between publish/subscribe/request/response channels)
+    struct ChannelIdentifier
+    {
+        uint64_t producer_module_id_;    // ID of the module
+        uint32_t producer_channel_id_;   // ID of the channel inside the module
+    };
+
     struct InputChannelMapInfo
     {
         struct IndividualChannelInfo
         {
-            // ids of modules mapped to the input channel
-            uint64_t* module_ids_;
-            uint32_t module_ids_count_;
+            // list of channel identifiers mapped to the input channel
+            ChannelIdentifier* channel_identifier_;
+            uint32_t channel_identifier_count_;
         };
 
         // ids of modules bound to each subscribe channel

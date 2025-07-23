@@ -1,7 +1,5 @@
 #include "core/core.h"
 
-#include <filesystem>
-
 using namespace aergo::core;
 
 

@@ -4,6 +4,8 @@
 #include "utils/module_interface/module_loader.h"
 #include "utils/logging/logger.h"
 
+#include <filesystem>
+
 namespace aergo::core
 {
     class Core : public aergo::module::ICore
@@ -16,9 +18,9 @@ namespace aergo::core
         /// Only call this method once. Subsequent calls are ignored.
         void initialize(const char* modules_dir, const char* data_dir);
 
-        virtual void sendMessage(uint64_t source_module_id, uint64_t publish_producer_id, aergo::module::message::MessageHeader message) noexcept override final;
-        virtual void sendResponse(uint64_t source_module_id, uint64_t response_producer_id, aergo::module::message::MessageHeader message) noexcept override final;
-        virtual void sendRequest(uint64_t source_module_id, uint64_t request_consumer_id, uint64_t target_module_id, aergo::module::message::MessageHeader message) noexcept override final;
+        virtual void sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override final;
+        virtual void sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept override final;
+        virtual void sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept override final;
         virtual aergo::module::IAllocatorCore* createDynamicAllocator() noexcept override final;
         virtual aergo::module::IAllocatorCore* createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept override final;
         virtual void deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept override final;

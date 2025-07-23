@@ -26,19 +26,19 @@ small_message_counter_(0), gen_(), dist_(0, 255)
 
 
 
-void ModuleA::processMessageImpl(uint64_t subscribe_consumer_id, uint64_t module_id, aergo::module::message::MessageHeader message)
+void ModuleA::processMessageImpl(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message)
 {}
 
 
 
-void ModuleA::processRequestImpl(uint64_t response_producer_id, aergo::module::message::MessageHeader message)
+void ModuleA::processRequestImpl(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message)
 {
     if (response_producer_id == 0)
     {
         if (message.data_len_ != sizeof(messages::request_response::LargeVariableReq))
         {
             LOG(logging::LogType::WARNING, "Unexpected message data length: " << message.data_len_ << "B (expected " << sizeof(messages::request_response::LargeVariableReq) << "B)")
-            sendResponse(0, message.id_, {.success_ = false});
+            sendResponse(0, source_channel, message.id_, {.success_ = false});
             return;
         }
         messages::request_response::LargeVariableReq* request = (messages::request_response::LargeVariableReq*)message.data_;
@@ -59,13 +59,13 @@ void ModuleA::processRequestImpl(uint64_t response_producer_id, aergo::module::m
         if (!data_blob.valid())
         {
             log(logging::LogType::WARNING, "Allocated data blob is not valid!");
-            sendResponse(0, message.id_, {.success_ = false});
+            sendResponse(0, source_channel, message.id_, {.success_ = false});
             return;
         }
         if (data_blob.size() != request->requested_size_)
         {
             LOG(logging::LogType::WARNING, "Data blob size is not " << request->requested_size_ << "B (actual size = " << data_blob.size() << "B)")
-            sendResponse(0, message.id_, {.success_ = false});
+            sendResponse(0, source_channel, message.id_, {.success_ = false});
             return;
         }
 
@@ -84,19 +84,19 @@ void ModuleA::processRequestImpl(uint64_t response_producer_id, aergo::module::m
             .blob_count_ = 1,
             .success_ = true
         };
-        sendResponse(0, message.id_, resp_message);
+        sendResponse(0, source_channel, message.id_, resp_message);
     }
     else
     {
         LOG(logging::LogType::WARNING, "Unknown request source: " << response_producer_id)
-        sendResponse(response_producer_id, message.id_, {.success_ = false});
+        sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false});
         return;
     }
 }
 
 
 
-void ModuleA::processResponseImpl(uint64_t request_consumer_id, uint64_t module_id, aergo::module::message::MessageHeader message)
+void ModuleA::processResponseImpl(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message)
 {}
 
 

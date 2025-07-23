@@ -21,8 +21,8 @@ ModuleWrapper::ModuleWrapper(ICore* core, InputChannelMapInfo channel_map_info, 
     {
         auto& info = channel_map_info.subscribe_consumer_info_[i];
         subscribe_consumer_info_.emplace_back(
-            info.module_ids_,
-            info.module_ids_ + info.module_ids_count_
+            info.channel_identifier_,
+            info.channel_identifier_ + info.channel_identifier_count_
         );
     }
 
@@ -32,8 +32,8 @@ ModuleWrapper::ModuleWrapper(ICore* core, InputChannelMapInfo channel_map_info, 
     {
         auto& info = channel_map_info.request_consumer_info_[i];
         request_consumer_info_.emplace_back(
-            info.module_ids_,
-            info.module_ids_ + info.module_ids_count_
+            info.channel_identifier_,
+            info.channel_identifier_ + info.channel_identifier_count_
         );
     }
 }
@@ -56,55 +56,79 @@ bool ModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
 
 
 
-void ModuleWrapper::sendMessage(uint64_t publish_producer_id, message::MessageHeader message)
+void ModuleWrapper::sendMessage(uint32_t publish_producer_id, message::MessageHeader message)
 {
     message.timestamp_ns_ = nowNs();
-    core_->sendMessage(module_id_, publish_producer_id, message);
+    
+    core_->sendMessage(
+        {
+            .producer_module_id_ = module_id_, 
+            .producer_channel_id_ = publish_producer_id
+        }, 
+        message
+    );
 }
 
 
 
-void ModuleWrapper::sendResponse(uint64_t response_producer_id, uint64_t request_id, message::MessageHeader message)
+void ModuleWrapper::sendResponse(uint32_t response_producer_id, ChannelIdentifier target_channel, uint64_t request_id, message::MessageHeader message)
 {
     message.id_ = request_id;
     message.timestamp_ns_ = nowNs();
-    core_->sendResponse(module_id_, response_producer_id, message);
+
+    core_->sendResponse(
+        {
+            .producer_module_id_ = module_id_, 
+            .producer_channel_id_ = response_producer_id
+        }, 
+        target_channel,
+        message
+    );
 }
 
 
 
-uint64_t ModuleWrapper::sendRequest(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message)
+uint64_t ModuleWrapper::sendRequest(uint32_t request_consumer_id, ChannelIdentifier target_channel, message::MessageHeader message)
 {
     message.id_ = request_id_++;
     message.timestamp_ns_ = nowNs();
-    core_->sendRequest(module_id_, request_consumer_id, module_id, message);
+
+    core_->sendRequest(
+        {
+            .producer_module_id_ = module_id_, 
+            .producer_channel_id_ = request_consumer_id
+        }, 
+        target_channel, 
+        message
+    );
+
     return message.id_;
 }
 
 
 
-void ModuleWrapper::processMessage(uint64_t subscribe_consumer_id, uint64_t module_id, message::MessageHeader message) noexcept
+void ModuleWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    pushProcessingData(ProcessingData::Type::MESSAGE, subscribe_consumer_id, module_id, message);
+    pushProcessingData(ProcessingData::Type::MESSAGE, subscribe_consumer_id, source_channel, message);
 }
 
 
 
-void ModuleWrapper::processRequest(uint64_t response_producer_id, message::MessageHeader message) noexcept
+void ModuleWrapper::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    pushProcessingData(ProcessingData::Type::REQUEST, response_producer_id, 0, message);
+    pushProcessingData(ProcessingData::Type::REQUEST, response_producer_id, source_channel, message);
 }
 
 
 
-void ModuleWrapper::processResponse(uint64_t request_consumer_id, uint64_t module_id, message::MessageHeader message) noexcept
+void ModuleWrapper::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    pushProcessingData(ProcessingData::Type::RESPONSE, request_consumer_id, module_id, message);
+    pushProcessingData(ProcessingData::Type::RESPONSE, request_consumer_id, source_channel, message);
 }
 
 
 
-void ModuleWrapper::pushProcessingData(ProcessingData::Type type, uint64_t source_id, uint64_t module_id, message::MessageHeader message)
+void ModuleWrapper::pushProcessingData(ProcessingData::Type type, uint32_t local_channel_id, ChannelIdentifier source_channel, message::MessageHeader message)
 {
     std::vector<uint8_t> data(message.data_, message.data_ + message.data_len_);
     message.data_ = data.data();
@@ -114,8 +138,8 @@ void ModuleWrapper::pushProcessingData(ProcessingData::Type type, uint64_t sourc
 
     ProcessingData processing_data {
         .type_ = type,
-        .source_id_ = source_id,
-        .module_id_ = module_id,
+        .local_channel_id_ = local_channel_id,
+        .source_channel_ = source_channel,
         .message_ = message,
         .data_ = std::move(data),
         .blobs_ = std::move(blobs)
@@ -157,13 +181,13 @@ void ModuleWrapper::_threadCycle()
             switch (processing_data.type_)
             {
                 case ProcessingData::Type::MESSAGE:
-                    TRY_CATCH_LOG("processMessageImpl", processMessageImpl(processing_data.source_id_, processing_data.module_id_, processing_data.message_);)
+                    TRY_CATCH_LOG("processMessageImpl", processMessageImpl(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);)
                     break;
                 case ProcessingData::Type::REQUEST:
-                    TRY_CATCH_LOG("processRequestImpl", processRequestImpl(processing_data.source_id_, processing_data.message_);)
+                    TRY_CATCH_LOG("processRequestImpl", processRequestImpl(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);)
                     break;
                 case ProcessingData::Type::RESPONSE:
-                    TRY_CATCH_LOG("processResponseImpl", processResponseImpl(processing_data.source_id_, processing_data.module_id_, processing_data.message_);)
+                    TRY_CATCH_LOG("processResponseImpl", processResponseImpl(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);)
                     break;
             }
         }
@@ -191,14 +215,14 @@ InputChannelMapInfo::IndividualChannelInfo ModuleWrapper::getSubscribeChannelInf
     if (channel_id >= subscribe_consumer_info_.size())
     {
         return InputChannelMapInfo::IndividualChannelInfo {
-            .module_ids_ = nullptr,
-            .module_ids_count_ = 0
+            .channel_identifier_ = nullptr,
+            .channel_identifier_count_ = 0
         };
     }
 
     return InputChannelMapInfo::IndividualChannelInfo {
-        .module_ids_ = subscribe_consumer_info_[channel_id].data(),
-        .module_ids_count_ = (uint32_t)subscribe_consumer_info_[channel_id].size()
+        .channel_identifier_ = subscribe_consumer_info_[channel_id].data(),
+        .channel_identifier_count_ = (uint32_t)subscribe_consumer_info_[channel_id].size()
     };
 }
 
@@ -209,14 +233,14 @@ InputChannelMapInfo::IndividualChannelInfo ModuleWrapper::getRequestChannelInfo(
     if (channel_id >= request_consumer_info_.size())
     {
         return InputChannelMapInfo::IndividualChannelInfo {
-            .module_ids_ = nullptr,
-            .module_ids_count_ = 0
+            .channel_identifier_ = nullptr,
+            .channel_identifier_count_ = 0
         };
     }
 
     return InputChannelMapInfo::IndividualChannelInfo {
-        .module_ids_ = request_consumer_info_[channel_id].data(),
-        .module_ids_count_ = (uint32_t)request_consumer_info_[channel_id].size()
+        .channel_identifier_ = request_consumer_info_[channel_id].data(),
+        .channel_identifier_count_ = (uint32_t)request_consumer_info_[channel_id].size()
     };
 }
 
