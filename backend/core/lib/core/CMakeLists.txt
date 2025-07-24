@@ -1,5 +1,6 @@
 add_library(core_project
     src/core.cpp
+    src/core_structures.cpp
 )
 
 target_include_directories(core_project PUBLIC

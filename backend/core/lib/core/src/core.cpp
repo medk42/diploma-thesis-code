@@ -1,4 +1,5 @@
 #include "core/core.h"
+#include "core/defaults.h"
 
 using namespace aergo::core;
 
@@ -15,9 +16,16 @@ void Core::initialize(const char* modules_dir, const char* data_dir)
     {
         return;
     }
-
     initialized_ = true;
 
+    loadModules(modules_dir, data_dir);
+    autoCreateModules();
+}
+
+
+
+void Core::loadModules(const char* modules_dir, const char* data_dir)
+{
     for (const auto& entry : std::filesystem::directory_iterator(modules_dir))
     {
         auto module_path = entry.path();
@@ -26,7 +34,7 @@ void Core::initialize(const char* modules_dir, const char* data_dir)
         if (!entry.exists() && module_path.has_stem())
         {
             std::string log_message = std::string("Following module file does not exist: ") + module_path_str;
-            log(aergo::module::logging::LogType::ERROR, log_message.c_str());
+            log(aergo::module::logging::LogType::WARNING, log_message.c_str());
         }
 
         
@@ -48,10 +56,11 @@ void Core::initialize(const char* modules_dir, const char* data_dir)
                 std::string log_message = std::string("Module loaded successfully: ") + module_filename;
                 log(aergo::module::logging::LogType::INFO, log_message.c_str());
 
-                loaded_modules_.push_back({
-                    .module_loader_ = std::move(*loaded_module),
-                    .module_filename_ = std::move(data_path)
-                });
+                loaded_modules_.emplace_back(
+                    std::move(*loaded_module),
+                    std::move(data_path.string()),
+                    std::move(module_filename)
+                );
             }
         }
         else
@@ -67,9 +76,85 @@ void Core::initialize(const char* modules_dir, const char* data_dir)
                 default:
                     log_message += "(UNKNOWN): " + module_filename;
             }
-            log(aergo::module::logging::LogType::ERROR, log_message.c_str());
+            log(aergo::module::logging::LogType::WARNING, log_message.c_str());
         }
     }
+}
+
+
+
+void Core::autoCreateModules()
+{
+    aergo::module::InputChannelMapInfo empty_channel_info
+    {
+        .subscribe_consumer_info_ = nullptr,
+        .subscribe_consumer_info_count_ = 0,
+        .request_consumer_info_ = nullptr,
+        .request_consumer_info_count_ = 0
+    };
+
+
+    for (size_t i = 0; i < loaded_modules_.size(); ++i)
+    {
+        if (loaded_modules_[i]->readModuleInfo()->auto_create_)
+        {
+
+            const char* data_path;
+            if (std::filesystem::exists(loaded_modules_[i].getModuleDataPath()))
+            {
+                data_path = loaded_modules_[i].getModuleDataPath().c_str();
+            }
+            else
+            {
+                data_path = nullptr;
+            }
+
+            
+            uint64_t next_module_id = getNextModuleId();
+            auto module_data = std::make_unique<structures::ModuleData>( // TODO this may be an issue, module_ does not have a default constructor maybe
+                structures::ModuleLogger(
+                    logger_, 
+                    loaded_modules_[i].getModuleUniqueName(), 
+                    next_module_id
+                ), 
+                &(loaded_modules_[i])
+            );
+
+            ModuleLoader::ModulePtr created_module(loaded_modules_[i]->createModule(data_path, this, empty_channel_info, &(module_data->logger_), next_module_id));
+
+            if (created_module.get() == nullptr)
+            {
+                std::string error_message = std::string("Failed to create module (createModule call failed) for module: ") + module_data->module_loader_data_->getModuleUniqueName();
+                log(aergo::module::logging::LogType::WARNING, error_message.c_str());
+            }
+            else
+            {
+                bool result = created_module->threadStart(defaults::module_thread_timeout_ms_);
+                if (!result)
+                {
+                    bool result2 = created_module->threadStop(defaults::module_thread_timeout_ms_);
+
+                    std::string error_message = std::string("Failed to start thread for module: \"") + module_data->module_loader_data_->getModuleUniqueName() + std::string("\", stop success: ") + (result2 ? "TRUE" : "false");
+                    log(aergo::module::logging::LogType::WARNING, error_message.c_str());
+                }
+                else
+                {
+                    module_data->module_ = std::move(created_module);
+                    running_modules_.push_back(std::move(module_data));
+
+                    std::string success_message = std::string("Successfully auto-created module: ") + module_data->module_loader_data_->getModuleUniqueName();
+                    log(aergo::module::logging::LogType::INFO, success_message.c_str());
+                }
+            }
+        }
+    }
+}
+
+
+
+uint64_t Core::getNextModuleId()
+{
+    return running_modules_.size();
 }
 
 
@@ -81,11 +166,11 @@ void Core::log(aergo::module::logging::LogType log_type, const char* message)
 
 
 
-const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(size_t loaded_module_id) const
+const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(size_t loaded_module_id)
 {
     if (loaded_module_id < loaded_modules_.size())
     {
-        return loaded_modules_[loaded_module_id].module_loader_->readModuleInfo();
+        return loaded_modules_[loaded_module_id]->readModuleInfo();
     }
     else
     {
