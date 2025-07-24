@@ -23,10 +23,9 @@
         ],
         "group": "build",
         "problemMatcher": [],
-        "detail": "Builds and Installs Project (cmake)",
-        "dependsOn": "CMake: configure",
+        "detail": "Builds and Installs Project Without Configuring (cmake)",
         "dependsOrder": "sequence"
-      }
+      },
   
     ]
   }
