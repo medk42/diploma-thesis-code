@@ -63,20 +63,23 @@ namespace aergo::core
         bool addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info);
 
     private:
+        enum class ConsumerType { SUBSCRIBE, REQUEST };
+
         void log(aergo::module::logging::LogType log_type, const char* message);
         void loadModules(const char* modules_dir, const char* data_dir);
         void autoCreateModules();
         uint64_t getNextModuleId();
-        void registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_, existing_response_channels_ and existing_subscribe_auto_all_channels_
+        void registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_, existing_response_channels_, existing_subscribe_auto_all_channels_ and existing_request_auto_all_channels_
 
         /// @brief register to publishing / response module mappings and module's own mappings.
         /// method expects that InputChannelMapInfo is correctly mapped (corresponds to module definition and types match)
         void registerModuleConnections(uint64_t module_id, aergo::module::InputChannelMapInfo channel_map_info);
+        void registerConsumers(uint64_t module_id, aergo::module::InputChannelMapInfo channel_map_info, ConsumerType consumer_type);
+        void registerToProducersAutoAll(uint64_t module_id, aergo::module::InputChannelMapInfo channel_map_info, ConsumerType consumer_type);
+        void registerToConsumersAutoAll(uint64_t module_id, aergo::module::InputChannelMapInfo channel_map_info, ConsumerType consumer_type);
         bool checkChannelMapValidity(aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::ModuleInfo* module_info); // return true if channel_map_info matched module_info
-
-        /// @param check_subscribe check subscribe if true, check request if false
         bool checkChannelMapValidityArrayCheck(
-            aergo::module::InputChannelMapInfo& channel_map_info, const aergo::module::ModuleInfo* module_info, bool check_subscribe
+            aergo::module::InputChannelMapInfo& channel_map_info, const aergo::module::ModuleInfo* module_info, ConsumerType consumer_type
         );
         
         /// @brief Attempt to create and start module identified by loaded_module_id.
@@ -92,6 +95,7 @@ namespace aergo::core
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_publish_channels_;
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_response_channels_;
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_subscribe_auto_all_channels_;
+        std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_request_auto_all_channels_;
 
         logging::ILogger* logger_;
     };
