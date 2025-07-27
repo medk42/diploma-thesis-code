@@ -230,6 +230,17 @@ void Core::registerModuleChannelNames(uint64_t module_id, const aergo::module::M
             .producer_channel_id_ = channel_id
         });
     }
+
+    for (uint32_t channel_id = 0; channel_id < module_info->subscribe_consumer_count_; ++channel_id)
+    {
+        if (module_info->subscribe_consumers_[channel_id].count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+        {
+            existing_subscribe_auto_all_channels_[module_info->subscribe_consumers_[channel_id].channel_type_identifier_].push_back({
+                .producer_module_id_ = module_id,
+                .producer_channel_id_ = channel_id
+            });
+        }
+    }
 }
 
 
@@ -250,6 +261,7 @@ void Core::registerModuleConnections(uint64_t module_id, aergo::module::InputCha
         return;
     }
     
+    // handle subscribe mapping
     for (uint32_t subscribe_id = 0; subscribe_id < channel_map_info.subscribe_consumer_info_count_; ++subscribe_id)
     {
         aergo::module::InputChannelMapInfo::IndividualChannelInfo subscribe_channel_info = channel_map_info.subscribe_consumer_info_[subscribe_id];
@@ -265,6 +277,7 @@ void Core::registerModuleConnections(uint64_t module_id, aergo::module::InputCha
         }
     }
 
+    // handle request mapping
     for (uint32_t request_id = 0; request_id < channel_map_info.request_consumer_info_count_; ++request_id)
     {
         aergo::module::InputChannelMapInfo::IndividualChannelInfo request_channel_info = channel_map_info.request_consumer_info_[request_id];
@@ -279,8 +292,84 @@ void Core::registerModuleConnections(uint64_t module_id, aergo::module::InputCha
             running_module->mapping_request_[request_id].push_back(channel_identifier);
         }
     }
+    
+    // handle AUTO_ALL subscribe mapping
+    const aergo::module::ModuleInfo* module_info = (*running_module->module_loader_data_)->readModuleInfo();
+    for (uint32_t subscribe_id = 0; subscribe_id < module_info->subscribe_consumer_count_; ++subscribe_id)
+    {
+        aergo::module::communication_channel::Consumer consumer_info = module_info->subscribe_consumers_[subscribe_id];
+        if (consumer_info.count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+        {
+            for (aergo::module::ChannelIdentifier producer_channel_identifier : getExistingPublishChannels(consumer_info.channel_type_identifier_))
+            {
+                if (producer_channel_identifier.producer_module_id_ >= running_modules_.size())
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Invalid producer_channel_identifier in registerModuleConnections, module id out of bounds.");
+                    std::terminate();
+                }
+
+                aergo::core::structures::ModuleData* producer_module_data = running_modules_[producer_channel_identifier.producer_module_id_].get();
+                if (producer_module_data == nullptr)
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Invalid producer_channel_identifier in registerModuleConnections, source module is already destroyed.");
+                    std::terminate();
+                }
+
+                if (producer_channel_identifier.producer_channel_id_ >= producer_module_data->mapping_publish_.size())
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Invalid producer_channel_identifier in registerModuleConnections, channel id out of bounds.");
+                    std::terminate();
+                }
+                
+                producer_module_data->mapping_publish_[producer_channel_identifier.producer_channel_id_].push_back({
+                    .producer_module_id_ = module_id,
+                    .producer_channel_id_ = subscribe_id
+                });
+
+                running_module->mapping_subscribe_[subscribe_id].push_back(producer_channel_identifier);
+            }
+        }
+    }
+
+    // connect publish to all AUTO_ALL subscribers
+    for (uint32_t publish_id = 0; publish_id < module_info->publish_producer_count_; ++publish_id)
+    {
+        const aergo::module::communication_channel::Producer producer_info = module_info->publish_producers_[publish_id];
+
+        auto it = existing_subscribe_auto_all_channels_.find(producer_info.channel_type_identifier_);
+        if (it != existing_subscribe_auto_all_channels_.end())
+        {
+            for (aergo::module::ChannelIdentifier other_channel_id : it->second)
+            {
+                if (other_channel_id.producer_module_id_ >= running_modules_.size())
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Invalid other_channel_id in registerModuleConnections, module id out of bounds.");
+                    std::terminate();
+                }
+
+                aergo::core::structures::ModuleData* subscriber_module_data = running_modules_[other_channel_id.producer_module_id_].get();
+                if (subscriber_module_data == nullptr)
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Invalid other_channel_id in registerModuleConnections, source module is already destroyed.");
+                    std::terminate();
+                }
+
+                if (other_channel_id.producer_channel_id_ >= subscriber_module_data->mapping_subscribe_.size())
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Invalid other_channel_id in registerModuleConnections, channel id out of bounds.");
+                    std::terminate();
+                }
+
+                subscriber_module_data->mapping_subscribe_[other_channel_id.producer_channel_id_].push_back({
+                    .producer_module_id_ = module_id,
+                    .producer_channel_id_ = publish_id
+                });
+                
+                running_module->mapping_publish_[publish_id].push_back(other_channel_id);
+            }
+        }
+    }
 }
-// TODO handle AUTO_ALL for subscribe (for request, it will need to prompt the core which modules exist, but for subscribe it should always be subscribed everywhere)
 
 
 

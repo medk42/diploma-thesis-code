@@ -47,7 +47,7 @@ namespace aergo::core
 
         /// @brief Return module specified by ID. Module will only be removed if it exists (id < getRunningModulesCount() and wasn't yet removed)
         /// and it does not have dependencies (modules connected to its outputs). If it has dependencies and recursive is true, module and all 
-        /// of its (recursive) dependencies will be removed. 
+        /// of its (recursive) dependencies will be removed. AUTO_ALL dependencies are not considered / removed, only SINGLE and RANGE.
         /// @param id id of the module to remove
         /// @param recursive remove all dependencies too, if module has dependencies and recursive is false, module will not be removed and method will return false
         /// @return true if module (and possibly dependencies, if recursive is true) was removed, false otherwise 
@@ -67,7 +67,7 @@ namespace aergo::core
         void loadModules(const char* modules_dir, const char* data_dir);
         void autoCreateModules();
         uint64_t getNextModuleId();
-        void registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_ and existing_response_channels_
+        void registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_, existing_response_channels_ and existing_subscribe_auto_all_channels_
 
         /// @brief register to publishing / response module mappings and module's own mappings.
         /// method expects that InputChannelMapInfo is correctly mapped (corresponds to module definition and types match)
@@ -91,6 +91,7 @@ namespace aergo::core
 
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_publish_channels_;
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_response_channels_;
+        std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_subscribe_auto_all_channels_;
 
         logging::ILogger* logger_;
     };
