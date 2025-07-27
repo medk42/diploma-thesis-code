@@ -38,12 +38,12 @@ namespace aergo::core
         uint64_t getModulesMappingStateId();
 
         /// @brief Get existing publish channels for specified channel type identifier. 
-        /// @return Returns a list of modules and channels inside the modules or std::nullopt if specified identifier is not tied to any channels yet.
-        std::optional<std::vector<aergo::module::ChannelIdentifier>&> getExistingPublishChannels(const char* channel_type_identifier);
+        /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
+        const std::vector<aergo::module::ChannelIdentifier>& getExistingPublishChannels(const char* channel_type_identifier) const;
 
         /// @brief Get existing response channels for specified channel type identifier.
-        /// @return Returns a list of modules and channels inside the modules or std::nullopt if specified identifier is not tied to any channels yet.
-        std::optional<std::vector<aergo::module::ChannelIdentifier>&> getExistingResponseChannels(const char* channel_type_identifier);
+        /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
+        const std::vector<aergo::module::ChannelIdentifier>& getExistingResponseChannels(const char* channel_type_identifier) const;
 
         /// @brief Return module specified by ID. Module will only be removed if it exists (id < getRunningModulesCount() and wasn't yet removed)
         /// and it does not have dependencies (modules connected to its outputs). If it has dependencies and recursive is true, module and all 
@@ -67,8 +67,17 @@ namespace aergo::core
         void loadModules(const char* modules_dir, const char* data_dir);
         void autoCreateModules();
         uint64_t getNextModuleId();
-        void registerModule(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_ and existing_response_channels_
+        void registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_ and existing_response_channels_
+
+        /// @brief register to publishing / response module mappings and module's own mappings.
+        /// method expects that InputChannelMapInfo is correctly mapped (corresponds to module definition and types match)
+        void registerModuleConnections(uint64_t module_id, aergo::module::InputChannelMapInfo channel_map_info);
         bool checkChannelMapValidity(aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::ModuleInfo* module_info); // return true if channel_map_info matched module_info
+
+        /// @param check_subscribe check subscribe if true, check request if false
+        bool checkChannelMapValidityArrayCheck(
+            aergo::module::InputChannelMapInfo& channel_map_info, const aergo::module::ModuleInfo* module_info, bool check_subscribe
+        );
         
         /// @brief Attempt to create and start module identified by loaded_module_id.
         /// @return true on success, false on failure

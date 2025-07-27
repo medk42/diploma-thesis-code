@@ -38,7 +38,14 @@ const std::string& ModuleLoaderData::getModuleDataPath() const
 
 
 ModuleData::ModuleData(ModuleLogger&& logger, ModuleLoaderData* module_loader_data)
-: logger_(std::move(logger)), module_loader_data_(module_loader_data) {}
+: logger_(std::move(logger)), module_loader_data_(module_loader_data)
+{
+    const aergo::module::ModuleInfo* module_info = (*module_loader_data_)->readModuleInfo();
+    mapping_publish_.resize(module_info->publish_producer_count_);
+    mapping_subscribe_.resize(module_info->subscribe_consumer_count_);
+    mapping_request_.resize(module_info->request_consumer_count_);
+    mapping_response_.resize(module_info->response_producer_count_);
+}
 
 
 

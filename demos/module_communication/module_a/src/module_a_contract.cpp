@@ -11,7 +11,7 @@ static_assert(MODULE_A_API_VERSION == PLUGIN_API_VERSION,
 using namespace aergo::demo_modules_1::module_a;
 using namespace aergo::module;
 
-static constexpr communication_channel::PublishProducer module_a_publish_producers[] = {
+static constexpr communication_channel::Producer module_a_publish_producers[] = {
     { 
         .channel_type_identifier_ = "message_1_small/v1:struct{int32_t counter1;uint8_t counter2}", 
         .display_name_ = "Small message", 
@@ -24,7 +24,7 @@ static constexpr communication_channel::PublishProducer module_a_publish_produce
     }
 };
 
-static constexpr communication_channel::ResponseProducer module_a_response_producers[] = {
+static constexpr communication_channel::Producer module_a_response_producers[] = {
     {
         // Request: "request_1_large_variable/v1:struct{int32_t requested_size;uint8_t counter_start}"
         .channel_type_identifier_ = "response_1_large_variable/v1:struct{} + blob[dynamic, counter]",

@@ -12,25 +12,20 @@ namespace aergo::module
     
     namespace communication_channel
     {
-        template <typename Tag>
-        struct TypedProducer
+        /// @brief 2 types:
+        /// PublishProducer publishes data, binds to SubscribeConsumer.
+        /// ResponseProducer provides response for requests, binds to RequestConsumer.
+        struct Producer
         {
             const char* channel_type_identifier_;   // uniquely identifies channel type (for inter-module communication), e.g. "image_rgb"
             const char* display_name_;              // human-friendly displayed channel name, e.g. "Camera #1"
             const char* display_description_;       // human-friendly displayed channel description, e.g. "First camera, raw video without any image processing"
         };
 
-        struct PublishTag {};
-        struct ResponseTag {};
-
-        // publishes data, binds to SubscribeConsumer
-        using PublishProducer = TypedProducer<PublishTag>;
-
-        // provides response for requests, binds to RequestConsumer
-        using ResponseProducer = TypedProducer<ResponseTag>;
-
-        template <typename Tag>
-        struct TypedConsumer
+        /// @brief 2 types:
+        /// SubscribeConsumer subscribes to published data, binds to PublishProducer.
+        /// RequestConsumer send request, expects response, binds to ResponseProducer
+        struct Consumer
         {
             enum class Count { 
                 SINGLE,   // single consumer
@@ -38,23 +33,14 @@ namespace aergo::module
                 AUTO_ALL  // automatically bind subscribe/request to all available producers
             };
             
-            Count count_;                // requested count of consumers
-            uint64_t min_;               // minimum amount of consumers (for RANGE only)
-            uint64_t max_;               // maximum amount of consumers (for RANGE only)
+            Count count_;   // requested count of consumers
+            uint64_t min_;  // minimum amount of consumers (for RANGE only)
+            uint64_t max_;  // maximum amount of consumers (for RANGE only)
             
             const char* channel_type_identifier_;   // uniquely identifies channel type (for inter-module communication), e.g. "image_rgb"
             const char* display_name_;              // human-friendly displayed channel name, e.g. "Camera #1"
             const char* display_description_;       // human-friendly displayed channel description, e.g. "First camera, raw video without any image processing"
         };
-
-        struct SubscribeTag {};
-        struct RequestTag {};
-
-        // subscribes to published data, binds to PublishProducer
-        using SubscribeConsumer = TypedConsumer<SubscribeTag>;
-
-        // send request, expects response, binds to ResponseProducer
-        using RequestConsumer = TypedConsumer<RequestTag>;
     };
 
     namespace message
@@ -107,19 +93,19 @@ namespace aergo::module
         const char* display_description_;
 
         // list of publish producers provided by module (module provides pen position)
-        const communication_channel::PublishProducer* publish_producers_;
+        const communication_channel::Producer* publish_producers_;
         uint32_t publish_producer_count_;
 
         // list of response producers provided by module (module provides 3d pose on request)
-        const communication_channel::ResponseProducer* response_producers_;
+        const communication_channel::Producer* response_producers_;
         uint32_t response_producer_count_;
 
         // list of subscribe consumers required by module (module needs camera data)
-        const communication_channel::SubscribeConsumer* subscribe_consumers_;
+        const communication_channel::Consumer* subscribe_consumers_;
         uint32_t subscribe_consumer_count_;
 
         // list of request consumers required by module (module needs to be able to request a 3d pose)
-        const communication_channel::RequestConsumer* request_consumers_;
+        const communication_channel::Consumer* request_consumers_;
         uint32_t request_consumer_count_;
 
         /// @brief If true, automatically create a single instance of module. Can be used for example for visualizer modules that need to exist to set up other modules.

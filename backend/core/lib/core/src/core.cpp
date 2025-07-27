@@ -1,6 +1,8 @@
 #include "core/core.h"
 #include "core/defaults.h"
 
+#include <cstring>
+
 using namespace aergo::core;
 
 
@@ -96,17 +98,44 @@ void Core::autoCreateModules()
 
     for (size_t i = 0; i < loaded_modules_.size(); ++i)
     {
-        if (loaded_modules_[i]->readModuleInfo()->auto_create_)
+        const aergo::module::ModuleInfo* module_info = loaded_modules_[i]->readModuleInfo();
+        if (module_info->auto_create_)
         {
-            if (createAndStartModule(i, empty_channel_info, defaults::module_thread_timeout_ms_))
+            bool valid_mapping = true;
+            for (uint32_t subscribe_id = 0; subscribe_id < module_info->subscribe_consumer_count_; ++subscribe_id)
             {
-                std::string success_message = std::string("Successfully auto-created module: ") + loaded_modules_[i].getModuleUniqueName();
-                log(aergo::module::logging::LogType::INFO, success_message.c_str());
+                if (module_info->subscribe_consumers_[subscribe_id].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+                {
+                    valid_mapping = false;
+                    break;
+                }
+            }
+            for (uint32_t request_id = 0; request_id < module_info->request_consumer_count_ && valid_mapping; ++request_id)
+            {
+                if (module_info->request_consumers_[request_id].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+                {
+                    valid_mapping = false;
+                    break;
+                }
+            }
+
+            if (valid_mapping)
+            {
+                if (createAndStartModule(i, empty_channel_info, defaults::module_thread_timeout_ms_))
+                {
+                    std::string success_message = std::string("Successfully auto-created module: ") + loaded_modules_[i].getModuleUniqueName();
+                    log(aergo::module::logging::LogType::INFO, success_message.c_str());
+                }
+                else
+                {
+                    std::string failure_message = std::string("Failed to auto-create module: ") + loaded_modules_[i].getModuleUniqueName();
+                    log(aergo::module::logging::LogType::WARNING, failure_message.c_str());
+                }
             }
             else
             {
-                std::string success_message = std::string("Failed to auto-create module: ") + loaded_modules_[i].getModuleUniqueName();
-                log(aergo::module::logging::LogType::WARNING, success_message.c_str());
+                std::string failure_message = std::string("Failed to auto-create module due to invalid mapping (all subscribe/request consumers are required to be AUTO_ALL for auto_create modules): ") + loaded_modules_[i].getModuleUniqueName();
+                log(aergo::module::logging::LogType::WARNING, failure_message.c_str());
             }
         }
     }
@@ -167,7 +196,8 @@ bool Core::createAndStartModule(uint64_t loaded_module_id, aergo::module::InputC
             module_data->module_ = std::move(created_module);
             running_modules_.push_back(std::move(module_data));
 
-            registerModule(next_module_id, loaded_modules_[loaded_module_id]->readModuleInfo());
+            registerModuleChannelNames(next_module_id, loaded_modules_[loaded_module_id]->readModuleInfo());
+            registerModuleConnections(next_module_id, channel_map_info);
 
             return true;
         }
@@ -183,7 +213,7 @@ uint64_t Core::getNextModuleId()
 
 
 
-void Core::registerModule(uint64_t module_id, const aergo::module::ModuleInfo* module_info)
+void Core::registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info)
 {
     for (uint32_t channel_id = 0; channel_id < module_info->publish_producer_count_; ++channel_id)
     {
@@ -201,6 +231,56 @@ void Core::registerModule(uint64_t module_id, const aergo::module::ModuleInfo* m
         });
     }
 }
+
+
+
+void Core::registerModuleConnections(uint64_t module_id, aergo::module::InputChannelMapInfo channel_map_info)
+{
+    if (module_id >= running_modules_.size())
+    {
+        log(aergo::module::logging::LogType::ERROR, "registerModuleConnections called with wrong module_id");
+        return;
+    }
+
+    auto& running_module = running_modules_[module_id];
+
+    if (running_module.get() == nullptr)
+    {
+        log(aergo::module::logging::LogType::ERROR, "registerModuleConnections called with nullptr module");
+        return;
+    }
+    
+    for (uint32_t subscribe_id = 0; subscribe_id < channel_map_info.subscribe_consumer_info_count_; ++subscribe_id)
+    {
+        aergo::module::InputChannelMapInfo::IndividualChannelInfo subscribe_channel_info = channel_map_info.subscribe_consumer_info_[subscribe_id];
+        for (uint32_t channel_i = 0; channel_i < subscribe_channel_info.channel_identifier_count_; ++channel_i)
+        {
+            aergo::module::ChannelIdentifier channel_identifier = subscribe_channel_info.channel_identifier_[channel_i];
+            running_modules_[channel_identifier.producer_module_id_]->mapping_publish_[channel_identifier.producer_channel_id_].push_back({
+                .producer_module_id_ = module_id,
+                .producer_channel_id_ = subscribe_id
+            });
+
+            running_module->mapping_subscribe_[subscribe_id].push_back(channel_identifier);
+        }
+    }
+
+    for (uint32_t request_id = 0; request_id < channel_map_info.request_consumer_info_count_; ++request_id)
+    {
+        aergo::module::InputChannelMapInfo::IndividualChannelInfo request_channel_info = channel_map_info.request_consumer_info_[request_id];
+        for (uint32_t channel_i = 0; channel_i < request_channel_info.channel_identifier_count_; ++channel_i)
+        {
+            aergo::module::ChannelIdentifier channel_identifier = request_channel_info.channel_identifier_[channel_i];
+            running_modules_[channel_identifier.producer_module_id_]->mapping_response_[channel_identifier.producer_channel_id_].push_back({
+                .producer_module_id_ = module_id,
+                .producer_channel_id_ = request_id
+            });
+
+            running_module->mapping_request_[request_id].push_back(channel_identifier);
+        }
+    }
+}
+// TODO handle AUTO_ALL for subscribe (for request, it will need to prompt the core which modules exist, but for subscribe it should always be subscribed everywhere)
 
 
 
@@ -260,29 +340,35 @@ uint64_t Core::getModulesMappingStateId()
 
 
 
-std::optional<std::vector<aergo::module::ChannelIdentifier>&> Core::getExistingPublishChannels(const char* channel_type_identifier)
+const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingPublishChannels(const char* channel_type_identifier) const
 {
-    if (existing_publish_channels_.contains(channel_type_identifier))
+    static const std::vector<aergo::module::ChannelIdentifier> empty{};
+
+    auto it = existing_publish_channels_.find(channel_type_identifier);
+    if (it != existing_publish_channels_.end())
     {
-        return existing_publish_channels_[channel_type_identifier];
+        return it->second;
     }
     else
     {
-        return std::nullopt;
+        return empty;
     }
 }
 
 
 
-std::optional<std::vector<aergo::module::ChannelIdentifier>&> Core::getExistingResponseChannels(const char* channel_type_identifier)
+const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseChannels(const char* channel_type_identifier) const
 {
-    if (existing_response_channels_.contains(channel_type_identifier))
+    static const std::vector<aergo::module::ChannelIdentifier> empty{};
+
+    auto it = existing_response_channels_.find(channel_type_identifier);
+    if (it != existing_response_channels_.end())
     {
-        return existing_response_channels_[channel_type_identifier];
+        return it->second;
     }
     else
     {
-        return std::nullopt;
+        return empty;
     }
 }
 
@@ -290,7 +376,20 @@ std::optional<std::vector<aergo::module::ChannelIdentifier>&> Core::getExistingR
 
 bool Core::removeModule(uint64_t id, bool recursive)
 {
+    if (id >= running_modules_.size() || running_modules_[id].get() == nullptr)
+    {
+        return false;
+    }
+
+    auto& running_module = running_modules_[id];
+
     // TODO remove module, dependencies and all existing mappings (existing_response_channels_ and publish)
+    // if (!recursive)
+    // {
+    //     if (running_module->mapping_publish_)
+    // }
+
+    return true;
 }
 
 
@@ -320,65 +419,112 @@ bool Core::addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapIn
 
 bool Core::checkChannelMapValidity(aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::ModuleInfo* module_info)
 {
-    if (module_info->subscribe_consumer_count_ != channel_map_info.subscribe_consumer_info_count_)
+    if (checkChannelMapValidityArrayCheck(channel_map_info, module_info, false))
     {
         return false;
     }
 
-    if (module_info->request_consumer_count_ != channel_map_info.request_consumer_info_count_)
+    if (checkChannelMapValidityArrayCheck(channel_map_info, module_info, true))
     {
         return false;
     }
 
-    for (uint32_t subscriber_id = 0; subscriber_id < channel_map_info.subscribe_consumer_info_count_; ++subscriber_id)
+    return true;
+}
+
+
+bool Core::checkChannelMapValidityArrayCheck(
+    aergo::module::InputChannelMapInfo& channel_map_info, const aergo::module::ModuleInfo* module_info, bool check_subscribe
+)
+{
+    uint32_t channel_map_consumers_count, module_info_consumers_count;
+    aergo::module::InputChannelMapInfo::IndividualChannelInfo* channel_map_consumers;
+    const aergo::module::communication_channel::Consumer* module_info_consumers;
+
+    if (check_subscribe)
     {
-        switch (module_info->subscribe_consumers_[subscriber_id].count_)
+        channel_map_consumers_count = channel_map_info.subscribe_consumer_info_count_;
+        channel_map_consumers = channel_map_info.subscribe_consumer_info_;
+
+        module_info_consumers_count = module_info->subscribe_consumer_count_;
+        module_info_consumers = module_info->subscribe_consumers_;
+    }
+    else
+    {
+        channel_map_consumers_count = channel_map_info.request_consumer_info_count_;
+        channel_map_consumers = channel_map_info.request_consumer_info_;
+
+        module_info_consumers_count = module_info->request_consumer_count_;
+        module_info_consumers = module_info->request_consumers_;
+    }
+
+
+
+    if (channel_map_consumers_count != module_info_consumers_count)
+    {
+        return false;
+    }
+
+    for (uint32_t consumer_id = 0; consumer_id < channel_map_consumers_count; ++consumer_id)
+    {
+        auto module_info_consumer = module_info_consumers[consumer_id];
+        auto channel_map_consumer = channel_map_consumers[consumer_id];
+
+        switch (module_info_consumer.count_)
         {
-        case aergo::module::communication_channel::SubscribeConsumer::Count::SINGLE:
-            if (channel_map_info.subscribe_consumer_info_[subscriber_id].channel_identifier_count_ != 1)
+        case aergo::module::communication_channel::Consumer::Count::SINGLE:
+            if (channel_map_consumer.channel_identifier_count_ != 1)
             {
                 return false;
             }
             break;
-        case aergo::module::communication_channel::SubscribeConsumer::Count::RANGE:
-            if (channel_map_info.subscribe_consumer_info_[subscriber_id].channel_identifier_count_ < module_info->subscribe_consumers_[subscriber_id].min_
-             || channel_map_info.subscribe_consumer_info_[subscriber_id].channel_identifier_count_ > module_info->subscribe_consumers_[subscriber_id].max_)
+        case aergo::module::communication_channel::Consumer::Count::RANGE:
+            if (channel_map_consumer.channel_identifier_count_ < module_info_consumer.min_
+            || channel_map_consumer.channel_identifier_count_ > module_info_consumer.max_)
             {
                 return false;
             }
             break;
-        case aergo::module::communication_channel::SubscribeConsumer::Count::AUTO_ALL:
+        case aergo::module::communication_channel::Consumer::Count::AUTO_ALL:
+            if (channel_map_consumer.channel_identifier_count_ != 0)
+            {
+                return false;
+            }
             break;
         default:
             log(aergo::module::logging::LogType::ERROR, "Unexpected enum type in checkChannelMapValidity, terminating!");
             std::terminate();
             break;
         }
-    }
 
-    for (uint32_t request_id = 0; request_id < channel_map_info.request_consumer_info_count_; ++request_id)
-    {
-        switch (module_info->request_consumers_[request_id].count_)
+
+
+        const char* expected_type_identifier = module_info_consumer.channel_type_identifier_;
+        for (uint32_t channel_id = 0; channel_id < channel_map_consumers[consumer_id].channel_identifier_count_; ++channel_id)
         {
-        case aergo::module::communication_channel::RequestConsumer::Count::SINGLE:
-            if (channel_map_info.request_consumer_info_[request_id].channel_identifier_count_ != 1)
+            aergo::module::ChannelIdentifier channel_identifier = channel_map_consumers[consumer_id].channel_identifier_[channel_id];
+            
+            if (channel_identifier.producer_module_id_ >= running_modules_.size() && running_modules_[channel_identifier.producer_module_id_].get() == nullptr)
             {
                 return false;
             }
-            break;
-        case aergo::module::communication_channel::RequestConsumer::Count::RANGE:
-            if (channel_map_info.request_consumer_info_[request_id].channel_identifier_count_ < module_info->request_consumers_[request_id].min_
-             || channel_map_info.request_consumer_info_[request_id].channel_identifier_count_ > module_info->request_consumers_[request_id].max_)
+
+            structures::ModuleData* other_module_data = running_modules_[channel_identifier.producer_module_id_].get();
+            const aergo::module::ModuleInfo* other_module_info = (*other_module_data->module_loader_data_)->readModuleInfo();
+
+            uint32_t producers_count = check_subscribe ? other_module_info->publish_producer_count_ : other_module_info->response_producer_count_;
+            const aergo::module::communication_channel::Producer* producers = check_subscribe ? other_module_info->publish_producers_ : other_module_info->response_producers_;
+
+            if (channel_identifier.producer_channel_id_ >= producers_count)
             {
                 return false;
             }
-            break;
-        case aergo::module::communication_channel::RequestConsumer::Count::AUTO_ALL:
-            break;
-        default:
-            log(aergo::module::logging::LogType::ERROR, "Unexpected enum type in checkChannelMapValidity, terminating!");
-            std::terminate();
-            break;
+
+            const char* producer_type_identifier = producers[channel_identifier.producer_channel_id_].channel_type_identifier_;
+            if (std::strcmp(expected_type_identifier, producer_type_identifier) != 0)
+            {
+                return false;
+            }
         }
     }
 
@@ -389,6 +535,7 @@ bool Core::checkChannelMapValidity(aergo::module::InputChannelMapInfo channel_ma
 
 void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept
 {
+    // TODO implement
     std::terminate();
 }
 
@@ -396,6 +543,7 @@ void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::m
 
 void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
 {
+    // TODO implement
     std::terminate();
 }
 
@@ -403,6 +551,7 @@ void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::
 
 void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
 {
+    // TODO implement
     std::terminate();
 }
 
@@ -410,6 +559,7 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
 
 aergo::module::IAllocatorCore* Core::createDynamicAllocator() noexcept
 {
+    // TODO implement
     std::terminate();
 }
 
@@ -417,6 +567,7 @@ aergo::module::IAllocatorCore* Core::createDynamicAllocator() noexcept
 
 aergo::module::IAllocatorCore* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
 {
+    // TODO implement
     std::terminate();
 }
 
@@ -424,6 +575,7 @@ aergo::module::IAllocatorCore* Core::createBufferAllocator(uint64_t slot_size_by
 
 void Core::deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept
 {
+    // TODO implement
     std::terminate();
 }
 
