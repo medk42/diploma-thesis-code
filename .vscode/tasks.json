@@ -12,7 +12,10 @@
         "problemMatcher": [],
         "detail": "Builds Project (cmake)",
         "dependsOn": "CMake: configure",
-        "dependsOrder": "sequence"
+        "dependsOrder": "sequence",
+        "presentation": {
+          "clear": true
+        }
       },
       {
         "type": "cmake",
@@ -24,7 +27,10 @@
         "group": "build",
         "problemMatcher": [],
         "detail": "Builds and Installs Project Without Configuring (cmake)",
-        "dependsOrder": "sequence"
+        "dependsOrder": "sequence",
+        "presentation": {
+          "clear": true
+        }
       },
   
     ]
