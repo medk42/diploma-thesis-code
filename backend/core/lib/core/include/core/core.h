@@ -11,6 +11,8 @@ namespace aergo::core
     class Core : public aergo::module::ICore
     {
     public:
+        enum class RemoveResult { SUCCESS, DOES_NOT_EXIST, HAS_DEPENDENCIES, FAILED_TO_STOP_THREADS };
+
         Core(logging::ILogger* logger);
 
         /// @brief Load all available modules from the modules_dir. Data for each module is in data_dir (with same folder name as the module library filename).
@@ -52,7 +54,7 @@ namespace aergo::core
         /// @param recursive remove all dependencies too, if module has dependencies and recursive is false, module will not be removed and method will return false
         /// @return true if module (and possibly dependencies, if recursive is true) was removed, false otherwise 
         /// (module with id does not exist, was already removed or has dependencies if recursive is false).
-        bool removeModule(uint64_t id, bool recursive);
+        RemoveResult removeModule(uint64_t id, bool recursive);
 
         /// @brief Attempt to create a new module. Creation fails if loaded_module_id is out of range of loaded modules,
         /// channel_map_info input mapping does not match the module's creation requirements or the createModule call returned
@@ -61,6 +63,10 @@ namespace aergo::core
         /// @param channel_map_info Communication mapping.
         /// @return true on success (module added), false otherwise (module not added)
         bool addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info);
+
+        /// @brief Find all dependent modules and return them in a vector. Vector includes the calling module 
+        /// (if no dependent modules, the vector will have size 1 and contain only the calling id).
+        std::vector<uint64_t> collectDependentModules(uint64_t id);
 
     private:
         enum class ConsumerType { SUBSCRIBE, REQUEST };
@@ -86,6 +92,10 @@ namespace aergo::core
         /// @return true on success, false on failure
         bool createAndStartModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info, uint32_t module_thread_timeout_ms); 
 
+        void collectDependentModulesHelper(structures::ModuleData* module, std::vector<uint64_t>& dependent_modules, ConsumerType consumer_type);
+        void removeMappingProducers(uint64_t module_id, ConsumerType consumer_type);
+        void removeMappingSubscribers(uint64_t module_id, ConsumerType consumer_type);
+        void removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<const char*(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels);
 
         bool initialized_;
         std::vector<structures::ModuleLoaderData> loaded_modules_;

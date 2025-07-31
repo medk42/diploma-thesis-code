@@ -117,6 +117,8 @@ namespace aergo::module
     {
         uint64_t producer_module_id_;    // ID of the module
         uint32_t producer_channel_id_;   // ID of the channel inside the module
+
+        constexpr bool operator==(const ChannelIdentifier&) const = default;
     };
 
     struct InputChannelMapInfo

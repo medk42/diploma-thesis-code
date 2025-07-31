@@ -2,6 +2,7 @@
 #include "core/defaults.h"
 
 #include <cstring>
+#include <algorithm>
 
 using namespace aergo::core;
 
@@ -556,25 +557,260 @@ const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseCh
 
 
 
-bool Core::removeModule(uint64_t id, bool recursive)
+Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
 {
     if (id >= running_modules_.size() || running_modules_[id].get() == nullptr)
     {
-        return false;
+        return Core::RemoveResult::DOES_NOT_EXIST;
+    }
+    
+    std::vector<uint64_t> dependent_modules = collectDependentModules(id);
+
+    if (dependent_modules.size() > 1 && !recursive)
+    {
+        return Core::RemoveResult::HAS_DEPENDENCIES;
     }
 
-    auto& running_module = running_modules_[id];
+    bool stop_success = true;
+    for (size_t module_id_p_1 = dependent_modules.size(); module_id_p_1 > 0; --module_id_p_1)
+    {
+        size_t module_id = module_id_p_1 - 1;
 
-    // if the module has dependencies (= non-AUTO_ALL mapping_publish_ / mapping_response_) and recursive is false, FAIL
-    // if the module does not have dependencies (only AUTO_ALL mapping_publish_ / mapping_response_), remove from the dependencies (other module dependencies)...
+        removeMappingProducers(module_id, ConsumerType::SUBSCRIBE);
+        removeMappingProducers(module_id, ConsumerType::REQUEST);
+        removeMappingSubscribers(module_id, ConsumerType::SUBSCRIBE);
+        removeMappingSubscribers(module_id, ConsumerType::REQUEST);
+        
+        auto module_data = running_modules_[module_id].get();
+        auto module_info = (*module_data->module_loader_data_)->readModuleInfo();
 
-    // TODO remove module, dependencies and all existing mappings (existing_response_channels_ and publish)
-    // if (!recursive)
-    // {
-    //     if (running_module->mapping_publish_)
-    // }
+        removeFromExistingMap(
+            module_id, module_info->publish_producer_count_, 
+            [module_info](uint32_t channel_id) { return module_info->publish_producers_[channel_id].channel_type_identifier_; }, 
+            existing_publish_channels_
+        );
+        removeFromExistingMap(
+            module_id, module_info->response_producer_count_, 
+            [module_info](uint32_t channel_id) { return module_info->response_producers_[channel_id].channel_type_identifier_; }, 
+            existing_response_channels_
+        );
+        removeFromExistingMap(
+            module_id, module_info->subscribe_consumer_count_, 
+            [module_info](uint32_t channel_id) { return module_info->subscribe_consumers_[channel_id].channel_type_identifier_; }, 
+            existing_subscribe_auto_all_channels_
+        );
+        removeFromExistingMap(
+            module_id, module_info->request_consumer_count_, 
+            [module_info](uint32_t channel_id) { return module_info->request_consumers_[channel_id].channel_type_identifier_; }, 
+            existing_request_auto_all_channels_
+        );
 
-    return true;
+        bool res = running_modules_[module_id]->module_->threadStop(defaults::module_thread_timeout_ms_);
+        stop_success = stop_success && res;    // stop_success: T->{T,F}; F->F (never F->T)
+        running_modules_[module_id] = nullptr; // only if stop successful? 
+    }
+
+    ++module_mapping_state_id_;
+
+    if (!stop_success)
+    {
+        return Core::RemoveResult::FAILED_TO_STOP_THREADS;   
+    }
+
+    return Core::RemoveResult::SUCCESS;
+}
+
+
+
+std::vector<uint64_t> Core::collectDependentModules(uint64_t id)
+{
+    std::vector<uint64_t> dependent_modules;
+    dependent_modules.push_back(id);
+
+    for (size_t i = 0; i < dependent_modules.size(); ++i)
+    {
+        uint64_t module_id = dependent_modules[i];
+        structures::ModuleData* module_data = running_modules_[module_id].get();
+
+        collectDependentModulesHelper(module_data, dependent_modules, ConsumerType::SUBSCRIBE);
+        collectDependentModulesHelper(module_data, dependent_modules, ConsumerType::REQUEST);
+    }
+
+    return dependent_modules;
+}
+
+
+
+void Core::collectDependentModulesHelper(structures::ModuleData* module_data, std::vector<uint64_t>& dependent_modules, ConsumerType consumer_type)
+{
+    std::vector<std::vector<aergo::module::ChannelIdentifier>>& mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? module_data->mapping_publish_ : module_data->mapping_response_;
+
+    for (auto& connected_channels : mapping_producer)
+    {
+        for (auto channel_identifier : connected_channels)
+        {
+            if (channel_identifier.producer_module_id_ >= running_modules_.size())
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ too large in collectDependentModulesHelper, terminating!");
+                std::terminate();
+            }
+            if (running_modules_[channel_identifier.producer_module_id_].get() == nullptr)
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ references destroyed module in collectDependentModulesHelper, terminating!");
+                std::terminate();
+            }
+
+            const aergo::module::ModuleInfo* other_module_info = (*running_modules_[channel_identifier.producer_module_id_]->module_loader_data_)->readModuleInfo();
+
+            uint32_t consumer_count = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumer_count_ : other_module_info->request_consumer_count_;
+            const aergo::module::communication_channel::Consumer* consumers = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumers_ : other_module_info->request_consumers_;
+
+            if (channel_identifier.producer_channel_id_ >= consumer_count)
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_channel_id_ too large in hasDependenciesHelper, terminating!");
+                std::terminate();
+            }
+
+            if (consumers[channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+            {
+                dependent_modules.push_back(channel_identifier.producer_module_id_);
+            }
+        }
+    }
+}
+
+
+
+void Core::removeMappingProducers(uint64_t module_id, ConsumerType consumer_type)
+{
+    structures::ModuleData* module_data = running_modules_[module_id].get();
+
+    std::vector<std::vector<aergo::module::ChannelIdentifier>>& mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? module_data->mapping_publish_ : module_data->mapping_response_;
+
+    for (size_t channel_id = 0; channel_id < mapping_producer.size(); ++channel_id)
+    {
+        for (auto other_channel_identifier : mapping_producer[channel_id])
+        {
+            if (other_channel_identifier.producer_module_id_ >= running_modules_.size())
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ too large in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+            if (running_modules_[other_channel_identifier.producer_module_id_].get() == nullptr)
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ references destroyed module in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+
+            structures::ModuleData* other_module_data = running_modules_[other_channel_identifier.producer_module_id_].get();
+            const aergo::module::ModuleInfo* other_module_info = (*other_module_data->module_loader_data_)->readModuleInfo();
+            aergo::module::ChannelIdentifier our_channel {
+                .producer_module_id_ = module_id,
+                .producer_channel_id_ = (uint32_t)channel_id
+            };
+
+            std::vector<std::vector<aergo::module::ChannelIdentifier>>& mapping_consumer = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_data->mapping_subscribe_ : other_module_data->mapping_request_;
+            uint32_t consumer_count = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumer_count_ : other_module_info->request_consumer_count_;
+            const aergo::module::communication_channel::Consumer* consumers = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumers_ : other_module_info->request_consumers_;
+
+            if (other_channel_identifier.producer_channel_id_ >= mapping_consumer.size() || other_channel_identifier.producer_channel_id_ >= consumer_count)
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_channel_id_ too large in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+
+            if (consumers[other_channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+            {
+                log(aergo::module::logging::LogType::ERROR, "count_ not AUTO_ALL in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+
+            std::vector<aergo::module::ChannelIdentifier>& single_channel_map = mapping_consumer[other_channel_identifier.producer_channel_id_];
+            auto it = std::find(single_channel_map.begin(), single_channel_map.end(), our_channel);
+            
+            if (it == single_channel_map.end())
+            {
+                log(aergo::module::logging::LogType::ERROR, "our_channel not found in other_module in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+
+            single_channel_map.erase(it);
+        }
+    }
+}
+
+
+
+void Core::removeMappingSubscribers(uint64_t module_id, ConsumerType consumer_type)
+{
+    structures::ModuleData* module_data = running_modules_[module_id].get();
+
+    std::vector<std::vector<aergo::module::ChannelIdentifier>>& mapping_consumer = (consumer_type == ConsumerType::SUBSCRIBE) ? module_data->mapping_subscribe_ : module_data->mapping_request_;
+
+    for (size_t channel_id = 0; channel_id < mapping_consumer.size(); ++channel_id)
+    {
+        for (auto other_channel_identifier : mapping_consumer[channel_id])
+        {
+            if (other_channel_identifier.producer_module_id_ >= running_modules_.size())
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ too large in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+            if (running_modules_[other_channel_identifier.producer_module_id_].get() == nullptr)
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ references destroyed module in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+
+            structures::ModuleData* other_module_data = running_modules_[other_channel_identifier.producer_module_id_].get();
+            const aergo::module::ModuleInfo* other_module_info = (*other_module_data->module_loader_data_)->readModuleInfo();
+            aergo::module::ChannelIdentifier our_channel {
+                .producer_module_id_ = module_id,
+                .producer_channel_id_ = (uint32_t)channel_id
+            };
+
+            std::vector<std::vector<aergo::module::ChannelIdentifier>>& other_mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_data->mapping_publish_ : other_module_data->mapping_response_;
+
+            if (other_channel_identifier.producer_channel_id_ >= other_mapping_producer.size())
+            {
+                log(aergo::module::logging::LogType::ERROR, "producer_channel_id_ too large in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+
+            std::vector<aergo::module::ChannelIdentifier>& single_channel_map = other_mapping_producer[other_channel_identifier.producer_channel_id_];
+            auto it = std::find(single_channel_map.begin(), single_channel_map.end(), our_channel);
+            
+            if (it == single_channel_map.end())
+            {
+                log(aergo::module::logging::LogType::ERROR, "our_channel not found in other_module in removeMappingProducers, terminating!");
+                std::terminate();
+            }
+
+            single_channel_map.erase(it);
+        }
+    }
+}
+
+
+
+void Core::removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<const char*(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels)
+{
+    for (uint32_t channel_id = 0; channel_id < channel_count; ++channel_id)
+    {
+        const char* channel_type_identifier = channel_type_identifier_function(channel_id);
+        auto it = existing_channels.find(channel_type_identifier);
+
+        if (it == existing_channels.end())
+        {
+            log(aergo::module::logging::LogType::ERROR, "channel_type_identifier not found in existing_producer_channels in removeFromExistingMap, terminating!");
+            std::terminate();
+        }
+
+        auto& single_channel = it->second;
+        single_channel.erase(std::remove_if(single_channel.begin(), single_channel.end(), [module_id](const aergo::module::ChannelIdentifier channel_identifier) {
+            return channel_identifier.producer_module_id_ == module_id;
+        }));
+    }
 }
 
 
