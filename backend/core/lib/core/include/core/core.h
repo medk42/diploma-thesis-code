@@ -5,6 +5,7 @@
 #include "core_structures.h"
 
 #include <map>
+#include <mutex>
 
 namespace aergo::core
 {
@@ -30,7 +31,7 @@ namespace aergo::core
 
         /// @return nullptr if out of range
         const aergo::module::ModuleInfo* getLoadedModulesInfo(uint64_t loaded_module_id);
-        uint64_t getLoadedModulesCount() const;
+        uint64_t getLoadedModulesCount();
 
         /// @return nullptr if out of range or module with specified ID was destroyed
         structures::ModuleData* getRunningModulesInfo(uint64_t running_module_id);
@@ -41,11 +42,11 @@ namespace aergo::core
 
         /// @brief Get existing publish channels for specified channel type identifier. 
         /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
-        const std::vector<aergo::module::ChannelIdentifier>& getExistingPublishChannels(const char* channel_type_identifier) const;
+        const std::vector<aergo::module::ChannelIdentifier>& getExistingPublishChannels(const char* channel_type_identifier);
 
         /// @brief Get existing response channels for specified channel type identifier.
         /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
-        const std::vector<aergo::module::ChannelIdentifier>& getExistingResponseChannels(const char* channel_type_identifier) const;
+        const std::vector<aergo::module::ChannelIdentifier>& getExistingResponseChannels(const char* channel_type_identifier);
 
         /// @brief Return module specified by ID. Module will only be removed if it exists (id < getRunningModulesCount() and wasn't yet removed)
         /// and it does not have dependencies (modules connected to its outputs). If it has dependencies and recursive is true, module and all 
@@ -107,6 +108,8 @@ namespace aergo::core
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_response_channels_;
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_subscribe_auto_all_channels_;
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_request_auto_all_channels_;
+
+        std::mutex core_mutex_;
 
         logging::ILogger* logger_;
     };

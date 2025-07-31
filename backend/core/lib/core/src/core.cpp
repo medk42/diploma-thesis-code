@@ -17,6 +17,8 @@ Core::Core(logging::ILogger* logger)
 
 void Core::initialize(const char* modules_dir, const char* data_dir)
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (initialized_)
     {
         return;
@@ -478,6 +480,8 @@ void Core::log(aergo::module::logging::LogType log_type, const char* message)
 
 const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(uint64_t loaded_module_id)
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (loaded_module_id < loaded_modules_.size())
     {
         return loaded_modules_[loaded_module_id]->readModuleInfo();
@@ -490,8 +494,10 @@ const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(uint64_t loaded_modu
 
 
 
-uint64_t Core::getLoadedModulesCount() const
+uint64_t Core::getLoadedModulesCount()
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     return (uint64_t)loaded_modules_.size();
 }
 
@@ -499,6 +505,8 @@ uint64_t Core::getLoadedModulesCount() const
 
 structures::ModuleData* Core::getRunningModulesInfo(uint64_t running_module_id)
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (running_module_id < running_modules_.size())
     {
         return running_modules_[running_module_id].get();
@@ -513,6 +521,8 @@ structures::ModuleData* Core::getRunningModulesInfo(uint64_t running_module_id)
 
 uint64_t Core::getRunningModulesCount()
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     return (uint64_t)running_modules_.size();
 }
 
@@ -520,13 +530,17 @@ uint64_t Core::getRunningModulesCount()
 
 uint64_t Core::getModulesMappingStateId()
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     return module_mapping_state_id_;
 }
 
 
 
-const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingPublishChannels(const char* channel_type_identifier) const
+const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingPublishChannels(const char* channel_type_identifier)
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     static const std::vector<aergo::module::ChannelIdentifier> empty{};
 
     auto it = existing_publish_channels_.find(channel_type_identifier);
@@ -542,8 +556,10 @@ const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingPublishCha
 
 
 
-const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseChannels(const char* channel_type_identifier) const
-{
+const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseChannels(const char* channel_type_identifier)
+{    
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     static const std::vector<aergo::module::ChannelIdentifier> empty{};
 
     auto it = existing_response_channels_.find(channel_type_identifier);
@@ -561,6 +577,8 @@ const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseCh
 
 Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (id >= running_modules_.size() || running_modules_[id].get() == nullptr)
     {
         return Core::RemoveResult::DOES_NOT_EXIST;
@@ -626,6 +644,8 @@ Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
 
 std::vector<uint64_t> Core::collectDependentModules(uint64_t id)
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     std::vector<uint64_t> dependent_modules;
     dependent_modules.push_back(id);
 
@@ -819,6 +839,8 @@ void Core::removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std
 
 bool Core::addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info)
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (loaded_module_id >= loaded_modules_.size())
     {
         return false;
@@ -963,6 +985,8 @@ bool Core::checkChannelMapValidityArrayCheck(
 
 void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr)
     {
         log(aergo::module::logging::LogType::WARNING, "Module identified by producer_module_id_ does not exist, discarding message, in sendMessage");
@@ -1001,6 +1025,8 @@ void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::m
 
 void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr
      || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr)
     {
@@ -1024,6 +1050,8 @@ void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::
 
 void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr
      || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr)
     {
@@ -1047,6 +1075,8 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
 
 aergo::module::IAllocatorCore* Core::createDynamicAllocator() noexcept
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     auto allocator = std::make_unique<memory_allocation::DynamicAllocator>(logger_);
     aergo::module::IAllocatorCore* raw_ptr = allocator.get();
     allocators_.push_back(std::move(allocator));
@@ -1057,6 +1087,8 @@ aergo::module::IAllocatorCore* Core::createDynamicAllocator() noexcept
 
 aergo::module::IAllocatorCore* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     auto allocator = std::make_unique<memory_allocation::StaticAllocator>(slot_size_bytes, number_of_slots, logger_);
     aergo::module::IAllocatorCore* raw_ptr = allocator.get();
     allocators_.push_back(std::move(allocator));
@@ -1067,6 +1099,8 @@ aergo::module::IAllocatorCore* Core::createBufferAllocator(uint64_t slot_size_by
 
 void Core::deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept
 {
+    std::lock_guard<std::mutex> lock(core_mutex_);
+
     auto it = std::find_if(allocators_.begin(), allocators_.end(), [allocator](auto& ptr) { return allocator == ptr.get(); });
 
     if (it != allocators_.end())
