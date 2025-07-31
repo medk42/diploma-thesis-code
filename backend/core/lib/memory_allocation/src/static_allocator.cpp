@@ -4,7 +4,7 @@ using namespace aergo::core::memory_allocation;
 
 
 
-StaticAllocator::StaticAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots, aergo::core::logging::ILogger* logger, IMemoryAllocator* custom_allocator = nullptr)
+StaticAllocator::StaticAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots, aergo::core::logging::ILogger* logger, IMemoryAllocator* custom_allocator)
 : logger_(logger)
 {
     if (custom_allocator)

@@ -1,5 +1,7 @@
 #include "core/core.h"
 #include "core/defaults.h"
+#include "utils/memory_allocation/dynamic_allocator.h"
+#include "utils/memory_allocation/static_allocator.h"
 
 #include <cstring>
 #include <algorithm>
@@ -961,48 +963,116 @@ bool Core::checkChannelMapValidityArrayCheck(
 
 void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept
 {
-    // TODO implement
-    std::terminate();
+    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr)
+    {
+        log(aergo::module::logging::LogType::WARNING, "Module identified by producer_module_id_ does not exist, discarding message, in sendMessage");
+        return;
+    }
+
+    auto module_data = running_modules_[source_channel.producer_module_id_].get();
+
+    if (source_channel.producer_channel_id_ >= module_data->mapping_publish_.size())
+    {
+        log(aergo::module::logging::LogType::WARNING, "Channel identified by producer_channel_id_ does not exist, discarding message, in sendMessage");
+        return;
+    }
+
+    for (auto other_channel_id : module_data->mapping_publish_[source_channel.producer_channel_id_])
+    {
+        if (other_channel_id.producer_module_id_ >= running_modules_.size() || running_modules_[other_channel_id.producer_module_id_].get() == nullptr)
+        {
+            log(aergo::module::logging::LogType::WARNING, "Other module identified by producer_module_id_ does not exist, in sendMessage");
+            continue;
+        }
+
+        auto other_module_data = running_modules_[other_channel_id.producer_module_id_].get();
+
+        if (other_channel_id.producer_channel_id_ >= other_module_data->mapping_subscribe_.size())
+        {
+            log(aergo::module::logging::LogType::WARNING, "Other channel identified by producer_channel_id_ does not exist, in sendMessage");
+            continue;
+        }
+
+        other_module_data->module_->processMessage(other_channel_id.producer_channel_id_, source_channel, message);
+    }
 }
 
 
 
 void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
 {
-    // TODO implement
-    std::terminate();
+    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr
+     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr)
+    {
+        log(aergo::module::logging::LogType::WARNING, "Source or target module identified by producer_module_id_ does not exist, discarding message, in sendResponse");
+        return;
+    }
+
+    auto source_module_data = running_modules_[source_channel.producer_module_id_].get();
+    auto target_module_data = running_modules_[target_channel.producer_module_id_].get();
+
+    if (source_channel.producer_channel_id_ >= source_module_data->mapping_response_.size() || target_channel.producer_channel_id_ >= target_module_data->mapping_request_.size())
+    {
+        log(aergo::module::logging::LogType::WARNING, "Source or target channel identified by producer_channel_id_ does not exist, discarding message, in sendResponse");
+        return;
+    }
+    
+    target_module_data->module_->processResponse(target_channel.producer_channel_id_, source_channel, message);
 }
 
 
 
 void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept
 {
-    // TODO implement
-    std::terminate();
+    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr
+     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr)
+    {
+        log(aergo::module::logging::LogType::WARNING, "Source or target module identified by producer_module_id_ does not exist, discarding message, in sendRequest");
+        return;
+    }
+
+    auto source_module_data = running_modules_[source_channel.producer_module_id_].get();
+    auto target_module_data = running_modules_[target_channel.producer_module_id_].get();
+
+    if (source_channel.producer_channel_id_ >= source_module_data->mapping_request_.size() || target_channel.producer_channel_id_ >= target_module_data->mapping_response_.size())
+    {
+        log(aergo::module::logging::LogType::WARNING, "Source or target channel identified by producer_channel_id_ does not exist, discarding message, in sendRequest");
+        return;
+    }
+    
+    target_module_data->module_->processRequest(target_channel.producer_channel_id_, source_channel, message);
 }
 
 
 
 aergo::module::IAllocatorCore* Core::createDynamicAllocator() noexcept
 {
-    // TODO implement
-    std::terminate();
+    auto allocator = std::make_unique<memory_allocation::DynamicAllocator>(logger_);
+    aergo::module::IAllocatorCore* raw_ptr = allocator.get();
+    allocators_.push_back(std::move(allocator));
+    return raw_ptr;
 }
 
 
 
 aergo::module::IAllocatorCore* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
 {
-    // TODO implement
-    std::terminate();
+    auto allocator = std::make_unique<memory_allocation::StaticAllocator>(slot_size_bytes, number_of_slots, logger_);
+    aergo::module::IAllocatorCore* raw_ptr = allocator.get();
+    allocators_.push_back(std::move(allocator));
+    return raw_ptr;
 }
 
 
 
 void Core::deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept
 {
-    // TODO implement
-    std::terminate();
+    auto it = std::find_if(allocators_.begin(), allocators_.end(), [allocator](auto& ptr) { return allocator == ptr.get(); });
+
+    if (it != allocators_.end())
+    {
+        allocators_.erase(it);
+    }
 }
 
 

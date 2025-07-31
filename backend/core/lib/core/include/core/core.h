@@ -100,6 +100,7 @@ namespace aergo::core
         bool initialized_;
         std::vector<structures::ModuleLoaderData> loaded_modules_;
         std::vector<std::unique_ptr<structures::ModuleData>> running_modules_;
+        std::vector<std::unique_ptr<aergo::module::IAllocatorCore>> allocators_;
         uint64_t module_mapping_state_id_;
 
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_publish_channels_;

@@ -19,7 +19,7 @@ namespace aergo::core::memory_allocation
         class StaticAllocatorInitializationException : public std::exception {};
 
         /// @throws StaticAllocatorInitializationException if data could not be allocated.
-        StaticAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots, aergo::core::logging::ILogger* logger, IMemoryAllocator* custom_allocator);
+        StaticAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots, aergo::core::logging::ILogger* logger, IMemoryAllocator* custom_allocator = nullptr);
 
         StaticAllocator(const StaticAllocator& other) = delete;
         StaticAllocator(StaticAllocator&& other) noexcept = default;
