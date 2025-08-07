@@ -82,7 +82,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.getCreatedModulesCount() == 2);
         REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 1);
-        REQUIRE(core.getExistingResponseChannels("message_3/v1:int").size() == 1);
+        REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 1);
         REQUIRE(core.getExistingResponseChannels("message_4/v1:int").size() == 1);
         REQUIRE(core.collectDependentModules(1).size() == 1);
 
