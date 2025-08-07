@@ -3,10 +3,13 @@
 #include "core/core.h"
 #include "utils/logging/console_logger.h"
 
+#include "module_common/module_common.h"
+
 #include <algorithm>
 
 using namespace aergo::core;
 using namespace aergo::core::logging;
+using namespace aergo::tests::core_1;
 
 
 
@@ -1733,6 +1736,165 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(data_e->mapping_subscribe_[0].size() == 0);
             REQUIRE(data_e->mapping_publish_[0].size() == 0);
             REQUIRE(data_e->mapping_response_[0].size() == 0);
+        }
+
+        SECTION("Test communication between modules")
+        {
+            REQUIRE_NOTHROW(data_e = core.getCreatedModulesInfo(0));
+            REQUIRE(data_e != nullptr);
+
+            REQUIRE_NOTHROW(data_a = core.getCreatedModulesInfo(1));
+            REQUIRE(data_a != nullptr);
+            
+            REQUIRE_NOTHROW(data_b = core.getCreatedModulesInfo(2));
+            REQUIRE(data_b != nullptr);
+            
+            REQUIRE_NOTHROW(data_c = core.getCreatedModulesInfo(3));
+            REQUIRE(data_c != nullptr);
+            
+            REQUIRE_NOTHROW(data_d = core.getCreatedModulesInfo(4));
+            REQUIRE(data_d != nullptr);
+
+            ModuleCommon* module_a = (ModuleCommon*) data_a->module_.get();
+            ModuleCommon* module_b = (ModuleCommon*) data_b->module_.get();
+            ModuleCommon* module_c = (ModuleCommon*) data_c->module_.get();
+            ModuleCommon* module_d = (ModuleCommon*) data_d->module_.get();
+            ModuleCommon* module_e = (ModuleCommon*) data_e->module_.get();
+
+            REQUIRE(module_a != nullptr);
+            REQUIRE(module_b != nullptr);
+            REQUIRE(module_c != nullptr);
+            REQUIRE(module_d != nullptr);
+            REQUIRE(module_e != nullptr);
+
+            REQUIRE(module_a->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_b->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+
+
+            REQUIRE_NOTHROW(module_d->publish(0, 0));
+            REQUIRE(module_a->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_b->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+
+
+            REQUIRE_NOTHROW(module_a->publish(0, 1));
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_e->last_msg_data_ == 1);
+            REQUIRE(module_e->last_channel_id_ == 0);
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{1, 0});
+
+            REQUIRE(module_a->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_b->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            
+
+            REQUIRE_NOTHROW(module_a->publish(1, 2));
+            
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_e->last_msg_data_ == 1);
+            REQUIRE(module_e->last_channel_id_ == 0);
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{1, 0});
+            
+            REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::INVALID);
+            
+            REQUIRE(module_b->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_b->last_msg_data_ == 2);
+            REQUIRE(module_b->last_channel_id_ == 0);
+            REQUIRE(module_b->last_source_channel_ == aergo::module::ChannelIdentifier{1, 0});
+            
+            REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_c->last_msg_data_ == 2);
+            REQUIRE(module_c->last_channel_id_ == 0);
+            REQUIRE(module_c->last_source_channel_ == aergo::module::ChannelIdentifier{1, 0});
+
+
+            REQUIRE_NOTHROW(module_e->publish(0, 3));
+
+            REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_d->last_msg_data_ == 3);
+            REQUIRE(module_d->last_channel_id_ == 0);
+            REQUIRE(module_d->last_source_channel_ == aergo::module::ChannelIdentifier{0, 0});
+
+
+            REQUIRE_NOTHROW(module_b->publish(0, 4));
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_e->last_msg_data_ == 4);
+            REQUIRE(module_e->last_channel_id_ == 0);
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{2, 0});
+
+
+            REQUIRE_NOTHROW(module_c->publish(0, 5));
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_e->last_msg_data_ == 5);
+            REQUIRE(module_e->last_channel_id_ == 0);
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{3, 0});
+
+
+            REQUIRE_NOTHROW(module_d->publish(1, 6));
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
+            REQUIRE(module_e->last_msg_data_ == 6);
+            REQUIRE(module_e->last_channel_id_ == 0);
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{4, 0});
+
+
+            uint64_t req_id, req_id_2;
+            REQUIRE_NOTHROW(req_id = module_c->request(0, {0, 0}, 7));
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
+            REQUIRE(module_e->last_msg_data_ == 7);
+            REQUIRE(module_e->last_msg_id_ == req_id);
+            REQUIRE(module_e->last_channel_id_ == 0);
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{3, 0});
+            REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::RESPONSE);
+            REQUIRE(module_c->last_msg_data_ == 7);
+            REQUIRE(module_c->last_msg_id_ == req_id);
+            REQUIRE(module_c->last_channel_id_ == 0);
+            REQUIRE(module_c->last_source_channel_ == aergo::module::ChannelIdentifier{0, 0});
+            
+
+            REQUIRE_NOTHROW(req_id_2 = module_c->request(0, {0, 0}, 8));
+            REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
+            REQUIRE(module_e->last_msg_data_ == 8);
+            REQUIRE(module_e->last_msg_id_ == req_id_2);
+            REQUIRE(module_e->last_channel_id_ == 0);
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{3, 0});
+            REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::RESPONSE);
+            REQUIRE(module_c->last_msg_data_ == 8);
+            REQUIRE(module_c->last_msg_id_ == req_id_2);
+            REQUIRE(module_c->last_channel_id_ == 0);
+            REQUIRE(module_c->last_source_channel_ == aergo::module::ChannelIdentifier{0, 0});
+            REQUIRE(req_id_2 != req_id);
+
+
+            REQUIRE_NOTHROW(req_id = module_d->request(0, {2, 0}, 9));
+            REQUIRE(module_b->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
+            REQUIRE(module_b->last_msg_data_ == 9);
+            REQUIRE(module_b->last_msg_id_ == req_id);
+            REQUIRE(module_b->last_channel_id_ == 0);
+            REQUIRE(module_b->last_source_channel_ == aergo::module::ChannelIdentifier{4, 0});
+            REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::RESPONSE);
+            REQUIRE(module_d->last_msg_data_ == 9);
+            REQUIRE(module_d->last_msg_id_ == req_id);
+            REQUIRE(module_d->last_channel_id_ == 0);
+            REQUIRE(module_d->last_source_channel_ == aergo::module::ChannelIdentifier{2, 0});
+
+
+            REQUIRE_NOTHROW(req_id = module_d->request(0, {3, 0}, 10));
+            REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
+            REQUIRE(module_c->last_msg_data_ == 10);
+            REQUIRE(module_c->last_msg_id_ == req_id);
+            REQUIRE(module_c->last_channel_id_ == 0);
+            REQUIRE(module_c->last_source_channel_ == aergo::module::ChannelIdentifier{4, 0});
+            REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::RESPONSE);
+            REQUIRE(module_d->last_msg_data_ == 10);
+            REQUIRE(module_d->last_msg_id_ == req_id);
+            REQUIRE(module_d->last_channel_id_ == 0);
+            REQUIRE(module_d->last_source_channel_ == aergo::module::ChannelIdentifier{3, 0});
         }
     }
 }
