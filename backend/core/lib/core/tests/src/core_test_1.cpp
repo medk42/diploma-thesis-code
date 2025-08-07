@@ -786,16 +786,16 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(core.getCreatedModulesInfo(0) == nullptr);
             REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
             REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
-            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) == nullptr);
             REQUIRE(core.getCreatedModulesInfo(4) == nullptr);
             REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
             
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
-            REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
+            REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 1);
             REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 0);
             REQUIRE(core.getExistingResponseChannels("message_4/v1:int").size() == 0);
-            REQUIRE(core.getExistingPublishChannels("message_5/v1:int").size() == 1);
-            REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 4);
+            REQUIRE(core.getExistingPublishChannels("message_5/v1:int").size() == 0);
+            REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 2);
             
             REQUIRE(core.getLoadedModulesCount() == 5);
 
@@ -1391,8 +1391,8 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
                 REQUIRE(data_e->mapping_response_[0].size() == 1);
 
                 REQUIRE(data_e->mapping_subscribe_[0][0] == aergo::module::ChannelIdentifier{1, 0});
-                REQUIRE(data_e->mapping_subscribe_[0][2] == aergo::module::ChannelIdentifier{3, 0});
-                REQUIRE(data_e->mapping_subscribe_[0][1] == aergo::module::ChannelIdentifier{5, 0});
+                REQUIRE(data_e->mapping_subscribe_[0][1] == aergo::module::ChannelIdentifier{3, 0});
+                REQUIRE(data_e->mapping_subscribe_[0][2] == aergo::module::ChannelIdentifier{5, 0});
                 REQUIRE(data_e->mapping_response_[0][0] == aergo::module::ChannelIdentifier{3, 0});
 
                 
@@ -1781,8 +1781,11 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::INVALID);
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::INVALID);
 
+            uint32_t sleep_ms = 20;
 
             REQUIRE_NOTHROW(module_a->publish(0, 1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_e->last_msg_data_ == 1);
             REQUIRE(module_e->last_channel_id_ == 0);
@@ -1795,6 +1798,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             
 
             REQUIRE_NOTHROW(module_a->publish(1, 2));
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
             
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_e->last_msg_data_ == 1);
@@ -1806,15 +1810,16 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(module_b->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_b->last_msg_data_ == 2);
             REQUIRE(module_b->last_channel_id_ == 0);
-            REQUIRE(module_b->last_source_channel_ == aergo::module::ChannelIdentifier{1, 0});
+            REQUIRE(module_b->last_source_channel_ == aergo::module::ChannelIdentifier{1, 1});
             
             REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_c->last_msg_data_ == 2);
             REQUIRE(module_c->last_channel_id_ == 0);
-            REQUIRE(module_c->last_source_channel_ == aergo::module::ChannelIdentifier{1, 0});
+            REQUIRE(module_c->last_source_channel_ == aergo::module::ChannelIdentifier{1, 1});
 
 
             REQUIRE_NOTHROW(module_e->publish(0, 3));
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
 
             REQUIRE(module_d->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_d->last_msg_data_ == 3);
@@ -1823,6 +1828,8 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
             REQUIRE_NOTHROW(module_b->publish(0, 4));
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_e->last_msg_data_ == 4);
             REQUIRE(module_e->last_channel_id_ == 0);
@@ -1830,6 +1837,8 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
             REQUIRE_NOTHROW(module_c->publish(0, 5));
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_e->last_msg_data_ == 5);
             REQUIRE(module_e->last_channel_id_ == 0);
@@ -1837,14 +1846,18 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
             REQUIRE_NOTHROW(module_d->publish(1, 6));
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::MESSAGE);
             REQUIRE(module_e->last_msg_data_ == 6);
             REQUIRE(module_e->last_channel_id_ == 0);
-            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{4, 0});
+            REQUIRE(module_e->last_source_channel_ == aergo::module::ChannelIdentifier{4, 1});
 
 
             uint64_t req_id, req_id_2;
             REQUIRE_NOTHROW(req_id = module_c->request(0, {0, 0}, 7));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2 * sleep_ms));
+
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
             REQUIRE(module_e->last_msg_data_ == 7);
             REQUIRE(module_e->last_msg_id_ == req_id);
@@ -1858,6 +1871,8 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             
 
             REQUIRE_NOTHROW(req_id_2 = module_c->request(0, {0, 0}, 8));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2 * sleep_ms));
+
             REQUIRE(module_e->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
             REQUIRE(module_e->last_msg_data_ == 8);
             REQUIRE(module_e->last_msg_id_ == req_id_2);
@@ -1872,6 +1887,8 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
             REQUIRE_NOTHROW(req_id = module_d->request(0, {2, 0}, 9));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2 * sleep_ms));
+            
             REQUIRE(module_b->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
             REQUIRE(module_b->last_msg_data_ == 9);
             REQUIRE(module_b->last_msg_id_ == req_id);
@@ -1885,6 +1902,8 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
             REQUIRE_NOTHROW(req_id = module_d->request(0, {3, 0}, 10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2 * sleep_ms));
+
             REQUIRE(module_c->last_msg_type_ == ModuleCommon::msg_type::REQUEST);
             REQUIRE(module_c->last_msg_data_ == 10);
             REQUIRE(module_c->last_msg_id_ == req_id);
