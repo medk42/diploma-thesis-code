@@ -34,7 +34,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 0);
         
         // replace publish by response, no channels should be found in that case
-        REQUIRE(core.getExistingResponseChannels("message_3/v1:int").size() == 0);
+        REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 0);
         REQUIRE(core.getExistingPublishChannels("message_4/v1:int").size() == 0);
         REQUIRE(core.getExistingResponseChannels("message_6/v1:int").size() == 0);
     }
@@ -154,7 +154,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 2);
         REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 1);
-        REQUIRE(core.getExistingResponseChannels("message_3/v1:int").size() == 1);
+        REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 1);
         REQUIRE(core.getExistingResponseChannels("message_4/v1:int").size() == 1);
         REQUIRE(core.collectDependentModules(0).size() == 1);
         REQUIRE(core.collectDependentModules(1).size() == 2);
@@ -297,7 +297,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 3);
         REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
-        REQUIRE(core.getExistingResponseChannels("message_3/v1:int").size() == 1);
+        REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 1);
         REQUIRE(core.getExistingResponseChannels("message_4/v1:int").size() == 1);
         REQUIRE(core.collectDependentModules(0).size() == 2);
         REQUIRE(core.collectDependentModules(1).size() == 3);
@@ -1356,7 +1356,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
                 REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
                 REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
-                REQUIRE(core.getExistingResponseChannels("message_3/v1:int").size() == 1);
+                REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 1);
                 REQUIRE(core.getExistingResponseChannels("message_4/v1:int").size() == 1);
                 REQUIRE(core.getExistingPublishChannels("message_5/v1:int").size() == 0);
                 REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 3);
