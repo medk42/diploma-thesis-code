@@ -1149,6 +1149,10 @@ void Core::deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept
     {
         allocators_.erase(it);
     }
+    else
+    {
+        log(aergo::module::logging::LogType::WARNING, "Attempting to remove non-existing allocator.")
+    }
 }
 
 
