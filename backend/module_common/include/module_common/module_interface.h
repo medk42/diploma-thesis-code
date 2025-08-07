@@ -80,7 +80,7 @@ namespace aergo::module
 
             uint64_t id_;
             uint64_t timestamp_ns_;
-            bool success_;
+            bool success_;                // indicates successful processing of request
         };
     };
 

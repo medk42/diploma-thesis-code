@@ -1,5 +1,6 @@
 include_directories(
     include
+    ../common_include
 )
 
 set(MODULE_NAME core_test_1_module_d)
