@@ -35,11 +35,11 @@ namespace aergo::core
         uint64_t getLoadedModulesCount();
 
         /// @return nullptr if out of range or module with specified ID was destroyed
-        structures::ModuleData* getRunningModulesInfo(uint64_t running_module_id);
+        structures::ModuleData* getCreatedModulesInfo(uint64_t running_module_id);
 
         /// @brief Returns the number of created modules over the lifetime of this object (even if they were later destroyed).
         /// For example if we create A,B,C,D,E -> 5; if we now remove C, D -> 5; if we add F -> 6.
-        uint64_t getRunningModulesCount();
+        uint64_t getCreatedModulesCount();
 
         /// @brief ID of the module mapping state. ID changes when modules get created or destroyed.
         uint64_t getModulesMappingStateId();
@@ -52,7 +52,7 @@ namespace aergo::core
         /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
         const std::vector<aergo::module::ChannelIdentifier>& getExistingResponseChannels(const char* channel_type_identifier);
 
-        /// @brief Return module specified by ID. Module will only be removed if it exists (id < getRunningModulesCount() and wasn't yet removed)
+        /// @brief Return module specified by ID. Module will only be removed if it exists (id < getCreatedModulesCount() and wasn't yet removed)
         /// and it does not have dependencies (modules connected to its outputs). If it has dependencies and recursive is true, module and all 
         /// of its (recursive) dependencies will be removed. AUTO_ALL dependencies are not considered / removed, only SINGLE and RANGE.
         /// @param id id of the module to remove

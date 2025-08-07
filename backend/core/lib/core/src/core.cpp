@@ -521,7 +521,7 @@ uint64_t Core::getLoadedModulesCount()
 
 
 
-structures::ModuleData* Core::getRunningModulesInfo(uint64_t running_module_id)
+structures::ModuleData* Core::getCreatedModulesInfo(uint64_t running_module_id)
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
@@ -537,7 +537,7 @@ structures::ModuleData* Core::getRunningModulesInfo(uint64_t running_module_id)
 
 
 
-uint64_t Core::getRunningModulesCount()
+uint64_t Core::getCreatedModulesCount()
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 

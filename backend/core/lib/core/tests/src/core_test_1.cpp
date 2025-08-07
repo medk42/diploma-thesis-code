@@ -20,7 +20,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
     SECTION("Modules loaded correctly")
     {
         REQUIRE(core.getLoadedModulesCount() == 5);
-        REQUIRE(core.getRunningModulesCount() == 1);
+        REQUIRE(core.getCreatedModulesCount() == 1);
         REQUIRE(core.collectDependentModules(0).size() == 1);
         REQUIRE(core.collectDependentModules(1).size() == 0);
 
@@ -32,6 +32,19 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.getExistingResponseChannels("message_3/v1:int").size() == 0);
         REQUIRE(core.getExistingPublishChannels("message_4/v1:int").size() == 0);
         REQUIRE(core.getExistingResponseChannels("message_6/v1:int").size() == 0);
+    }
+
+    SECTION("Add non-existing module")
+    {
+        aergo::module::InputChannelMapInfo channel_map_info
+        {
+            .subscribe_consumer_info_ = nullptr,
+            .subscribe_consumer_info_count_ = 0,
+            .request_consumer_info_ = nullptr,
+            .request_consumer_info_count_ = 0
+        };
+
+        REQUIRE(core.addModule(100, channel_map_info) == false);
     }
 
     SECTION("Create communication map")
@@ -49,7 +62,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(new_state_id > last_state_id);
         last_state_id = new_state_id;
 
-        REQUIRE(core.getRunningModulesCount() == 2);
+        REQUIRE(core.getCreatedModulesCount() == 2);
         REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 1);
         REQUIRE(core.collectDependentModules(1).size() == 1);
@@ -83,7 +96,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(new_state_id > last_state_id);
         last_state_id = new_state_id;
 
-        REQUIRE(core.getRunningModulesCount() == 3);
+        REQUIRE(core.getCreatedModulesCount() == 3);
         REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 2);
         REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 1);
@@ -173,7 +186,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(new_state_id > last_state_id);
         last_state_id = new_state_id;
 
-        REQUIRE(core.getRunningModulesCount() == 4);
+        REQUIRE(core.getCreatedModulesCount() == 4);
         REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 3);
         REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
@@ -228,7 +241,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(new_state_id > last_state_id);
         last_state_id = new_state_id;
 
-        REQUIRE(core.getRunningModulesCount() == 5);
+        REQUIRE(core.getCreatedModulesCount() == 5);
         REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
         REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
         REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 1);
@@ -243,12 +256,12 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.collectDependentModules(5).size() == 0);
         REQUIRE(core.collectDependentModules(6).size() == 0);
 
-        REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-        REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-        REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-        REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-        REQUIRE(core.getRunningModulesInfo(4) != nullptr);
-        REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+        REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+        REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+        REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+        REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+        REQUIRE(core.getCreatedModulesInfo(4) != nullptr);
+        REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
 
         new_state_id = core.getModulesMappingStateId();
         REQUIRE(new_state_id == last_state_id);
@@ -285,13 +298,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id == last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
 
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
@@ -308,13 +321,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id > last_state_id);
             last_state_id = new_state_id;
             
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
             
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
@@ -334,13 +347,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id > last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
 
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
@@ -360,13 +373,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id == last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
 
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
@@ -384,13 +397,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id > last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
             
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 1);
@@ -410,13 +423,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id == last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
             
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
@@ -433,13 +446,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id > last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
             
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 1);
@@ -461,13 +474,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id == last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
             
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 1);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 2);
@@ -484,13 +497,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(new_state_id > last_state_id);
             last_state_id = new_state_id;
 
-            REQUIRE(core.getRunningModulesCount() == 5);
-            REQUIRE(core.getRunningModulesInfo(0) != nullptr);
-            REQUIRE(core.getRunningModulesInfo(1) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(2) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(3) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(4) == nullptr);
-            REQUIRE(core.getRunningModulesInfo(5) == nullptr);
+            REQUIRE(core.getCreatedModulesCount() == 5);
+            REQUIRE(core.getCreatedModulesInfo(0) != nullptr);
+            REQUIRE(core.getCreatedModulesInfo(1) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(2) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(3) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(4) == nullptr);
+            REQUIRE(core.getCreatedModulesInfo(5) == nullptr);
             
             REQUIRE(core.getExistingPublishChannels("message_1/v1:int").size() == 0);
             REQUIRE(core.getExistingResponseChannels("message_2/v1:int").size() == 0);
