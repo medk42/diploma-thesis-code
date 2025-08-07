@@ -15,6 +15,7 @@ namespace aergo::core
         enum class RemoveResult { SUCCESS, DOES_NOT_EXIST, HAS_DEPENDENCIES, FAILED_TO_STOP_THREADS };
 
         Core(logging::ILogger* logger);
+        ~Core() override;
 
         /// @brief Load all available modules from the modules_dir. Data for each module is in data_dir (with same folder name as the module library filename).
         /// For example "${modules_dir}/module_a.dll" will have data directory pointed to "${data_dir}/module_a". Auto-create modules with flag auto_create_.
@@ -35,6 +36,9 @@ namespace aergo::core
 
         /// @return nullptr if out of range or module with specified ID was destroyed
         structures::ModuleData* getRunningModulesInfo(uint64_t running_module_id);
+
+        /// @brief Returns the number of created modules over the lifetime of this object (even if they were later destroyed).
+        /// For example if we create A,B,C,D,E -> 5; if we now remove C, D -> 5; if we add F -> 6.
         uint64_t getRunningModulesCount();
 
         /// @brief ID of the module mapping state. ID changes when modules get created or destroyed.
@@ -88,11 +92,15 @@ namespace aergo::core
         bool checkChannelMapValidityArrayCheck(
             aergo::module::InputChannelMapInfo& channel_map_info, const aergo::module::ModuleInfo* module_info, ConsumerType consumer_type
         );
+
+        const std::vector<aergo::module::ChannelIdentifier>& getExistingPublishChannelsImpl(const char* channel_type_identifier);
+        const std::vector<aergo::module::ChannelIdentifier>& getExistingResponseChannelsImpl(const char* channel_type_identifier);
         
         /// @brief Attempt to create and start module identified by loaded_module_id.
         /// @return true on success, false on failure
         bool createAndStartModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info, uint32_t module_thread_timeout_ms); 
 
+        std::vector<uint64_t> collectDependentModulesImpl(uint64_t id);
         void collectDependentModulesHelper(structures::ModuleData* module, std::vector<uint64_t>& dependent_modules, ConsumerType consumer_type);
         void removeMappingProducers(uint64_t module_id, ConsumerType consumer_type);
         void removeMappingSubscribers(uint64_t module_id, ConsumerType consumer_type);

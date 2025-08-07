@@ -1,0 +1,5 @@
+add_subdirectory(module_a)
+add_subdirectory(module_b)
+add_subdirectory(module_c)
+add_subdirectory(module_d)
+add_subdirectory(module_e)

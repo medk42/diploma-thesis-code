@@ -110,6 +110,18 @@
             "environment": [],
             "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"
+        },
+        {
+            "name": "core_test_1",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/backend/core/lib/core/tests/Debug/core_tests.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/backend/core/lib/core/tests/Debug/",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "Project: Build and Install"
         }
     ]
 }

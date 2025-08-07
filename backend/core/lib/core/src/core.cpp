@@ -15,6 +15,16 @@ Core::Core(logging::ILogger* logger)
 
 
 
+Core::~Core()
+{
+    for (auto& module : running_modules_)
+    {
+        module->module_->threadStop(defaults::module_thread_timeout_ms_);
+    }
+}
+
+
+
 void Core::initialize(const char* modules_dir, const char* data_dir)
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
@@ -33,7 +43,15 @@ void Core::initialize(const char* modules_dir, const char* data_dir)
 
 void Core::loadModules(const char* modules_dir, const char* data_dir)
 {
-    for (const auto& entry : std::filesystem::directory_iterator(modules_dir))
+    std::filesystem::directory_entry modules_dir_entry(modules_dir);
+    if (!modules_dir_entry.exists())
+    {
+        std::string log_msg = std::string("Attempting to load modules from directory that does not exist: ") + std::filesystem::absolute(modules_dir_entry).string();
+        log(aergo::module::logging::LogType::WARNING, log_msg.c_str());
+        return;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(modules_dir_entry))
     {
         auto module_path = entry.path();
         std::string module_path_str = module_path.string();
@@ -363,7 +381,7 @@ void Core::registerToProducersAutoAll(uint64_t module_id, aergo::module::InputCh
         aergo::module::communication_channel::Consumer consumer_info = module_info_consumers[channel_id];
         if (consumer_info.count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
         {
-            const std::vector<aergo::module::ChannelIdentifier>& existing_channels = (consumer_type == ConsumerType::SUBSCRIBE) ? getExistingPublishChannels(consumer_info.channel_type_identifier_) : getExistingResponseChannels(consumer_info.channel_type_identifier_);
+            const std::vector<aergo::module::ChannelIdentifier>& existing_channels = (consumer_type == ConsumerType::SUBSCRIBE) ? getExistingPublishChannelsImpl(consumer_info.channel_type_identifier_) : getExistingResponseChannelsImpl(consumer_info.channel_type_identifier_);
             for (aergo::module::ChannelIdentifier producer_channel_identifier : existing_channels)
             {
                 if (producer_channel_identifier.producer_module_id_ >= running_modules_.size())
@@ -540,7 +558,21 @@ uint64_t Core::getModulesMappingStateId()
 const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingPublishChannels(const char* channel_type_identifier)
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
+    return getExistingPublishChannelsImpl(channel_type_identifier);
+}
 
+
+
+const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseChannels(const char* channel_type_identifier)
+{
+    std::lock_guard<std::mutex> lock(core_mutex_);
+    return getExistingResponseChannelsImpl(channel_type_identifier);
+}
+
+
+
+const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingPublishChannelsImpl(const char* channel_type_identifier)
+{
     static const std::vector<aergo::module::ChannelIdentifier> empty{};
 
     auto it = existing_publish_channels_.find(channel_type_identifier);
@@ -556,10 +588,8 @@ const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingPublishCha
 
 
 
-const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseChannels(const char* channel_type_identifier)
-{    
-    std::lock_guard<std::mutex> lock(core_mutex_);
-
+const std::vector<aergo::module::ChannelIdentifier>& Core::getExistingResponseChannelsImpl(const char* channel_type_identifier)
+{
     static const std::vector<aergo::module::ChannelIdentifier> empty{};
 
     auto it = existing_response_channels_.find(channel_type_identifier);
@@ -584,7 +614,7 @@ Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
         return Core::RemoveResult::DOES_NOT_EXIST;
     }
     
-    std::vector<uint64_t> dependent_modules = collectDependentModules(id);
+    std::vector<uint64_t> dependent_modules = collectDependentModulesImpl(id);
 
     if (dependent_modules.size() > 1 && !recursive)
     {
@@ -646,6 +676,18 @@ std::vector<uint64_t> Core::collectDependentModules(uint64_t id)
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
+    if (id >= running_modules_.size() || running_modules_[id].get() == nullptr)
+    {
+        return std::vector<uint64_t>();
+    }
+
+    return collectDependentModulesImpl(id);
+}
+
+
+
+std::vector<uint64_t> Core::collectDependentModulesImpl(uint64_t id)
+{
     std::vector<uint64_t> dependent_modules;
     dependent_modules.push_back(id);
 
@@ -864,12 +906,12 @@ bool Core::addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapIn
 
 bool Core::checkChannelMapValidity(aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::ModuleInfo* module_info)
 {
-    if (checkChannelMapValidityArrayCheck(channel_map_info, module_info, ConsumerType::REQUEST))
+    if (!checkChannelMapValidityArrayCheck(channel_map_info, module_info, ConsumerType::REQUEST))
     {
         return false;
     }
 
-    if (checkChannelMapValidityArrayCheck(channel_map_info, module_info, ConsumerType::SUBSCRIBE))
+    if (!checkChannelMapValidityArrayCheck(channel_map_info, module_info, ConsumerType::SUBSCRIBE))
     {
         return false;
     }
@@ -954,7 +996,7 @@ bool Core::checkChannelMapValidityArrayCheck(
         {
             aergo::module::ChannelIdentifier channel_identifier = channel_map_consumers[consumer_id].channel_identifier_[channel_id];
             
-            if (channel_identifier.producer_module_id_ >= running_modules_.size() && running_modules_[channel_identifier.producer_module_id_].get() == nullptr)
+            if (channel_identifier.producer_module_id_ >= running_modules_.size() || running_modules_[channel_identifier.producer_module_id_].get() == nullptr)
             {
                 return false;
             }

@@ -1,3 +1,5 @@
+add_subdirectory(tests)
+
 add_library(core_project
     src/core.cpp
     src/core_structures.cpp
