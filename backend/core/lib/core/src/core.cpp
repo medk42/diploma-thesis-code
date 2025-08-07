@@ -622,9 +622,10 @@ Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
     }
 
     bool stop_success = true;
-    for (size_t module_id_p_1 = dependent_modules.size(); module_id_p_1 > 0; --module_id_p_1)
+    for (size_t dependent_modules_id_p_1 = dependent_modules.size(); dependent_modules_id_p_1 > 0; --dependent_modules_id_p_1)
     {
-        size_t module_id = module_id_p_1 - 1;
+        size_t dependent_modules_id = dependent_modules_id_p_1 - 1;
+        uint64_t module_id = dependent_modules[dependent_modules_id];
 
         removeMappingProducers(module_id, ConsumerType::SUBSCRIBE);
         removeMappingProducers(module_id, ConsumerType::REQUEST);
@@ -735,7 +736,8 @@ void Core::collectDependentModulesHelper(structures::ModuleData* module_data, st
                 std::terminate();
             }
 
-            if (consumers[channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+            if (consumers[channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL      // only for actually dependent channels
+             && std::find(dependent_modules.begin(), dependent_modules.end(), channel_identifier.producer_module_id_) == dependent_modules.end()) // only if not already there
             {
                 dependent_modules.push_back(channel_identifier.producer_module_id_);
             }
@@ -952,6 +954,11 @@ bool Core::checkChannelMapValidityArrayCheck(
 
 
 
+    if (channel_map_consumers_count > 0 && channel_map_consumers == nullptr)
+    {
+        return false;
+    }
+
     if (channel_map_consumers_count != module_info_consumers_count)
     {
         return false;
@@ -990,6 +997,10 @@ bool Core::checkChannelMapValidityArrayCheck(
         }
 
 
+        if (channel_map_consumers[consumer_id].channel_identifier_count_ > 0 && channel_map_consumers[consumer_id].channel_identifier_ == nullptr)
+        {
+            return false;
+        }
 
         const char* expected_type_identifier = module_info_consumer.channel_type_identifier_;
         for (uint32_t channel_id = 0; channel_id < channel_map_consumers[consumer_id].channel_identifier_count_; ++channel_id)

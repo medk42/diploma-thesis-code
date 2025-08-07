@@ -34,7 +34,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 0);
         
         // replace publish by response, no channels should be found in that case
-        REQUIRE(core.getExistingPublishChannels("message_3/v1:int").size() == 0);
+        REQUIRE(core.getExistingResponseChannels("message_3/v1:int").size() == 0);
         REQUIRE(core.getExistingPublishChannels("message_4/v1:int").size() == 0);
         REQUIRE(core.getExistingResponseChannels("message_6/v1:int").size() == 0);
     }
@@ -429,7 +429,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(core.getExistingResponseChannels("message_4/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_5/v1:int").size() == 1);
         REQUIRE(core.getExistingPublishChannels("message_6/v1:int").size() == 4);
-        REQUIRE(core.collectDependentModules(0).size() == 4);
+        REQUIRE(core.collectDependentModules(0).size() == 3);
         REQUIRE(core.collectDependentModules(1).size() == 4);
         REQUIRE(core.collectDependentModules(2).size() == 2);
         REQUIRE(core.collectDependentModules(3).size() == 2);
