@@ -104,7 +104,9 @@ namespace aergo::core
         void collectDependentModulesHelper(structures::ModuleData* module, std::vector<uint64_t>& dependent_modules, ConsumerType consumer_type);
         void removeMappingProducers(uint64_t module_id, ConsumerType consumer_type);
         void removeMappingSubscribers(uint64_t module_id, ConsumerType consumer_type);
-        void removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<const char*(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels);
+
+        /// @param channel_type_identifier_function return channel name and if it needs to be removed from "existing_channels"
+        void removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<std::pair<const char*, bool>(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels);
 
         bool initialized_;
         std::vector<structures::ModuleLoaderData> loaded_modules_;

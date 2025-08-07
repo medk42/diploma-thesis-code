@@ -19,7 +19,10 @@ Core::~Core()
 {
     for (auto& module : running_modules_)
     {
-        module->module_->threadStop(defaults::module_thread_timeout_ms_);
+        if (module.get() != nullptr)
+        {
+            module->module_->threadStop(defaults::module_thread_timeout_ms_);
+        }
     }
 }
 
@@ -637,22 +640,34 @@ Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
 
         removeFromExistingMap(
             module_id, module_info->publish_producer_count_, 
-            [module_info](uint32_t channel_id) { return module_info->publish_producers_[channel_id].channel_type_identifier_; }, 
+            [module_info](uint32_t channel_id) { return std::make_pair(
+                module_info->publish_producers_[channel_id].channel_type_identifier_, 
+                true
+            ); }, 
             existing_publish_channels_
         );
         removeFromExistingMap(
             module_id, module_info->response_producer_count_, 
-            [module_info](uint32_t channel_id) { return module_info->response_producers_[channel_id].channel_type_identifier_; }, 
+            [module_info](uint32_t channel_id) { return std::make_pair(
+                module_info->response_producers_[channel_id].channel_type_identifier_,
+                true
+            ); }, 
             existing_response_channels_
         );
         removeFromExistingMap(
             module_id, module_info->subscribe_consumer_count_, 
-            [module_info](uint32_t channel_id) { return module_info->subscribe_consumers_[channel_id].channel_type_identifier_; }, 
+            [module_info](uint32_t channel_id) { return std::make_pair(
+                module_info->subscribe_consumers_[channel_id].channel_type_identifier_,
+                module_info->subscribe_consumers_[channel_id].count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL
+            ); }, 
             existing_subscribe_auto_all_channels_
         );
         removeFromExistingMap(
             module_id, module_info->request_consumer_count_, 
-            [module_info](uint32_t channel_id) { return module_info->request_consumers_[channel_id].channel_type_identifier_; }, 
+            [module_info](uint32_t channel_id) { return std::make_pair(
+                module_info->request_consumers_[channel_id].channel_type_identifier_,
+                module_info->request_consumers_[channel_id].count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL
+            ); }, 
             existing_request_auto_all_channels_
         );
 
@@ -879,11 +894,18 @@ void Core::removeMappingSubscribers(uint64_t module_id, ConsumerType consumer_ty
 
 
 
-void Core::removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<const char*(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels)
+void Core::removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<std::pair<const char*, bool>(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels)
 {
     for (uint32_t channel_id = 0; channel_id < channel_count; ++channel_id)
     {
-        const char* channel_type_identifier = channel_type_identifier_function(channel_id);
+        std::pair<const char*, bool> channel_info = channel_type_identifier_function(channel_id);
+
+        if (!channel_info.second) // does not need to be removed
+        {
+            continue;
+        }
+
+        const char* channel_type_identifier = channel_info.first;
         auto it = existing_channels.find(channel_type_identifier);
 
         if (it == existing_channels.end())
