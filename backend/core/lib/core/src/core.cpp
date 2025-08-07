@@ -690,18 +690,39 @@ std::vector<uint64_t> Core::collectDependentModules(uint64_t id)
 std::vector<uint64_t> Core::collectDependentModulesImpl(uint64_t id)
 {
     std::vector<uint64_t> dependent_modules;
+    std::map<uint64_t, size_t> explored_modules;
     dependent_modules.push_back(id);
 
     for (size_t i = 0; i < dependent_modules.size(); ++i)
     {
         uint64_t module_id = dependent_modules[i];
+        auto it = explored_modules.find(module_id);
+        if (it != explored_modules.end())
+        {
+            it->second = i;
+            continue;
+        }
+
         structures::ModuleData* module_data = running_modules_[module_id].get();
 
         collectDependentModulesHelper(module_data, dependent_modules, ConsumerType::SUBSCRIBE);
         collectDependentModulesHelper(module_data, dependent_modules, ConsumerType::REQUEST);
+
+        explored_modules[module_id] = i;
     }
 
-    return dependent_modules;
+    std::vector<uint64_t> result;
+    result.reserve(dependent_modules.size());
+    for (size_t i = 0; i < dependent_modules.size(); ++i)
+    {
+        uint64_t module_id = dependent_modules[i];
+        if (explored_modules[module_id] == i)
+        {
+            result.push_back(module_id);
+        }
+    }
+
+    return result;
 }
 
 
@@ -736,8 +757,7 @@ void Core::collectDependentModulesHelper(structures::ModuleData* module_data, st
                 std::terminate();
             }
 
-            if (consumers[channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL      // only for actually dependent channels
-             && std::find(dependent_modules.begin(), dependent_modules.end(), channel_identifier.producer_module_id_) == dependent_modules.end()) // only if not already there
+            if (consumers[channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
             {
                 dependent_modules.push_back(channel_identifier.producer_module_id_);
             }
