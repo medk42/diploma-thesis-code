@@ -1,49 +1,15 @@
-#include "module_common/module_interface.h"
-#include "module_common/module_interface_threads.h"
+#include "module_common/module_interface_.h"
 
 #include <utility>
 
-using namespace aergo::module;
-using namespace message;
+using namespace aergo::module::message;
 
-
-
-Allocator::Allocator(ICore* core, IAllocatorCore* allocator)
-: core_(core), allocator_(allocator) {}
-
-
-
-Allocator::~Allocator()
-{
-    core_->deleteAllocator(allocator_);
-}
-
-
-
-SharedDataBlob Allocator::allocate(uint64_t number_of_bytes)
-{
-    ISharedData* data = allocator_->allocate(number_of_bytes);
-    if (data)
-    {
-        return SharedDataBlob(data, allocator_);
-    }
-    else
-    {
-        return SharedDataBlob();
-    }
-}
-
-
-bool Allocator::valid()
-{
-    return core_ != nullptr && allocator_ != nullptr;
-}
 
 
 SharedDataBlob::SharedDataBlob()
 : data_(nullptr), allocator_(nullptr) {}
 
-SharedDataBlob::SharedDataBlob(ISharedData* data, IAllocatorCore* allocator)
+SharedDataBlob::SharedDataBlob(ISharedData* data, IAllocator* allocator)
 : data_(data), allocator_(allocator)
 {
     if (allocator_)

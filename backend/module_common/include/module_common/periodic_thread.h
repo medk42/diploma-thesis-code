@@ -12,7 +12,7 @@ namespace aergo::module::thread
     protected:
         PeriodicThread(uint32_t thread_sleep_ms);
 
-        inline virtual ~PeriodicThread() {}
+        inline virtual ~PeriodicThread() = default;
 
         /// @brief Start the background thread.
         /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the thread to start.

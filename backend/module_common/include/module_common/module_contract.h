@@ -13,8 +13,8 @@
 
 #include <stdint.h>
 
-#include "module_interface.h"
-#include "module_wrapper.h"
+#include "module_interface_.h"
+#include "dll_module_wrapper.h"
 
 
 
@@ -34,53 +34,7 @@ DLL_API const aergo::module::ModuleInfo* readModuleInfo();
 /// @param logger object for logging messages from the core
 /// @param module_id unique ID of this module received from the core
 /// @return create module or nullptr on failure
-DLL_API aergo::module::IModule* createModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id);
+DLL_API aergo::module::dll::DllModuleWrapper* createModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id);
 
 /// @brief Destroy previously created module.  
-DLL_API void destroyModule(aergo::module::IModule* module);
-
-
-// struct MessageHeader               // travels through the bus
-// {
-//     uint64_t id, timestamp_ns;
-//     uint32_t smallSize;
-//     uint32_t blobCount;            // uint32_t blobIds[blobCount] follow
-// };
-
-// struct ParameterDesc
-// {
-//     const char* key;               // "gain_db"
-//     uint8_t     type;              // enum ParamType { Int, Double, String, Blob }
-//     const char* defaultValue;
-// };
-
-// struct ParameterList
-// {
-//     uint32_t           count;
-//     const ParameterDesc* items;    // DLL-owned
-// };
-
-// struct CoreAPI
-// {
-//     void (*publish)(const MessageHeader*, const void* small, const uint32_t* blobs);
-//     uint32_t (*allocBlob)(uint32_t bytes);      // returns blobId
-//     void (*freeBlob)(uint32_t blobId);          // ref-counted
-//     void (*log)(int level, const char* txt);    // 0=dbg,1=inf,2=err
-// };
-
-// class IModule
-// {
-// public:
-//     virtual void process(const MessageHeader& h,
-//                          const void* small,
-//                          const uint32_t* blobs) noexcept = 0;
-//     virtual void release() noexcept = 0;
-// protected:
-//     virtual ~IModule() = default;
-// };
-
-// ---- mandatory C exports ------------------------------------------
-// DLL_API int        GetPluginAPIVersion();                 // e.g. 1
-// DLL_API void       GetRequiredParameters(ParameterList*);
-// DLL_API bool       SetProvidedParameters(const ParameterList*);
-// DLL_API IModule*   CreateModule(const CoreAPI*) noexcept; // new Wrapper
+DLL_API void destroyModule(aergo::module::dll::DllModuleWrapper* module);

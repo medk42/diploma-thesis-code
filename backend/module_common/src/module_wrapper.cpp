@@ -1,134 +1,52 @@
-#include "module_common/module_wrapper.h"
-
-#include <optional>
-
-#define TRY_CATCH_LOG(__method, __code) try {\
-    __code \
-} catch(const std::exception& e) { \
-    logger_->log(logging::LogType::ERROR, (std::string("Module implementation of function \"") + __method + "\" raised the following exception: " + e.what()).c_str());\
-}
+#include "module_common/dll_module_wrapper.h"
 
 using namespace aergo::module;
+using namespace aergo::module::dll;
 
 
 
-ModuleWrapper::ModuleWrapper(ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, uint32_t thread_sleep_ms)
-: PeriodicThread(thread_sleep_ms), module_id_(module_id), core_(core), logger_(logger), request_id_(0)
-{
-    // subscribe side
-    subscribe_consumer_info_.reserve(channel_map_info.subscribe_consumer_info_count_);
-    for (uint32_t i = 0; i < channel_map_info.subscribe_consumer_info_count_; ++i)
-    {
-        auto& info = channel_map_info.subscribe_consumer_info_[i];
-        subscribe_consumer_info_.emplace_back(
-            info.channel_identifier_,
-            info.channel_identifier_ + info.channel_identifier_count_
-        );
-    }
-
-    // request side
-    request_consumer_info_.reserve(channel_map_info.request_consumer_info_count_);
-    for (uint32_t i = 0; i < channel_map_info.request_consumer_info_count_; ++i)
-    {
-        auto& info = channel_map_info.request_consumer_info_[i];
-        request_consumer_info_.emplace_back(
-            info.channel_identifier_,
-            info.channel_identifier_ + info.channel_identifier_count_
-        );
-    }
-}
-
-ModuleWrapper::~ModuleWrapper() {}
+DllModuleWrapper::DllModuleWrapper(std::unique_ptr<BaseModule> module, uint32_t thread_sleep_ms)
+: PeriodicThread(thread_sleep_ms), module_(std::move(module))
+{}
 
 
 
-bool ModuleWrapper::threadStart(uint32_t timeout_ms) noexcept
+bool DllModuleWrapper::threadStart(uint32_t timeout_ms) noexcept
 {
     return _threadStart(timeout_ms);
 }
 
 
 
-bool ModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
+bool DllModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
 {
     return _threadStop(timeout_ms);
 }
 
 
 
-void ModuleWrapper::sendMessage(uint32_t publish_producer_id, message::MessageHeader message)
-{
-    message.timestamp_ns_ = nowNs();
-    
-    core_->sendMessage(
-        {
-            .producer_module_id_ = module_id_, 
-            .producer_channel_id_ = publish_producer_id
-        }, 
-        message
-    );
-}
-
-
-
-void ModuleWrapper::sendResponse(uint32_t response_producer_id, ChannelIdentifier target_channel, uint64_t request_id, message::MessageHeader message)
-{
-    message.id_ = request_id;
-    message.timestamp_ns_ = nowNs();
-
-    core_->sendResponse(
-        {
-            .producer_module_id_ = module_id_, 
-            .producer_channel_id_ = response_producer_id
-        }, 
-        target_channel,
-        message
-    );
-}
-
-
-
-uint64_t ModuleWrapper::sendRequest(uint32_t request_consumer_id, ChannelIdentifier target_channel, message::MessageHeader message)
-{
-    message.id_ = request_id_++;
-    message.timestamp_ns_ = nowNs();
-
-    core_->sendRequest(
-        {
-            .producer_module_id_ = module_id_, 
-            .producer_channel_id_ = request_consumer_id
-        }, 
-        target_channel, 
-        message
-    );
-
-    return message.id_;
-}
-
-
-
-void ModuleWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+void DllModuleWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
     pushProcessingData(ProcessingData::Type::MESSAGE, subscribe_consumer_id, source_channel, message);
 }
 
 
 
-void ModuleWrapper::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+void DllModuleWrapper::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
     pushProcessingData(ProcessingData::Type::REQUEST, response_producer_id, source_channel, message);
 }
 
 
 
-void ModuleWrapper::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+void DllModuleWrapper::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
     pushProcessingData(ProcessingData::Type::RESPONSE, request_consumer_id, source_channel, message);
 }
 
 
 
-void ModuleWrapper::pushProcessingData(ProcessingData::Type type, uint32_t local_channel_id, ChannelIdentifier source_channel, message::MessageHeader message)
+void DllModuleWrapper::pushProcessingData(ProcessingData::Type type, uint32_t local_channel_id, ChannelIdentifier source_channel, message::MessageHeader message)
 {
     std::vector<uint8_t> data(message.data_, message.data_ + message.data_len_);
     message.data_ = data.data();
@@ -153,13 +71,13 @@ void ModuleWrapper::pushProcessingData(ProcessingData::Type type, uint32_t local
 
 
 
-void ModuleWrapper::_threadInit() {}
+void DllModuleWrapper::_threadInit() {}
 
-void ModuleWrapper::_threadDeinit() {}
+void DllModuleWrapper::_threadDeinit() {}
 
 
 
-void ModuleWrapper::_threadCycle()
+void DllModuleWrapper::_threadCycle()
 {
     // Process messages/requests/responses
     while (true)
@@ -181,13 +99,13 @@ void ModuleWrapper::_threadCycle()
             switch (processing_data.type_)
             {
                 case ProcessingData::Type::MESSAGE:
-                    TRY_CATCH_LOG("processMessageImpl", processMessageImpl(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);)
+                    module_->processMessage(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
                     break;
                 case ProcessingData::Type::REQUEST:
-                    TRY_CATCH_LOG("processRequestImpl", processRequestImpl(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);)
+                    module_->processRequest(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
                     break;
                 case ProcessingData::Type::RESPONSE:
-                    TRY_CATCH_LOG("processResponseImpl", processResponseImpl(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);)
+                    module_->processResponse(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
                     break;
             }
         }
@@ -198,64 +116,5 @@ void ModuleWrapper::_threadCycle()
     }
     
     // Call module's cycle function
-    TRY_CATCH_LOG("cycleImpl", cycleImpl();)
-}
-
-
-
-void ModuleWrapper::log(logging::LogType type, const char* message)
-{
-    logger_->log(type, message);
-}
-
-
-
-InputChannelMapInfo::IndividualChannelInfo ModuleWrapper::getSubscribeChannelInfo(uint32_t channel_id)
-{
-    if (channel_id >= subscribe_consumer_info_.size())
-    {
-        return InputChannelMapInfo::IndividualChannelInfo {
-            .channel_identifier_ = nullptr,
-            .channel_identifier_count_ = 0
-        };
-    }
-
-    return InputChannelMapInfo::IndividualChannelInfo {
-        .channel_identifier_ = subscribe_consumer_info_[channel_id].data(),
-        .channel_identifier_count_ = (uint32_t)subscribe_consumer_info_[channel_id].size()
-    };
-}
-
-
-
-InputChannelMapInfo::IndividualChannelInfo ModuleWrapper::getRequestChannelInfo(uint32_t channel_id)
-{
-    if (channel_id >= request_consumer_info_.size())
-    {
-        return InputChannelMapInfo::IndividualChannelInfo {
-            .channel_identifier_ = nullptr,
-            .channel_identifier_count_ = 0
-        };
-    }
-
-    return InputChannelMapInfo::IndividualChannelInfo {
-        .channel_identifier_ = request_consumer_info_[channel_id].data(),
-        .channel_identifier_count_ = (uint32_t)request_consumer_info_[channel_id].size()
-    };
-}
-
-
-
-std::unique_ptr<Allocator> ModuleWrapper::createDynamicAllocator()
-{
-    IAllocatorCore* allocator = core_->createDynamicAllocator();
-    return std::make_unique<Allocator>(core_, allocator);
-}
-
-
-
-std::unique_ptr<Allocator> ModuleWrapper::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots)
-{
-    IAllocatorCore* allocator = core_->createBufferAllocator(slot_size_bytes, number_of_slots);
-    return std::make_unique<Allocator>(core_, allocator);
+    module_->cycleImpl();
 }

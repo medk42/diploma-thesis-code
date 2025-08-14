@@ -3,6 +3,7 @@ add_library(module_common STATIC
     src/module_wrapper.cpp
     src/periodic_thread.cpp
     src/module_interface.cpp
+    src/base_module.cpp
 )
 
 target_include_directories(module_common PUBLIC include)

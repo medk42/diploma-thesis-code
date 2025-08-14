@@ -9,7 +9,7 @@ namespace aergo::core::logging
     class ILogger
     {
     public:
-        inline virtual ~ILogger() {}
+        inline virtual ~ILogger() = default;
 
         /// @brief Log a message.
         /// @param source_type Core or Module.
