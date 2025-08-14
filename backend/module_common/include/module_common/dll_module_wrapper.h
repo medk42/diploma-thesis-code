@@ -12,7 +12,7 @@
 
 namespace aergo::module::dll
 {
-    class DllModuleWrapper : public thread::PeriodicThread, IDllModule
+    class DllModuleWrapper : public thread::PeriodicThread, public IDllModule
     {
     public:
         /// @param thread_sleep_ms sleep time for thread cycle, use 0 for no sleep (sleep handled by module).

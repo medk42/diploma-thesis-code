@@ -10,14 +10,14 @@ using namespace aergo::module;
 
 
 
-ModuleA::ModuleA(ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
-: ModuleWrapper(core, channel_map_info, logger, module_id, 10), next_small_message_(0), next_large_message_(0),
+ModuleA::ModuleA(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
+: BaseModule(data_path, core, channel_map_info, logger, module_id), next_small_message_(0), next_large_message_(0),
 small_message_counter_(0), gen_(), dist_(0, 255)
 {
     large_fixed_allocator_ = createBufferAllocator(1000, 10);
     request_dynamic_allocator_ = createDynamicAllocator();
 
-    if (!large_fixed_allocator_->valid() || !request_dynamic_allocator_->valid())
+    if (large_fixed_allocator_ == nullptr || request_dynamic_allocator_ == nullptr)
     {
         logger->log(logging::LogType::ERROR, "Failed to create allocators.");
         throw std::exception("Failed to create allocators.");
@@ -26,12 +26,12 @@ small_message_counter_(0), gen_(), dist_(0, 255)
 
 
 
-void ModuleA::processMessageImpl(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message)
+void ModuleA::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {}
 
 
 
-void ModuleA::processRequestImpl(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message)
+void ModuleA::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
     if (response_producer_id == 0)
     {
@@ -96,7 +96,7 @@ void ModuleA::processRequestImpl(uint32_t response_producer_id, ChannelIdentifie
 
 
 
-void ModuleA::processResponseImpl(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message)
+void ModuleA::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {}
 
 

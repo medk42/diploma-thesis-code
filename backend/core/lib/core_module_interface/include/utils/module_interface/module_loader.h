@@ -18,7 +18,7 @@ namespace aergo::core
     class ModuleLoader
     {
     public:
-        using ModulePtr = std::unique_ptr<aergo::module::IModule, std::function<void(aergo::module::IModule*)>>;
+        using ModulePtr = std::unique_ptr<aergo::module::dll::IDllModule, std::function<void(aergo::module::dll::IDllModule*)>>;
 
         ~ModuleLoader();
 

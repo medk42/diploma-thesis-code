@@ -1,13 +1,18 @@
 #pragma once
 
-#include "module_common/module_wrapper.h"
+#include "module_common/base_module.h"
 
 namespace aergo::tests::core_1
 {
-    class ModuleCommon : public aergo::module::ModuleWrapper
+    class ModuleCommon : public aergo::module::BaseModule
     {
     public:
-        ModuleCommon(aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id) : ModuleWrapper(core, channel_map_info, logger, module_id, 10) {}
+        ModuleCommon(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id)
+        : BaseModule(data_path, core, channel_map_info, logger, module_id)
+        {
+            std::string log_msg = std::string( "Initializing module, ID: ") + std::to_string(module_id) + std::string(", data: ") + data_path;
+            logger->log(aergo::module::logging::LogType::INFO, log_msg.c_str());
+        }
 
         void publish(uint32_t source_channel_id, int value)
         {
@@ -38,7 +43,7 @@ namespace aergo::tests::core_1
         aergo::module::ChannelIdentifier last_source_channel_;
 
     protected:
-        void processMessageImpl(uint32_t subscribe_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) override
+        void processMessage(uint32_t subscribe_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override
         {
             if (message.data_len_ != sizeof(int))
             {
@@ -52,7 +57,7 @@ namespace aergo::tests::core_1
             last_source_channel_ = source_channel;
         }
 
-        void processRequestImpl(uint32_t response_producer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) override
+        void processRequest(uint32_t response_producer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override
         {
             if (message.data_len_ != sizeof(int))
             {
@@ -74,7 +79,7 @@ namespace aergo::tests::core_1
                 .success_ = true
             });
         }
-        void processResponseImpl(uint32_t request_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) override
+        void processResponse(uint32_t request_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override
         {
             if (message.data_len_ != sizeof(int))
             {
@@ -89,6 +94,6 @@ namespace aergo::tests::core_1
             last_source_channel_ = source_channel;
         }
 
-        void cycleImpl() override {}
+        void cycleImpl() noexcept override {}
     };
 }

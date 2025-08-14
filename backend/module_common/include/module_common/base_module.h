@@ -11,7 +11,7 @@ namespace aergo::module
     class BaseModule : public IModule
     {
     public:
-        BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id);
+        BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id);
 
         /// @brief Cycle method of the module. Called in each period after all messages/request/responses are handled. 
         /// If cycleImpl contains sleep, consider disabling sleep in ModuleWrapper by passing thread_sleep_ms = 0 in ModuleWrapper's constructor.
@@ -77,7 +77,7 @@ namespace aergo::module
 
     private:
         ICore* core_;
-        logging::ILogger* logger_;
+        const logging::ILogger* logger_;
         std::string data_path_;
         const uint64_t module_id_; 
         

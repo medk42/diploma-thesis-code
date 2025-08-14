@@ -1,5 +1,6 @@
 #include "module_common/module_contract.h"
 #include "module_a/module_a.h"
+#include "module_common/dll_module_wrapper.h"
 
 
 #define MODULE_A_API_VERSION 2
@@ -53,12 +54,12 @@ const ModuleInfo* readModuleInfo()
     return &module_a_info;
 }
 
-IModule* createModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id)
+aergo::module::dll::IDllModule* createModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id)
 {
-    return new ModuleA(core, channel_map_info, logger, module_id);
+    return new aergo::module::dll::DllModuleWrapper(std::make_unique<ModuleA>(data_path, core, channel_map_info, logger, module_id), 10);
 }
 
-void destroyModule(IModule* module)
+void destroyModule(aergo::module::dll::IDllModule* module)
 {
     delete module;
 }

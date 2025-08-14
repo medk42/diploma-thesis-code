@@ -1168,31 +1168,31 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
 
 
 
-aergo::module::IAllocatorCore* Core::createDynamicAllocator() noexcept
+aergo::module::IAllocator* Core::createDynamicAllocator() noexcept
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
     auto allocator = std::make_unique<memory_allocation::DynamicAllocator>(logger_);
-    aergo::module::IAllocatorCore* raw_ptr = allocator.get();
+    aergo::module::IAllocator* raw_ptr = allocator.get();
     allocators_.push_back(std::move(allocator));
     return raw_ptr;
 }
 
 
 
-aergo::module::IAllocatorCore* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
+aergo::module::IAllocator* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
     auto allocator = std::make_unique<memory_allocation::StaticAllocator>(slot_size_bytes, number_of_slots, logger_);
-    aergo::module::IAllocatorCore* raw_ptr = allocator.get();
+    aergo::module::IAllocator* raw_ptr = allocator.get();
     allocators_.push_back(std::move(allocator));
     return raw_ptr;
 }
 
 
 
-void Core::deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept
+void Core::deleteAllocator(aergo::module::IAllocator* allocator) noexcept
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 

@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 #include "module_interface_.h"
-#include "dll_module_wrapper.h"
+#include "dll_interface_threads.h"
 
 
 
@@ -34,7 +34,7 @@ DLL_API const aergo::module::ModuleInfo* readModuleInfo();
 /// @param logger object for logging messages from the core
 /// @param module_id unique ID of this module received from the core
 /// @return create module or nullptr on failure
-DLL_API aergo::module::dll::DllModuleWrapper* createModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id);
+DLL_API aergo::module::dll::IDllModule* createModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, aergo::module::logging::ILogger* logger, uint64_t module_id);
 
 /// @brief Destroy previously created module.  
-DLL_API void destroyModule(aergo::module::dll::DllModuleWrapper* module);
+DLL_API void destroyModule(aergo::module::dll::IDllModule* module);

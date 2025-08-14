@@ -6,7 +6,7 @@ using namespace aergo::module;
 
 
 
-BaseModule::BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id)
+BaseModule::BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
 : data_path_(data_path), core_(core), logger_(logger), module_id_(module_id), request_id_(0)
 {
     // subscribe side

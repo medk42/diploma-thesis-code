@@ -1,6 +1,5 @@
 #pragma once
 
-#include "module_common/module_interface_threads.h"
 #include "utils/logging/logger.h"
 #include "core_structures.h"
 
@@ -22,13 +21,12 @@ namespace aergo::core
         /// Only call this method once. Subsequent calls are ignored.
         void initialize(const char* modules_dir, const char* data_dir);
 
-        // TODO don't forget, these will be called ASYNC from modules, they need lock-free operation or synchronization
         virtual void sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override final;
         virtual void sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept override final;
         virtual void sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept override final;
-        virtual aergo::module::IAllocatorCore* createDynamicAllocator() noexcept override final;
-        virtual aergo::module::IAllocatorCore* createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept override final;
-        virtual void deleteAllocator(aergo::module::IAllocatorCore* allocator) noexcept override final;
+        virtual aergo::module::IAllocator* createDynamicAllocator() noexcept override final;
+        virtual aergo::module::IAllocator* createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept override final;
+        virtual void deleteAllocator(aergo::module::IAllocator* allocator) noexcept override final;
 
         /// @return nullptr if out of range
         const aergo::module::ModuleInfo* getLoadedModulesInfo(uint64_t loaded_module_id);
@@ -111,7 +109,7 @@ namespace aergo::core
         bool initialized_;
         std::vector<structures::ModuleLoaderData> loaded_modules_;
         std::vector<std::unique_ptr<structures::ModuleData>> running_modules_;
-        std::vector<std::unique_ptr<aergo::module::IAllocatorCore>> allocators_;
+        std::vector<std::unique_ptr<aergo::module::IAllocator>> allocators_;
         uint64_t module_mapping_state_id_;
 
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_publish_channels_;

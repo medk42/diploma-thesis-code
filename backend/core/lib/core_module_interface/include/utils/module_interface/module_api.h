@@ -2,8 +2,8 @@
 
 #include <stdint.h>
 
-#include "module_common/module_interface.h"
-#include "module_common/module_interface_threads.h"
+#include "module_common/module_interface_.h"
+#include "module_common/dll_interface_threads.h"
 
 #define CORE_API_VERSION 2
 
@@ -28,8 +28,8 @@
 #define PLUGIN_FUNCS(_) \
     _(const aergo::module::ModuleInfo*,  readModuleInfo,       ) \
     _(uint64_t,                          readPluginApiVersion  ) \
-    _(aergo::module::IModule*,           createModule,         const char* data_path, aergo::module::ICore*, aergo::module::InputChannelMapInfo, aergo::module::logging::ILogger*, uint64_t) \
-    _(void,                              destroyModule,        aergo::module::IModule*)
+    _(aergo::module::dll::IDllModule*,           createModule,         const char* data_path, aergo::module::ICore*, aergo::module::InputChannelMapInfo, aergo::module::logging::ILogger*, uint64_t) \
+    _(void,                              destroyModule,        aergo::module::dll::IDllModule*)
 
 struct ModuleLibrary_Api {
     #define _(ret,name,...) ret (*name)(__VA_ARGS__);
