@@ -5,6 +5,7 @@ add_library(utils___memory_allocation
     src/static_allocator.cpp
     src/memory_allocator.cpp
     src/shared_data_core.cpp
+    src/allocator_wrapper.cpp
 )
 
 target_include_directories(utils___memory_allocation PUBLIC

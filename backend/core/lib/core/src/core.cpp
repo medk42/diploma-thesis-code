@@ -2,6 +2,7 @@
 #include "core/defaults.h"
 #include "utils/memory_allocation/dynamic_allocator.h"
 #include "utils/memory_allocation/static_allocator.h"
+#include "utils/memory_allocation/allocator_wrapper.h"
 
 #include <cstring>
 #include <algorithm>
@@ -1173,8 +1174,9 @@ aergo::module::IAllocator* Core::createDynamicAllocator() noexcept
     std::lock_guard<std::mutex> lock(core_mutex_);
 
     auto allocator = std::make_unique<memory_allocation::DynamicAllocator>(logger_);
-    aergo::module::IAllocator* raw_ptr = allocator.get();
-    allocators_.push_back(std::move(allocator));
+    auto allocator_wrapper = std::make_unique<memory_allocation::AllocatorWrapper>(std::move(allocator));
+    aergo::module::IAllocator* raw_ptr = allocator_wrapper.get();
+    allocators_.push_back(std::move(allocator_wrapper));
     return raw_ptr;
 }
 
@@ -1185,8 +1187,9 @@ aergo::module::IAllocator* Core::createBufferAllocator(uint64_t slot_size_bytes,
     std::lock_guard<std::mutex> lock(core_mutex_);
 
     auto allocator = std::make_unique<memory_allocation::StaticAllocator>(slot_size_bytes, number_of_slots, logger_);
-    aergo::module::IAllocator* raw_ptr = allocator.get();
-    allocators_.push_back(std::move(allocator));
+    auto allocator_wrapper = std::make_unique<memory_allocation::AllocatorWrapper>(std::move(allocator));
+    aergo::module::IAllocator* raw_ptr = allocator_wrapper.get();
+    allocators_.push_back(std::move(allocator_wrapper));
     return raw_ptr;
 }
 

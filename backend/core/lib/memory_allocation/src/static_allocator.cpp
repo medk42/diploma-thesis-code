@@ -33,19 +33,19 @@ StaticAllocator::StaticAllocator(uint64_t slot_size_bytes, uint32_t number_of_sl
 
 
 
-aergo::module::message::SharedDataBlob StaticAllocator::allocate(uint64_t number_of_bytes) noexcept { return allocateImpl(); }
+aergo::module::ISharedData* StaticAllocator::allocate(uint64_t number_of_bytes) noexcept { return allocateImpl(); }
 void StaticAllocator::addOwner(aergo::module::ISharedData* data) noexcept { addOwnerImpl(data); }
 void StaticAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { removeOwnerImpl(data); }
 
 
 
-aergo::module::message::SharedDataBlob StaticAllocator::allocateImpl()
+aergo::module::ISharedData* StaticAllocator::allocateImpl()
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (free_memory_slot_ids_.empty())
     {
-        return aergo::module::message::SharedDataBlob();
+        return nullptr;
     }
 
     size_t free_id = free_memory_slot_ids_.front();
@@ -53,7 +53,7 @@ aergo::module::message::SharedDataBlob StaticAllocator::allocateImpl()
 
     allocated_memory_slots_.insert((size_t)(&preallocated_data_[free_id]));
 
-    return aergo::module::message::SharedDataBlob(&preallocated_data_[free_id], this);
+    return &preallocated_data_[free_id];
 }
 
 

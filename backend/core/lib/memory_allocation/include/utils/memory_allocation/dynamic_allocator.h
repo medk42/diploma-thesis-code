@@ -3,6 +3,7 @@
 #include "module_common/module_interface_.h"
 #include "utils/logging/logger.h"
 #include "shared_data_core.h"
+#include "allocator_interface_core.h"
 
 #include <map>
 #include <set>
@@ -11,21 +12,19 @@
 
 namespace aergo::core::memory_allocation
 {
-    class DynamicAllocator : public aergo::module::IAllocator
+    class DynamicAllocator : public ICoreAllocator
     {
     public:
         DynamicAllocator(aergo::core::logging::ILogger* logger, IMemoryAllocator* custom_allocator = nullptr);
 
-        virtual aergo::module::message::SharedDataBlob allocate(uint64_t number_of_bytes) noexcept override final;
-
-        // separate for testing that it does not throw exceptions
-        aergo::module::message::SharedDataBlob allocateImpl(uint64_t number_of_bytes);
-        void addOwnerImpl(aergo::module::ISharedData* data);
-        void removeOwnerImpl(aergo::module::ISharedData* data);
-
-    protected:
+        virtual aergo::module::ISharedData* allocate(uint64_t number_of_bytes) noexcept override final;
         virtual void addOwner(aergo::module::ISharedData* data) noexcept override final;
         virtual void removeOwner(aergo::module::ISharedData* data) noexcept override final;
+
+        // separate for testing that it does not throw exceptions
+        aergo::module::ISharedData* allocateImpl(uint64_t number_of_bytes);
+        void addOwnerImpl(aergo::module::ISharedData* data);
+        void removeOwnerImpl(aergo::module::ISharedData* data);
 
     private:
         void log(aergo::module::logging::LogType log_type, const char* message);
