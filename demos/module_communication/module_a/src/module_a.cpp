@@ -101,7 +101,7 @@ void ModuleA::processResponse(uint32_t request_consumer_id, ChannelIdentifier so
 
 
 
-void ModuleA::cycleImpl()
+void ModuleA::cycleImpl() noexcept
 {
     uint64_t time_ms = nowMs();
     if (time_ms > next_small_message_)
