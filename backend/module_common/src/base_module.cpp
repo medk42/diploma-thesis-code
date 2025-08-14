@@ -7,8 +7,17 @@ using namespace aergo::module;
 
 
 BaseModule::BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
-: data_path_(data_path), core_(core), logger_(logger), module_id_(module_id), request_id_(0)
+: core_(core), logger_(logger), module_id_(module_id), request_id_(0)
 {
+    if (data_path)
+    {
+        data_path_ = std::string(data_path);
+    }
+    else
+    {
+        data_path_ = std::string();
+    }
+
     // subscribe side
     subscribe_consumer_info_.reserve(channel_map_info.subscribe_consumer_info_count_);
     for (uint32_t i = 0; i < channel_map_info.subscribe_consumer_info_count_; ++i)
@@ -144,4 +153,11 @@ InputChannelMapInfo::IndividualChannelInfo BaseModule::getRequestChannelInfo(uin
         .channel_identifier_ = request_consumer_info_[channel_id].data(),
         .channel_identifier_count_ = (uint32_t)request_consumer_info_[channel_id].size()
     };
+}
+
+
+
+const std::string& BaseModule::getDataPath()
+{
+    return data_path_;
 }

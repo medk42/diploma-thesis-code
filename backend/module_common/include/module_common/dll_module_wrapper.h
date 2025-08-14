@@ -46,6 +46,8 @@ namespace aergo::module::dll
         /// @param source_channel identifies the source response channel (module and channel ID)
         void processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
 
+        BaseModule* getBaseModule();
+
     protected:
         void _threadInit() override final;
 

@@ -118,3 +118,10 @@ void DllModuleWrapper::_threadCycle()
     // Call module's cycle function
     module_->cycleImpl();
 }
+
+
+
+BaseModule* DllModuleWrapper::getBaseModule()
+{
+    return module_.get();
+}

@@ -65,6 +65,8 @@ namespace aergo::module
         /// @brief get mapped module IDs for a request channel
         InputChannelMapInfo::IndividualChannelInfo getRequestChannelInfo(uint32_t channel_id);
 
+        const std::string& getDataPath();
+
         
 
         inline uint64_t nowNs() noexcept

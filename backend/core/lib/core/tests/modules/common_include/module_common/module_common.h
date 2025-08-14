@@ -10,7 +10,7 @@ namespace aergo::tests::core_1
         ModuleCommon(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id)
         : BaseModule(data_path, core, channel_map_info, logger, module_id)
         {
-            std::string log_msg = std::string( "Initializing module, ID: ") + std::to_string(module_id) + std::string(", data: ") + data_path;
+            std::string log_msg = std::string( "Initializing module, ID: ") + std::to_string(module_id) + std::string(", data: ") + (data_path ? data_path : "NULL");
             logger->log(aergo::module::logging::LogType::INFO, log_msg.c_str());
         }
 
