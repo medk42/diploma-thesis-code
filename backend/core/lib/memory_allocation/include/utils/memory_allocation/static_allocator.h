@@ -1,6 +1,6 @@
 #pragma once
 
-#include "module_common/module_interface_threads.h"
+#include "module_common/module_interface_.h"
 #include "utils/logging/logger.h"
 #include "shared_data_core.h"
 
@@ -13,7 +13,7 @@
 
 namespace aergo::core::memory_allocation
 {
-    class StaticAllocator : public aergo::module::IAllocatorCore
+    class StaticAllocator : public aergo::module::IAllocator
     {
     public:
         class StaticAllocatorInitializationException : public std::exception {};
@@ -28,14 +28,16 @@ namespace aergo::core::memory_allocation
         StaticAllocator& operator=(StaticAllocator&& other) noexcept = default;
 
         /// @param number_of_bytes parameter is ignored, since we have fixed slots
-        virtual aergo::module::ISharedData* allocate(uint64_t number_of_bytes) noexcept override final;
-        virtual void addOwner(aergo::module::ISharedData* data) noexcept override final;
-        virtual void removeOwner(aergo::module::ISharedData* data) noexcept override final;
+        virtual aergo::module::message::SharedDataBlob allocate(uint64_t number_of_bytes) noexcept override final;
 
         // separate for testing that it does not throw exceptions
-        aergo::module::ISharedData* allocateImpl();
+        aergo::module::message::SharedDataBlob allocateImpl();
         void addOwnerImpl(aergo::module::ISharedData* data);
         void removeOwnerImpl(aergo::module::ISharedData* data);
+
+    protected:
+        virtual void addOwner(aergo::module::ISharedData* data) noexcept override final;
+        virtual void removeOwner(aergo::module::ISharedData* data) noexcept override final;
 
     private:
         void log(aergo::module::logging::LogType log_type, const char* message);

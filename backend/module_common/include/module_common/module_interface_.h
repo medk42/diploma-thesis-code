@@ -158,7 +158,7 @@ namespace aergo::module
 
         /// @brief Allocate "number_of_bytes" bytes of shared memory. If the allocator has fixed byte size, "number_of_bytes" parameter is ignored.
         /// @return SharedDataBlob, check for validity by calling the valid() function
-        virtual message::SharedDataBlob allocate(uint64_t number_of_bytes);
+        virtual message::SharedDataBlob allocate(uint64_t number_of_bytes) noexcept;
 
     protected:
         /// @brief Add owner for shared data object. Object removed when owners drop to zero.

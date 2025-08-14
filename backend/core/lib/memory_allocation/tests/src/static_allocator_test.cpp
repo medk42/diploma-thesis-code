@@ -5,6 +5,7 @@
 #include "utils/memory_allocation/static_allocator.h"
 
 #include <algorithm>
+#include <array>
 
 using namespace aergo::core::memory_allocation;
 
@@ -15,7 +16,7 @@ TEST_CASE( "StaticAllocator", "[static_allocator]" )
     TestLogger logger;
 
     uint64_t slot_size_bytes = 1000;
-    uint32_t number_of_slots = 100;
+    const uint32_t number_of_slots = 100;
 
     SECTION("broken allocator")
     {
@@ -32,99 +33,89 @@ TEST_CASE( "StaticAllocator", "[static_allocator]" )
 
         REQUIRE(logger.logs().size() == 0);
         
-        std::vector<aergo::module::ISharedData*> allocated_data;
+        std::array<aergo::module::message::SharedDataBlob, number_of_slots> allocated_data;
         for (uint32_t i = 0; i < number_of_slots; ++i)
         {
-            aergo::module::ISharedData* data;
-            REQUIRE_NOTHROW(data = static_allocator.allocateImpl());
-            REQUIRE(data != nullptr);
-            REQUIRE(data->valid());
-            REQUIRE(data->size() == slot_size_bytes);
-            REQUIRE(data->data() == (uint8_t*)((uint64_t)i + 1));
-            allocated_data.push_back(data);
+            aergo::module::message::SharedDataBlob data;
+            REQUIRE_NOTHROW(allocated_data[i] = static_allocator.allocateImpl());
+            REQUIRE(allocated_data[i].valid());
+            REQUIRE(allocated_data[i].size() == slot_size_bytes);
+            REQUIRE(allocated_data[i].data() == (uint8_t*)((uint64_t)i + 1));
         }
 
         {
-            aergo::module::ISharedData* data;
+            aergo::module::message::SharedDataBlob data;
             REQUIRE_NOTHROW(data = static_allocator.allocateImpl());
-            REQUIRE(data == nullptr);
+            REQUIRE(!data.valid());
         }
 
         REQUIRE(logger.logs().size() == 0);
-        aergo::module::ISharedData* data42 = allocated_data[42];
-        allocated_data.erase(allocated_data.begin() + 42);
-        REQUIRE_NOTHROW(static_allocator.removeOwnerImpl(data42));
 
-        aergo::module::ISharedData* data42new;
-        REQUIRE_NOTHROW(data42new = static_allocator.allocateImpl());
-        REQUIRE(data42 == data42new);
-        allocated_data.push_back(data42new);
+        uint8_t* data_42 = allocated_data[42].data();
+        REQUIRE_NOTHROW(static_allocator.removeOwnerImpl((aergo::module::ISharedData*)allocated_data[42].data()));
+        allocated_data[42] = aergo::module::message::SharedDataBlob();
 
-        aergo::module::ISharedData* data_null;
+        REQUIRE_NOTHROW(allocated_data[42] = static_allocator.allocateImpl());
+        REQUIRE(data_42 == allocated_data[42].data());
+
+        aergo::module::message::SharedDataBlob data_null;
         REQUIRE_NOTHROW(data_null = static_allocator.allocateImpl());
-        REQUIRE(data_null == nullptr);
+        REQUIRE(!data_null.valid());
 
         for (uint32_t i = 0; i < number_of_slots; ++i)
         {
-            REQUIRE_NOTHROW(static_allocator.addOwnerImpl(allocated_data[i]));
-            REQUIRE_NOTHROW(static_allocator.addOwnerImpl(allocated_data[i]));  
+            REQUIRE_NOTHROW(static_allocator.addOwnerImpl((aergo::module::ISharedData*)allocated_data[i].data()));
+            REQUIRE_NOTHROW(static_allocator.addOwnerImpl((aergo::module::ISharedData*)allocated_data[i].data()));
         }
 
         REQUIRE_NOTHROW(data_null = static_allocator.allocateImpl());
-        REQUIRE(data_null == nullptr);
+        REQUIRE(!data_null.valid());
         
         REQUIRE(logger.logs().size() == 0);
 
         for (uint32_t i = 0; i < number_of_slots; ++i)
         {
-            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl(allocated_data[i]));
+            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl((aergo::module::ISharedData*)allocated_data[i].data()));
         }
 
         REQUIRE_NOTHROW(data_null = static_allocator.allocateImpl());
-        REQUIRE(data_null == nullptr);
+        REQUIRE(!data_null.valid());
 
         for (uint32_t i = 0; i < 50; ++i)
         {
-            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl(allocated_data[i]));
+            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl((aergo::module::ISharedData*)allocated_data[i].data()));
         }
 
-        REQUIRE_NOTHROW(data_null = static_allocator.allocateImpl());
-        REQUIRE(data_null != nullptr);
-        allocated_data.push_back(data_null);
+        REQUIRE_NOTHROW(allocated_data[0] = static_allocator.allocateImpl());
+        REQUIRE(allocated_data[0].valid());
         
         REQUIRE(logger.logs().size() == 0);
 
         for (uint32_t i = 0; i < allocated_data.size(); ++i)
         {
-            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl(allocated_data[i]));
+            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl((aergo::module::ISharedData*)allocated_data[i].data()));
         }
         
-        REQUIRE(logger.logs().size() == 50);
-
-        allocated_data.clear();
+        REQUIRE(logger.logs().size() == 49);
 
         for (uint32_t i = 0; i < number_of_slots; ++i)
         {
-            aergo::module::ISharedData* data;
-            REQUIRE_NOTHROW(data = static_allocator.allocateImpl());
-            REQUIRE(data != nullptr);
-            REQUIRE(data->valid());
-            REQUIRE(data->size() == slot_size_bytes);
+            REQUIRE_NOTHROW(allocated_data[i] = static_allocator.allocateImpl());
+            REQUIRE(allocated_data[i].valid());
+            REQUIRE(allocated_data[i].size() == slot_size_bytes);
             for (uint32_t j = 0; j < i; ++j)
             {
-                REQUIRE(allocated_data.at(j)->data() != data->data());
+                REQUIRE(allocated_data[j].data() != allocated_data[i].data());
             }
-
-            allocated_data.push_back(data);
         }
 
-        REQUIRE(logger.logs().size() == 50);
+        REQUIRE(logger.logs().size() == 49);
 
         for (uint32_t i = 0; i < allocated_data.size(); ++i)
         {
-            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl(allocated_data[i]));
+            REQUIRE_NOTHROW(static_allocator.removeOwnerImpl((aergo::module::ISharedData*)allocated_data[i].data()));
         }
         
-        REQUIRE(logger.logs().size() == 50);
+        REQUIRE(logger.logs().size() == 49);
     }
 }

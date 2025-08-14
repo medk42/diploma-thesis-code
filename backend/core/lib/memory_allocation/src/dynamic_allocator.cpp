@@ -19,12 +19,12 @@ DynamicAllocator::DynamicAllocator(aergo::core::logging::ILogger* logger, IMemor
 
 
 
-aergo::module::ISharedData* DynamicAllocator::allocate(uint64_t number_of_bytes) noexcept { return allocateImpl(number_of_bytes); }
+aergo::module::message::SharedDataBlob DynamicAllocator::allocate(uint64_t number_of_bytes) noexcept { return allocateImpl(number_of_bytes); }
 void DynamicAllocator::addOwner(aergo::module::ISharedData* data) noexcept { addOwnerImpl(data); }
 void DynamicAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { removeOwnerImpl(data); }
 
 
-aergo::module::ISharedData* DynamicAllocator::allocateImpl(uint64_t number_of_bytes)
+aergo::module::message::SharedDataBlob DynamicAllocator::allocateImpl(uint64_t number_of_bytes)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     
@@ -41,12 +41,12 @@ aergo::module::ISharedData* DynamicAllocator::allocateImpl(uint64_t number_of_by
         );
         allocated_memory_slots_.insert((std::size_t)(&it->second));
 
-        return &it->second; 
+        return aergo::module::message::SharedDataBlob(&it->second, this);
     }
     else
     {
         log(aergo::module::logging::LogType::ERROR, "Failed to allocate memory.");
-        return nullptr;
+        return aergo::module::message::SharedDataBlob();
     }
     
 }

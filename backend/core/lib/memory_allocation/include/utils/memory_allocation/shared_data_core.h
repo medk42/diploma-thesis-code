@@ -1,6 +1,6 @@
 #pragma once
 
-#include "module_common/module_interface_threads.h"
+#include "module_common/module_interface_.h"
 #include "memory_allocator.h"
 
 namespace aergo::core::memory_allocation
