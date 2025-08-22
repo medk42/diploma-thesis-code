@@ -1756,11 +1756,11 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE_NOTHROW(data_d = core.getCreatedModulesInfo(4));
             REQUIRE(data_d != nullptr);
 
-            ModuleCommon* module_a = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_a->module_.get()))->getBaseModule();
-            ModuleCommon* module_b = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_b->module_.get()))->getBaseModule();
-            ModuleCommon* module_c = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_c->module_.get()))->getBaseModule();
-            ModuleCommon* module_d = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_d->module_.get()))->getBaseModule();
-            ModuleCommon* module_e = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_e->module_.get()))->getBaseModule();
+            ModuleCommon* module_a = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_a->module_.get()))->getModule();
+            ModuleCommon* module_b = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_b->module_.get()))->getModule();
+            ModuleCommon* module_c = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_c->module_.get()))->getModule();
+            ModuleCommon* module_d = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_d->module_.get()))->getModule();
+            ModuleCommon* module_e = (ModuleCommon*) ((aergo::module::dll::DllModuleWrapper*)(data_e->module_.get()))->getModule();
 
             REQUIRE(module_a != nullptr);
             REQUIRE(module_b != nullptr);

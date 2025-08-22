@@ -4,7 +4,7 @@
 
 namespace aergo::module::dll
 {
-    class IDllModule : public IModule
+    class IDllModule : public virtual IModuleBase
     {
     public:
         /// @brief Start the background thread.

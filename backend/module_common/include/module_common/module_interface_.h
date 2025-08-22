@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <typeinfo>
 
 namespace aergo::module
 {
@@ -220,11 +221,12 @@ namespace aergo::module
         virtual void deleteAllocator(IAllocator* allocator) noexcept = 0;
     };
 
-    class IModule
+    class IModuleBase
     {
     public:
-        virtual ~IModule() = default;
-    
+        
+        virtual ~IModuleBase() = default;
+
         /// @brief Process a message that came to subscribed channel "subscribe_consumer_id" from module "module_id".
         /// @param subscribe_consumer_id ID of this module's channel from which the message came
         /// @param source_channel identifies the source publish channel (module and channel ID)
@@ -241,5 +243,23 @@ namespace aergo::module
         /// @param request_consumer_id ID of this module's channel from which the message came
         /// @param source_channel identifies the source response channel (module and channel ID)
         virtual void processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept = 0;
+    };
+
+    class IModule : public virtual IModuleBase
+    {
+    public:
+
+        /// @brief Cycle method of the module. Called in each period after all messages/request/responses are handled. 
+        /// If cycleImpl contains sleep, consider disabling sleep in ModuleWrapper by passing thread_sleep_ms = 0 in ModuleWrapper's constructor.
+        virtual void cycleImpl() noexcept = 0;
+
+        virtual void* query_capability(const std::type_info& id) noexcept = 0;
+
+        /// @brief Query internal module for type. Module can implement for example IActivable and ISavable, query can be used to recover the correct
+        /// interface from the base module.
+        template<class T>
+        T* query() noexcept {
+            return static_cast<T*>(query_capability(typeid(T)));
+        }
     };
 }

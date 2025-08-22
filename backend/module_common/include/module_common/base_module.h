@@ -13,13 +13,6 @@ namespace aergo::module
     public:
         BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id);
 
-        /// @brief Cycle method of the module. Called in each period after all messages/request/responses are handled. 
-        /// If cycleImpl contains sleep, consider disabling sleep in ModuleWrapper by passing thread_sleep_ms = 0 in ModuleWrapper's constructor.
-        virtual void cycleImpl() noexcept = 0;
-
-
-
-    protected:
         using AllocatorPtr = std::unique_ptr<IAllocator, std::function<void(IAllocator*)>>;
 
         /// @brief Log message of specific type (info, warning, error).

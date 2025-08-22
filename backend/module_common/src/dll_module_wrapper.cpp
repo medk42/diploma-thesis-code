@@ -5,7 +5,7 @@ using namespace aergo::module::dll;
 
 
 
-DllModuleWrapper::DllModuleWrapper(std::unique_ptr<BaseModule> module, uint32_t thread_sleep_ms)
+DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, uint32_t thread_sleep_ms)
 : PeriodicThread(thread_sleep_ms), module_(std::move(module))
 {}
 
@@ -121,7 +121,7 @@ void DllModuleWrapper::_threadCycle()
 
 
 
-BaseModule* DllModuleWrapper::getBaseModule()
+aergo::module::IModule* DllModuleWrapper::getModule()
 {
     return module_.get();
 }

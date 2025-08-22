@@ -12,11 +12,11 @@
 
 namespace aergo::module::dll
 {
-    class DllModuleWrapper : public thread::PeriodicThread, public IDllModule
+    class DllModuleWrapper : protected thread::PeriodicThread, public IDllModule
     {
     public:
         /// @param thread_sleep_ms sleep time for thread cycle, use 0 for no sleep (sleep handled by module).
-        DllModuleWrapper(std::unique_ptr<BaseModule> module, uint32_t thread_sleep_ms);
+        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, uint32_t thread_sleep_ms);
 
         ~DllModuleWrapper() override = default;
 
@@ -46,7 +46,7 @@ namespace aergo::module::dll
         /// @param source_channel identifies the source response channel (module and channel ID)
         void processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
 
-        BaseModule* getBaseModule();
+        aergo::module::IModule* getModule();
 
     protected:
         void _threadInit() override final;
@@ -74,6 +74,6 @@ namespace aergo::module::dll
         std::mutex processing_data_queue_mutex_;
         std::queue<ProcessingData> processing_data_queue_;
 
-        std::unique_ptr<BaseModule> module_;
+        std::unique_ptr<aergo::module::IModule> module_;
     };
 }
