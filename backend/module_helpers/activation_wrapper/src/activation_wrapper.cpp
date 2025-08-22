@@ -76,9 +76,13 @@ void ActivationWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelId
     {
         module_ref_->processMessage(subscribe_consumer_id, source_channel, message);
     }
-    else
+    else if (message_wait_.expected_)
     {
-
+        auto& param = parameters_->getParameters()[message_wait_.param_id_];
+        if (param.custom_channel_type_ == params::CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == subscribe_consumer_id)
+        {
+            setCustomValueOnReceive(message);
+        }
     }
 }
 
@@ -136,9 +140,13 @@ void ActivationWrapper::processResponse(uint32_t request_consumer_id, ChannelIde
     {
         module_ref_->processResponse(request_consumer_id, source_channel, message);
     }
-    else
+    else if (message_wait_.expected_)
     {
-
+        auto& param = parameters_->getParameters()[message_wait_.param_id_];
+        if (param.custom_channel_type_ == params::CustomChannelType::REQUEST && param.custom_channel_id_ == request_consumer_id)
+        {
+            setCustomValueOnReceive(message);
+        }
     }
 }
 
@@ -683,4 +691,41 @@ void ActivationWrapper::handleActivationTask()
             activation_task_.reset();
         };
     }
+}
+
+
+
+void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
+{
+    
+    auto& chosen_value = parameter_values_[message_wait_.param_id_][message_wait_.list_id_];
+    chosen_value.resize(0);
+    
+    chosen_value.insert(chosen_value.end(),
+            reinterpret_cast<const uint8_t*>(&message.data_len_),
+            reinterpret_cast<const uint8_t*>(&message.data_len_) + sizeof(uint64_t));
+    chosen_value.insert(chosen_value.end(), message.data_, message.data_ + message.data_len_);
+    
+    for (uint64_t blob_id = 0; blob_id < message.blob_count_; ++blob_id)
+    {
+        if (message.blobs_[blob_id].valid())
+        {
+            uint64_t blob_size = message.blobs_[blob_id].size();
+            uint8_t* blob_data = message.blobs_[blob_id].data();
+
+            chosen_value.insert(chosen_value.end(),
+                reinterpret_cast<const uint8_t*>(&blob_size),
+                reinterpret_cast<const uint8_t*>(&blob_size) + sizeof(uint64_t));
+            chosen_value.insert(chosen_value.end(), blob_data, blob_data + blob_size);
+        }
+        else
+        {
+            uint64_t blob_size = 0;
+            chosen_value.insert(chosen_value.end(),
+                reinterpret_cast<const uint8_t*>(&blob_size),
+                reinterpret_cast<const uint8_t*>(&blob_size) + sizeof(uint64_t));
+        }
+    }
+
+    message_wait_.expected_ = false;
 }

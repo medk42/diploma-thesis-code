@@ -10,6 +10,8 @@
 
 namespace aergo::module::helpers::activation_wrapper
 {
+    /// @brief Wrapper for modules that can be activated/deactivated with parameters.
+    /// Holds back all messages/requests/responses until the module is activated.
     class ActivationWrapper : public virtual aergo::module::IModule
     {
     public:
@@ -32,6 +34,7 @@ namespace aergo::module::helpers::activation_wrapper
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> readValues(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> listRemove(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
         void handleActivationTask();
+        void setCustomValueOnReceive(message::MessageHeader message);
 
         bool valid_;                              // is the wrapper valid (correctly initialized)
 
