@@ -95,5 +95,16 @@ namespace aergo::tests::core_1
         }
 
         void cycleImpl() noexcept override {}
+
+        bool valid() noexcept override
+        {
+            return true;
+        }
+
+        void* query_capability(const std::type_info& id) noexcept override
+        { 
+            if (id == typeid(BaseModule)) return static_cast<BaseModule*>(this);
+            return nullptr;
+        }
     };
 }

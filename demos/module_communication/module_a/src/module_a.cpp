@@ -161,3 +161,18 @@ void ModuleA::cycleImpl() noexcept
         sendMessage(1, message);
     }
 }
+
+
+
+bool ModuleA::valid() noexcept
+{
+    return true;
+}
+
+
+
+void* ModuleA::query_capability(const std::type_info& id) noexcept
+{ 
+    if (id == typeid(BaseModule)) return static_cast<BaseModule*>(this);
+    return nullptr;
+}

@@ -16,6 +16,8 @@ namespace aergo::demo_modules_1::module_a
         void processRequest(uint32_t response_producer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override;
         void processResponse(uint32_t request_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override;
         void cycleImpl() noexcept override;
+        bool valid() noexcept override;
+        void* query_capability(const std::type_info& id) noexcept override;
 
     private:
         uint64_t next_small_message_;

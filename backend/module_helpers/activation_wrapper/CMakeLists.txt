@@ -2,6 +2,8 @@ set(LIB_NAME helpers___activation_wrapper)
 
 add_library(${LIB_NAME}
     src/activation_wrapper.cpp
+    src/async_task.cpp
+    src/parameter_description.cpp
 )
 
 target_include_directories(${LIB_NAME} PUBLIC

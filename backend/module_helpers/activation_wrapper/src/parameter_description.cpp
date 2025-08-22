@@ -18,8 +18,10 @@ void ParameterDescription::toStringStream(std::stringstream& stream)
     stream << param_desc_;
     stream << limit_min_ << " ";
     stream << limit_max_ << " ";
-    stream << min_value_ << " ";
-    stream << max_value_ << " ";
+    stream << min_value_double_ << " ";
+    stream << max_value_double_ << " ";
+    stream << min_value_long_ << " ";
+    stream << max_value_long_ << " ";
     stream << as_slider_ << " ";
     stream << enum_values_.size() << " ";
     for (auto& enum_value : enum_values_)
@@ -28,11 +30,12 @@ void ParameterDescription::toStringStream(std::stringstream& stream)
         stream << enum_value;
     }
     stream << (size_t)custom_channel_type_ << " ";
-    stream << custom_channel_name_.size() << " ";
-    stream << custom_channel_name_;
+    stream << custom_channel_id_ << " ";
     stream << as_list_ << " ";
     stream << list_size_min_ << " ";
     stream << list_size_max_ << " ";
+    stream << default_value_.size() << " ";
+    stream << default_value_;
 
 }
 
@@ -42,7 +45,7 @@ ParameterDescription ParameterDescription::fromStringStream(std::stringstream& s
 {
     ParameterDescription description;
 
-    size_t param_type, param_name_length, param_desc_length, enum_values_size, custom_channel_type, custom_channel_name_length;
+    size_t param_type, param_name_length, param_desc_length, enum_values_size, custom_channel_type, default_value_length;
 
     CHECKED_READ(stream >> param_type)
     description.type_ = (ParameterType)param_type;
@@ -54,8 +57,10 @@ ParameterDescription ParameterDescription::fromStringStream(std::stringstream& s
     CHECKED_READ(stream.read(&description.param_desc_[0], param_desc_length))
     CHECKED_READ(stream >> description.limit_min_)
     CHECKED_READ(stream >> description.limit_max_)
-    CHECKED_READ(stream >> description.min_value_)
-    CHECKED_READ(stream >> description.max_value_)
+    CHECKED_READ(stream >> description.min_value_double_)
+    CHECKED_READ(stream >> description.max_value_double_)
+    CHECKED_READ(stream >> description.min_value_long_)
+    CHECKED_READ(stream >> description.max_value_long_)
     CHECKED_READ(stream >> description.as_slider_)
     CHECKED_READ(stream >> enum_values_size)
     for (size_t i = 0; i < enum_values_size; ++i)
@@ -70,12 +75,13 @@ ParameterDescription ParameterDescription::fromStringStream(std::stringstream& s
 
     CHECKED_READ(stream >> custom_channel_type)
     description.custom_channel_type_ = (CustomChannelType)custom_channel_type;
-    CHECKED_READ(stream >> custom_channel_name_length)
-    description.custom_channel_name_.resize(custom_channel_name_length);
-    CHECKED_READ(stream.read(&description.custom_channel_name_[0], custom_channel_name_length))
+    CHECKED_READ(stream >> description.custom_channel_id_)
     CHECKED_READ(stream >> description.as_list_)
     CHECKED_READ(stream >> description.list_size_min_)
     CHECKED_READ(stream >> description.list_size_max_)
+    CHECKED_READ(stream >> default_value_length)
+    description.default_value_.resize(default_value_length);
+    CHECKED_READ(stream.read(&description.default_value_[0], default_value_length))
 
     return description;
 }
@@ -92,6 +98,7 @@ std::string ParameterList::toString()
     if (cashed_string_.empty())
     {
         std::stringstream stream;
+        stream.precision(std::numeric_limits<double>::max_digits10);
 
         stream << PARAM_DESC_VERSION << " ";
         stream << parameters_.size() << " ";
@@ -141,8 +148,7 @@ ParameterList ParameterList::fromString(std::string& parameters_str)
 
 
 
-std::vector<ParameterDescription>& ParameterList::getParameters()
+const std::vector<ParameterDescription>& ParameterList::getParameters() const
 {
-    cashed_string_ = ""; // user may have changed the parameters, reset the cache
     return parameters_;
 }

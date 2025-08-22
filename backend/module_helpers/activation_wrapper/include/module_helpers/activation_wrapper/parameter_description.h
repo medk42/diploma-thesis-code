@@ -37,16 +37,20 @@ namespace aergo::module::helpers::activation_wrapper::params
         std::string param_desc_;
 
         bool limit_min_, limit_max_;    // with limit checking
-        double min_value_, max_value_;  // min/max double value
+        double min_value_double_, max_value_double_;  // min/max double value
+        int64_t min_value_long_, max_value_long_; // min/max long value
         bool as_slider_;                // display value as a slider
 
         std::vector<std::string> enum_values_;
 
         CustomChannelType custom_channel_type_;
-        std::string custom_channel_name_;
+        uint32_t custom_channel_id_;
 
         bool as_list_;
         uint16_t list_size_min_, list_size_max_;
+
+        std::string default_value_; // default value as a string (for all types, except CUSTOM and lists of types)
+        
 
         void toStringStream(std::stringstream& stream);
         static ParameterDescription fromStringStream(std::stringstream& stream);
@@ -59,7 +63,8 @@ namespace aergo::module::helpers::activation_wrapper::params
 
         std::string toString();
         static ParameterList fromString(std::string& parameters_str); // can throw runtime_error on parsing error
-        std::vector<ParameterDescription>& getParameters();
+
+        const std::vector<ParameterDescription>& getParameters() const;
 
     private:
         std::vector<ParameterDescription> parameters_;
