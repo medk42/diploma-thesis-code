@@ -12,7 +12,13 @@ using namespace aergo::core;
 
 
 Core::Core(logging::ILogger* logger)
-: logger_(logger), initialized_(false), module_mapping_state_id_(0) {}
+: logger_(logger), initialized_(false), module_mapping_state_id_(0)
+{
+    core_dynamic_allocator_ = std::move(std::unique_ptr<aergo::module::IAllocator, std::function<void(aergo::module::IAllocator*)>>(
+        createDynamicAllocator(),
+        [this](aergo::module::IAllocator* allocator_ref) { deleteAllocator(allocator_ref); }
+    ));
+}
 
 
 
@@ -500,7 +506,7 @@ void Core::log(aergo::module::logging::LogType log_type, const char* message)
 
 
 
-const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(uint64_t loaded_module_id)
+const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(uint64_t loaded_module_id) noexcept
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
@@ -516,7 +522,7 @@ const aergo::module::ModuleInfo* Core::getLoadedModulesInfo(uint64_t loaded_modu
 
 
 
-uint64_t Core::getLoadedModulesCount()
+uint64_t Core::getLoadedModulesCount() noexcept
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
@@ -550,7 +556,7 @@ uint64_t Core::getCreatedModulesCount()
 
 
 
-uint64_t Core::getModulesMappingStateId()
+uint64_t Core::getModulesMappingStateId() noexcept
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
@@ -924,7 +930,7 @@ void Core::removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std
 
 
 
-bool Core::addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info)
+bool Core::addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info) noexcept
 {
     std::lock_guard<std::mutex> lock(core_mutex_);
 
@@ -1209,6 +1215,163 @@ void Core::deleteAllocator(aergo::module::IAllocator* allocator) noexcept
     {
         log(aergo::module::logging::LogType::WARNING, "Attempting to remove non-existing allocator.");
     }
+}
+
+
+
+aergo::module::RunningModuleInfo Core::getRunningModulesInfo(uint64_t running_module_id) noexcept
+{
+    auto module_info = getCreatedModulesInfo(running_module_id);
+    if (module_info == nullptr)
+    {
+        return { .exists_ = false };
+    }
+
+    aergo::module::RunningModuleInfo info {
+        .exists_ = true,
+        .module_info_ = (*module_info->module_loader_data_)->readModuleInfo()
+    };
+
+    uint64_t required_memory = 0;
+
+    required_memory += sizeof(uint32_t); // uint32_t for subscribe_consumer_count_
+    for (uint32_t i = 0; i < info.module_info_->subscribe_consumer_count_; ++i)
+    {
+        required_memory += sizeof(uint32_t); // uint32_t for vector size
+        required_memory += module_info->mapping_subscribe_[i].size() * sizeof(aergo::module::ChannelIdentifier); // vector content for single subscriber
+    }
+
+    required_memory += sizeof(uint32_t); // uint32_t for request_consumer_count_
+    for (uint32_t i = 0; i < info.module_info_->request_consumer_count_; ++i)
+    {
+        required_memory += sizeof(uint32_t); // uint32_t for vector size
+        required_memory += module_info->mapping_request_[i].size() * sizeof(aergo::module::ChannelIdentifier); // vector content for single request consumer
+    }
+
+    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(required_memory);
+    if (!blob.valid())
+    {
+        return info; // return without mappings
+    }
+
+    uint8_t* data_ptr = blob.data();
+    uint32_t* data_as_uint32 = reinterpret_cast<uint32_t*>(data_ptr);
+
+    *data_as_uint32 = info.module_info_->subscribe_consumer_count_; // log number of subscribe channels
+    ++data_as_uint32;
+    for (uint32_t i = 0; i < info.module_info_->subscribe_consumer_count_; ++i)
+    {
+        *data_as_uint32 = (uint32_t)module_info->mapping_subscribe_[i].size(); // log number of subscribers for this channel
+        ++data_as_uint32;
+        aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint32);
+        for (size_t j = 0; j < module_info->mapping_subscribe_[i].size(); ++j)
+        {
+            *data_as_channel_identifier = module_info->mapping_subscribe_[i][j];
+            ++data_as_channel_identifier;
+        }
+        data_as_uint32 = reinterpret_cast<uint32_t*>(data_as_channel_identifier);
+    }
+
+    *data_as_uint32 = info.module_info_->request_consumer_count_; // log number of request channels
+    ++data_as_uint32;
+    for (uint32_t i = 0; i < info.module_info_->request_consumer_count_; ++i)
+    {
+        *data_as_uint32 = (uint32_t)module_info->mapping_request_[i].size(); // log number of request consumers for this channel
+        ++data_as_uint32;
+        aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint32);
+        for (size_t j = 0; j < module_info->mapping_request_[i].size(); ++j)
+        {
+            *data_as_channel_identifier = module_info->mapping_request_[i][j];
+            ++data_as_channel_identifier;
+        }
+        data_as_uint32 = reinterpret_cast<uint32_t*>(data_as_channel_identifier);
+    }
+
+    info.channel_map_ = blob;
+
+    return info;
+}
+
+
+
+bool Core::removeModuleById(uint64_t id, bool recursive) noexcept
+{
+    return removeModule(id, recursive) == Core::RemoveResult::SUCCESS;
+}
+
+
+
+uint64_t Core::getRunningModulesCount() noexcept
+{
+    return getCreatedModulesCount();
+}
+
+
+
+aergo::module::message::SharedDataBlob Core::collectDependencies(uint64_t id) noexcept
+{
+    auto dependent_modules = collectDependentModules(id);
+    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(sizeof(uint64_t) + sizeof(uint64_t) * dependent_modules.size());
+    if (!blob.valid())
+    {
+        return aergo::module::message::SharedDataBlob(); // return invalid blob
+    }
+
+    uint8_t* data_ptr = blob.data();
+    uint64_t* data_as_uint64 = reinterpret_cast<uint64_t*>(data_ptr);
+    data_as_uint64[0] = (uint64_t)dependent_modules.size();
+    for (size_t i = 0; i < dependent_modules.size(); ++i)
+    {
+        data_as_uint64[i + 1] = dependent_modules[i];
+    }
+
+    return blob;
+}
+
+
+
+aergo::module::message::SharedDataBlob Core::getExistingPublishChannelsByName(const char* channel_type_identifier) noexcept
+{
+    auto& channels = getExistingPublishChannels(channel_type_identifier);
+    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels.size());
+    if (!blob.valid())  
+    {
+        return aergo::module::message::SharedDataBlob(); // return invalid blob
+    }
+
+    uint8_t* data_ptr = blob.data();
+    uint64_t* data_as_uint64 = reinterpret_cast<uint64_t*>(data_ptr);
+    data_as_uint64[0] = (uint64_t)channels.size();
+    aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
+    for (size_t i = 0; i < channels.size(); ++i)
+    {
+        data_as_channel_identifier[i] = channels[i];
+    }
+
+    return blob;
+}
+
+
+
+aergo::module::message::SharedDataBlob Core::getExistingResponseChannelsByName(const char* channel_type_identifier) noexcept
+{
+    auto& channels = getExistingResponseChannels(channel_type_identifier);
+    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels.size());
+    if (!blob.valid())  
+    {
+        return aergo::module::message::SharedDataBlob(); // return invalid blob
+    }
+
+    uint8_t* data_ptr = blob.data();
+    uint64_t* data_as_uint64 = reinterpret_cast<uint64_t*>(data_ptr);
+    data_as_uint64[0] = (uint64_t)channels.size();
+    aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
+    for (size_t i = 0; i < channels.size(); ++i)
+    {
+        data_as_channel_identifier[i] = channels[i];
+    }
+
+    return blob;
 }
 
 

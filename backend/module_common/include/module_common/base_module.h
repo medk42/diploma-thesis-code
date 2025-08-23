@@ -68,6 +68,8 @@ namespace aergo::module
             return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
         }
 
+        ICoreControl* getCoreControl() { return core_; }
+
 
 
     private:

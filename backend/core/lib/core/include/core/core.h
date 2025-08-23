@@ -10,6 +10,8 @@ namespace aergo::core
 {
     class Core : public aergo::module::ICore
     {
+        using AllocatorPtr = std::unique_ptr<aergo::module::IAllocator, std::function<void(aergo::module::IAllocator*)>>;
+
     public:
         enum class RemoveResult { SUCCESS, DOES_NOT_EXIST, HAS_DEPENDENCIES, FAILED_TO_STOP_THREADS };
 
@@ -29,8 +31,8 @@ namespace aergo::core
         virtual void deleteAllocator(aergo::module::IAllocator* allocator) noexcept override final;
 
         /// @return nullptr if out of range
-        const aergo::module::ModuleInfo* getLoadedModulesInfo(uint64_t loaded_module_id);
-        uint64_t getLoadedModulesCount();
+        virtual const aergo::module::ModuleInfo* getLoadedModulesInfo(uint64_t loaded_module_id) noexcept override final;
+        virtual uint64_t getLoadedModulesCount() noexcept override final;
 
         /// @return nullptr if out of range or module with specified ID was destroyed
         structures::ModuleData* getCreatedModulesInfo(uint64_t running_module_id);
@@ -40,7 +42,7 @@ namespace aergo::core
         uint64_t getCreatedModulesCount();
 
         /// @brief ID of the module mapping state. ID changes when modules get created or destroyed.
-        uint64_t getModulesMappingStateId();
+        virtual uint64_t getModulesMappingStateId() noexcept override final;
 
         /// @brief Get existing publish channels for specified channel type identifier. 
         /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
@@ -65,11 +67,20 @@ namespace aergo::core
         /// @param loaded_module_id ID of the module to add.
         /// @param channel_map_info Communication mapping.
         /// @return true on success (module added), false otherwise (module not added)
-        bool addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info);
+        virtual bool addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info) noexcept override final;
 
         /// @brief Find all dependent modules and return them in a vector. Vector includes the calling module 
         /// (if no dependent modules, the vector will have size 1 and contain only the calling id).
         std::vector<uint64_t> collectDependentModules(uint64_t id);
+
+
+        virtual bool removeModuleById(uint64_t id, bool recursive) noexcept override final;
+        virtual aergo::module::RunningModuleInfo getRunningModulesInfo(uint64_t running_module_id) noexcept override final;  // wrapper, does not lock
+        virtual uint64_t getRunningModulesCount() noexcept override final; // wrapper, does not lock
+        virtual aergo::module::message::SharedDataBlob collectDependencies(uint64_t id) noexcept override final; // wrapper, does not lock
+        virtual aergo::module::message::SharedDataBlob getExistingPublishChannelsByName(const char* channel_type_identifier) noexcept override final; // wrapper, does not lock
+        virtual aergo::module::message::SharedDataBlob getExistingResponseChannelsByName(const char* channel_type_identifier) noexcept override final; // wrapper, does not lock
+
 
     private:
         enum class ConsumerType { SUBSCRIBE, REQUEST };
@@ -120,5 +131,7 @@ namespace aergo::core
         std::mutex core_mutex_;
 
         logging::ILogger* logger_;
+
+        AllocatorPtr core_dynamic_allocator_;
     };
 }

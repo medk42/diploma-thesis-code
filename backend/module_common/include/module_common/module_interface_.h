@@ -184,11 +184,22 @@ namespace aergo::module
         };
     };
 
-    /// @brief Reference to the core.
-    class ICore
+    struct RunningModuleInfo
+    {
+        bool exists_;                      // does the module exist (was not destroyed)
+        const ModuleInfo* module_info_;    // reference to module info (loaded module)
+
+        /// @brief Mapping of input channels (subscribe/request) to other modules and their output channels (publish/response).
+        /// Structure is {uint32_t subscribe_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[subscribe_consumer_count],
+        ///               uint32_t request_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[request_consumer_count]}
+        message::SharedDataBlob channel_map_; 
+    };
+
+    /// @brief Interface provided by the core to modules.
+    class ICoreBase
     {
     public:	
-        inline virtual ~ICore() = default;
+        inline virtual ~ICoreBase() = default;
 
         /// @brief Publish message to channel "publish_producer_id".
         /// @param source_channel identifies the source publish channel (module and channel ID)
@@ -220,6 +231,66 @@ namespace aergo::module
         /// @brief Delete previously created allocator.
         virtual void deleteAllocator(IAllocator* allocator) noexcept = 0;
     };
+
+    /// @brief Interface provided by the core to control module management.
+    class ICoreControl
+    {
+    public:
+        inline virtual ~ICoreControl() = default;
+        
+        /// @brief Returns information about loaded module. If loaded_module_id is out of range, returns nullptr. 
+        virtual const aergo::module::ModuleInfo* getLoadedModulesInfo(uint64_t loaded_module_id) noexcept = 0;
+
+        /// @brief Returns the number of loaded modules.
+        virtual uint64_t getLoadedModulesCount() noexcept = 0;
+
+        /// @brief Returns information about created module. If module was destroyed, exists_ will be false.
+        /// @return Check returned blob for validity by calling the valid() function.
+        virtual RunningModuleInfo getRunningModulesInfo(uint64_t running_module_id) noexcept = 0;
+
+        /// @brief Returns the number of created modules over the lifetime of this object (even if they were later destroyed).
+        /// For example if we create A,B,C,D,E -> 5; if we now remove C, D -> 5; if we add F -> 6.
+        virtual uint64_t getRunningModulesCount() noexcept = 0;
+
+        /// @brief ID of the module mapping state. ID changes when modules get created or destroyed.
+        /// Can be used to detect changes in module mapping and update UI.
+        virtual uint64_t getModulesMappingStateId() noexcept = 0;
+
+        /// @brief Attempt to create a new module. Creation fails if loaded_module_id is out of range of loaded modules,
+        /// channel_map_info input mapping does not match the module's creation requirements or the createModule call returned
+        /// nullptr.
+        /// @param loaded_module_id ID of the module to add.
+        /// @param channel_map_info Communication mapping.
+        /// @return true on success (module added), false otherwise (module not added)
+        virtual bool addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info) noexcept = 0;
+
+        /// @brief Find all dependent modules and return them in a vector. Vector includes the calling module 
+        /// (if no dependent modules, the vector will have size 1 and contain only the calling id).
+        /// @return blob containing vector size (as uint64_t) and uint64_t array of module ids,
+        /// structure is {uint64_t size, uint64_t ids[size]}. Check returned blob for validity by calling the valid() function.
+        virtual message::SharedDataBlob collectDependencies(uint64_t id) noexcept = 0;
+
+        /// @brief Remove module specified by ID. Module will only be removed if it exists (id < getCreatedModulesCount() and wasn't yet removed)
+        /// and it does not have dependencies (modules connected to its outputs). If it has dependencies and recursive is true, module and all 
+        /// of its (recursive) dependencies will be removed. AUTO_ALL dependencies are not considered / removed, only SINGLE and RANGE.
+        /// @return true if module (and possibly dependencies, if recursive is true) was removed, false otherwise 
+        /// (module with id does not exist, was already removed or has dependencies if recursive is false).
+        virtual bool removeModuleById(uint64_t id, bool recursive) noexcept = 0;
+
+        /// @brief Get existing publish channels for specified channel type identifier. 
+        /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
+        /// The return structure is {uint64_t size, ChannelIdentifier[size]}. Check returned blob for validity by calling the valid() function.
+        virtual message::SharedDataBlob getExistingPublishChannelsByName(const char* channel_type_identifier) noexcept = 0;
+
+        /// @brief Get existing response channels for specified channel type identifier.
+        /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
+        /// The return structure is {uint64_t size, ChannelIdentifier[size]}. Check returned blob for validity by calling the valid() function.
+        virtual message::SharedDataBlob getExistingResponseChannelsByName(const char* channel_type_identifier) noexcept = 0;
+    };
+
+    /// @brief Reference to the core.
+    class ICore : public virtual ICoreBase, public virtual ICoreControl
+    {};
 
     class IModuleBase
     {
