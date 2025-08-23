@@ -1916,5 +1916,165 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
             REQUIRE(module_d->last_channel_id_ == 0);
             REQUIRE(module_d->last_source_channel_ == aergo::module::ChannelIdentifier{3, 0});
         }
+
+        SECTION("Test Core Controls that return SharedDataBlob")
+        {
+            SECTION("test collectDependencies")
+            {
+                for (uint64_t module_id = 0; module_id < core.getCreatedModulesCount(); ++module_id)
+                {
+                    // Get dependencies via vector
+                    std::vector<uint64_t> deps_vec = core.collectDependentModules(module_id);
+
+                    // Get dependencies via SharedDataBlob
+                    aergo::module::message::SharedDataBlob deps_blob = core.collectDependencies(module_id);
+
+                    REQUIRE(deps_blob.valid());
+
+                    // Blob structure: {uint64_t size, uint64_t ids[size]}
+                    REQUIRE(deps_blob.size() == sizeof(uint64_t) + sizeof(uint64_t) * deps_vec.size());
+
+                    const uint8_t* data_ptr = deps_blob.data();
+                    const uint64_t* data_as_uint64 = reinterpret_cast<const uint64_t*>(data_ptr);
+
+                    REQUIRE(data_as_uint64[0] == deps_vec.size());
+                    for (size_t i = 0; i < deps_vec.size(); ++i)
+                    {
+                        REQUIRE(data_as_uint64[i + 1] == deps_vec[i]);
+                    }
+                }
+            }
+
+            SECTION("test getExistingPublishChannelsByName")
+            {
+                // Test for all known channel type identifiers
+                std::vector<std::string> channel_types = {
+                    "message_1/v1:int", "message_2/v1:int", "message_3/v1:int",
+                    "message_4/v1:int", "message_5/v1:int", "message_6/v1:int"
+                };
+                for (const auto& type : channel_types)
+                {
+                    const auto& channels_vec = core.getExistingPublishChannels(type.c_str());
+                    aergo::module::message::SharedDataBlob channels_blob = core.getExistingPublishChannelsByName(type.c_str());
+
+                    REQUIRE(channels_blob.valid());
+                    REQUIRE(channels_blob.size() == sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels_vec.size());
+
+                    const uint8_t* data_ptr = channels_blob.data();
+                    const uint64_t* data_as_uint64 = reinterpret_cast<const uint64_t*>(data_ptr);
+                    REQUIRE(data_as_uint64[0] == channels_vec.size());
+
+                    const aergo::module::ChannelIdentifier* ids = reinterpret_cast<const aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
+                    for (size_t i = 0; i < channels_vec.size(); ++i)
+                    {
+                        REQUIRE(ids[i] == channels_vec[i]);
+                    }
+                }
+            }
+
+            SECTION("test getExistingResponseChannelsByName")
+            {
+                std::vector<std::string> channel_types = {
+                    "message_1/v1:int", "message_2/v1:int", "message_3/v1:int",
+                    "message_4/v1:int", "message_5/v1:int", "message_6/v1:int"
+                };
+                for (const auto& type : channel_types)
+                {
+                    const auto& channels_vec = core.getExistingResponseChannels(type.c_str());
+                    aergo::module::message::SharedDataBlob channels_blob = core.getExistingResponseChannelsByName(type.c_str());
+
+                    REQUIRE(channels_blob.valid());
+                    REQUIRE(channels_blob.size() == sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels_vec.size());
+
+                    const uint8_t* data_ptr = channels_blob.data();
+                    const uint64_t* data_as_uint64 = reinterpret_cast<const uint64_t*>(data_ptr);
+                    REQUIRE(data_as_uint64[0] == channels_vec.size());
+
+                    const aergo::module::ChannelIdentifier* ids = reinterpret_cast<const aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
+                    for (size_t i = 0; i < channels_vec.size(); ++i)
+                    {
+                        REQUIRE(ids[i] == channels_vec[i]);
+                    }
+                }
+            }
+
+            SECTION("test getRunningModulesInfo")
+            {
+                for (uint64_t module_id = 0; module_id < core.getCreatedModulesCount(); ++module_id)
+                {
+                    aergo::module::RunningModuleInfo info = core.getRunningModulesInfo(module_id);
+                    aergo::core::structures::ModuleData* module_data = core.getCreatedModulesInfo(module_id); // Just to ensure it doesn't throw
+                    if (module_data == nullptr)
+                    {
+                        REQUIRE(info.exists_ == false);
+                        REQUIRE(info.module_info_ == nullptr);
+                        REQUIRE(info.channel_map_.valid() == false);
+                    }
+                    else
+                    {
+                        REQUIRE(info.exists_ == true);
+                        REQUIRE(info.module_info_ != nullptr);
+                        REQUIRE(info.channel_map_.valid() == true);
+
+                        // Validate blob structure:
+                        // {uint32_t subscribe_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[subscribe_consumer_count],
+                        //  uint32_t request_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[request_consumer_count]}
+
+                        const uint8_t* data_ptr = info.channel_map_.data();
+                        size_t offset = 0;
+
+                        // Check subscribe consumers
+                        uint32_t subscribe_count = *reinterpret_cast<const uint32_t*>(data_ptr + offset);
+                        REQUIRE(subscribe_count == info.module_info_->subscribe_consumer_count_);
+                        offset += sizeof(uint32_t);
+
+                        for (uint32_t i = 0; i < subscribe_count; ++i)
+                        {
+                            uint32_t channel_id_count = *reinterpret_cast<const uint32_t*>(data_ptr + offset);
+                            offset += sizeof(uint32_t);
+
+                            // The next channel_id_count ChannelIdentifier structs
+                            const aergo::module::ChannelIdentifier* ids =
+                                reinterpret_cast<const aergo::module::ChannelIdentifier*>(data_ptr + offset);
+
+                            // Compare with module_data->mapping_subscribe_
+                            REQUIRE(module_data->mapping_subscribe_[i].size() == channel_id_count);
+                            for (uint32_t j = 0; j < channel_id_count; ++j)
+                            {
+                                REQUIRE(module_data->mapping_subscribe_[i][j] == ids[j]);
+                            }
+                            offset += sizeof(aergo::module::ChannelIdentifier) * channel_id_count;
+                        }
+
+                        // Check request consumers
+                        uint32_t request_count = *reinterpret_cast<const uint32_t*>(data_ptr + offset);
+                        REQUIRE(request_count == info.module_info_->request_consumer_count_);
+                        offset += sizeof(uint32_t);
+
+                        for (uint32_t i = 0; i < request_count; ++i)
+                        {
+                            uint32_t channel_id_count = *reinterpret_cast<const uint32_t*>(data_ptr + offset);
+                            offset += sizeof(uint32_t);
+
+                            const aergo::module::ChannelIdentifier* ids =
+                                reinterpret_cast<const aergo::module::ChannelIdentifier*>(data_ptr + offset);
+
+                            REQUIRE(module_data->mapping_request_.size() > i);
+                            REQUIRE(module_data->mapping_request_[i].size() == channel_id_count);
+                            for (uint32_t j = 0; j < channel_id_count; ++j)
+                            {
+                                REQUIRE(module_data->mapping_request_[i][j] == ids[j]);
+                            }
+                            offset += sizeof(aergo::module::ChannelIdentifier) * channel_id_count;
+                        }
+
+                        // Final offset should match blob size
+                        REQUIRE(offset == info.channel_map_.size());
+                    }
+                }
+            }
+        }
+
+        
     }
 }
