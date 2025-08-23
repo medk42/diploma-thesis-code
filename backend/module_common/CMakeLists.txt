@@ -1,3 +1,5 @@
+add_subdirectory(tests)
+
 # Add the library
 add_library(module_common STATIC
     src/dll_module_wrapper.cpp
