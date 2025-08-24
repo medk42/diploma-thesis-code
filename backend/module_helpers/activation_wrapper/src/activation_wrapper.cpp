@@ -16,13 +16,16 @@ ActivationWrapper::ActivationWrapper(aergo::module::IModule* module, aergo::modu
 {
     if (module_ref_ == nullptr || parameters_ == nullptr)
     {
-        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid constructor parameters.");
         return;
     }
 
     base_module_ref_ = module_ref_->query<aergo::module::BaseModule>();
     activable_module_ref_ = module_ref_->query<IActivableModule>();
-    if (activable_module_ref_ == nullptr || base_module_ref_ == nullptr)
+    if (base_module_ref_ == nullptr)
+    {
+        return;
+    }
+    if (activable_module_ref_ == nullptr)
     {
         base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Wrapped module does not implement required interfaces.");
         return;
