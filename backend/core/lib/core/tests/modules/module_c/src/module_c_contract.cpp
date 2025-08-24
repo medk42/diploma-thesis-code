@@ -74,7 +74,7 @@ aergo::module::dll::IDllModule* createModule(const char* data_path, ICore* core,
     auto module = std::make_unique<aergo::tests::core_1::ModuleC>(data_path, core, channel_map_info, logger, module_id);
     if (module->valid())
     {
-        return new aergo::module::dll::DllModuleWrapper(std::move(module), &module_info);
+        return new aergo::module::dll::DllModuleWrapper(std::move(module), &module_info, logger);
     }
     else
     {

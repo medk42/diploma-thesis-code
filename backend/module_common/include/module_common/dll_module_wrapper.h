@@ -11,6 +11,7 @@
 #include "module_interface_.h"
 #include "dll_interface_threads.h"
 #include "base_module.h"
+#include "dll_module_metrics.h"
 
 namespace aergo::module::dll
 {
@@ -18,7 +19,7 @@ namespace aergo::module::dll
     {
     public:
         /// @brief module must be non-nullptr and valid (check IModule::valid()), module_info must be non-nullptr.
-        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info);
+        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, const aergo::module::logging::ILogger* logger);
 
         ~DllModuleWrapper() override = default;
 
@@ -85,7 +86,7 @@ namespace aergo::module::dll
 
         uint32_t next_prioritized_queue_idx_ = 0;                    // index of next prioritized queue to check for data (round-robin)
         uint32_t next_regular_queue_idx_ = 0;                        // index of next regular queue to check for data (round-robin)
-        
+
         uint32_t messages_channel_count_;                            // number of channels for receiving messages
         uint32_t requests_channel_count_;                            // number of channels for receiving requests
         uint32_t responses_channel_count_;                           // number of channels for receiving responses
@@ -105,5 +106,8 @@ namespace aergo::module::dll
 
         std::unique_ptr<aergo::module::IModule> module_;
         const aergo::module::ModuleInfo* module_info_;
+        const aergo::module::logging::ILogger* logger_;
+
+        Metrics metrics_;
     };
 }

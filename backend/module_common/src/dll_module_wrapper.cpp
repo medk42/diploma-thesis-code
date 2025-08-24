@@ -7,8 +7,8 @@ using namespace aergo::module::dll;
 
 
 
-DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info)
-: module_(std::move(module)), module_info_(module_info)
+DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, const aergo::module::logging::ILogger* logger)
+: module_(std::move(module)), module_info_(module_info), logger_(logger), metrics_(module_info)
 {
     if (module_ == nullptr || !module_->valid() || module_info_ == nullptr)
     {
@@ -168,6 +168,8 @@ bool DllModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
         }
         regular_worker_threads_.clear();
 
+        metrics_.printLogs(logger_);
+
         return true;
     }
     else
@@ -229,6 +231,8 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
     bool queue_full = (target_queue.size() >= capacity);
     aergo::module::IModule::QueueStatus queue_status = queue_full ? aergo::module::IModule::QueueStatus::QUEUE_FULL : aergo::module::IModule::QueueStatus::NORMAL;
     aergo::module::IModule::IngressDecision decision = module_->onIngress(type, local_channel_id, source_channel, message, queue_status);
+
+    metrics_.record(idx, target_queue.size(), decision, queue_full); 
 
     if (decision == aergo::module::IModule::IngressDecision::DROP || (decision == aergo::module::IModule::IngressDecision::ACCEPT && queue_full))
     {
