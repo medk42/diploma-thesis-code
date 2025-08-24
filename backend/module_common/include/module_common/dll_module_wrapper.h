@@ -4,28 +4,30 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
 
 #include "module_interface_.h"
 #include "dll_interface_threads.h"
-#include "periodic_thread.h"
 #include "base_module.h"
 
 namespace aergo::module::dll
 {
-    class DllModuleWrapper : protected thread::PeriodicThread, public IDllModule
+    class DllModuleWrapper : public IDllModule
     {
     public:
-        /// @param thread_sleep_ms sleep time for thread cycle, use 0 for no sleep (sleep handled by module).
-        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, uint32_t thread_sleep_ms);
+        /// @brief module must be non-nullptr and valid (check IModule::valid()), module_info must be non-nullptr.
+        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info);
 
         ~DllModuleWrapper() override = default;
 
-        /// @brief Start the background thread.
-        /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the thread to start.
+        /// @brief Start the worker threads.
+        /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the threads to start.
         /// @return true if started within timeout_ms. false on fail to start / timeout. Thread may exist if false.
         bool threadStart(uint32_t timeout_ms) noexcept override;
 
-        /// @brief Stop and join the background thread.
+        /// @brief Stop and join the worker threads.
         /// @return true if the thread was running, stopped within "timeout_ms" milliseconds and joined. false otherwise. 
         bool threadStop(uint32_t timeout_ms) noexcept override;
 
@@ -48,19 +50,10 @@ namespace aergo::module::dll
 
         aergo::module::IModule* getModule();
 
-    protected:
-        void _threadInit() override final;
-
-        void _threadCycle() override final;
-
-        void _threadDeinit() override final;
-
     private:
         struct ProcessingData
         {
-            enum class Type { MESSAGE, REQUEST, RESPONSE };
-
-            Type type_;
+            aergo::module::IModule::ProcessingType processing_type_;
             uint32_t local_channel_id_;
             ChannelIdentifier source_channel_;
 
@@ -69,11 +62,48 @@ namespace aergo::module::dll
             std::vector<message::SharedDataBlob> blobs_;
         };
 
-        void pushProcessingData(ProcessingData::Type type, uint32_t local_channel_id, ChannelIdentifier source_channel, message::MessageHeader message);
+        void pushProcessingData(aergo::module::IModule::ProcessingType type, uint32_t local_channel_id, ChannelIdentifier source_channel, message::MessageHeader message);
 
-        std::mutex processing_data_queue_mutex_;
-        std::queue<ProcessingData> processing_data_queue_;
+        void regularWorkerThreadFunc();
+        void prioritizedWorkerThreadFunc();
+
+        bool regularQueuesEmpty(); // true if all regular queues are empty
+        bool prioritizedQueuesEmpty(); // true if all prioritized queues are empty
+
+        bool popRegularProcessingData(ProcessingData& data); // pops data from any non-empty regular queue, returns false if all queues are empty
+        bool popPrioritizedProcessingData(ProcessingData& data); // pops data from any non-empty prioritized queue, returns false if all queues are empty
+
+        int64_t nowMs();
+
+        std::mutex mutex_;
+
+        std::vector<std::queue<ProcessingData>> prioritized_queues_; // one queue per prioritized message/request/response channel
+        std::vector<std::queue<ProcessingData>> regular_queues_;     // one queue per regular message/request/response channel
+
+        std::vector<bool> is_queue_prioritized_;                     // true if channel is prioritized, false otherwise
+        std::vector<uint16_t> queue_capacities_;                      // maximum number of waiting messages/requests/responses in the queue (beyond that, new messages/requests/responses are dropped)
+
+        uint32_t next_prioritized_queue_idx_ = 0;                    // index of next prioritized queue to check for data (round-robin)
+        uint32_t next_regular_queue_idx_ = 0;                        // index of next regular queue to check for data (round-robin)
+        
+        uint32_t messages_channel_count_;                            // number of channels for receiving messages
+        uint32_t requests_channel_count_;                            // number of channels for receiving requests
+        uint32_t responses_channel_count_;                           // number of channels for receiving responses
+
+        
+        std::vector<std::thread> regular_worker_threads_;
+        std::vector<std::thread> prioritized_worker_threads_;
+
+        std::atomic<uint8_t> regular_worker_running_count_{0};
+        std::atomic<uint8_t> prioritized_worker_running_count_{0};
+
+        std::condition_variable regular_worker_cv_;
+        std::condition_variable prioritized_worker_cv_;
+
+        std::atomic<bool> stop_threads_{false};
+
 
         std::unique_ptr<aergo::module::IModule> module_;
+        const aergo::module::ModuleInfo* module_info_;
     };
 }

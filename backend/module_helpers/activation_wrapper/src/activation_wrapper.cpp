@@ -152,16 +152,6 @@ void ActivationWrapper::processResponse(uint32_t request_consumer_id, ChannelIde
 
 
 
-void ActivationWrapper::cycleImpl() noexcept
-{
-    if (activated_)
-    {
-        module_ref_->cycleImpl();
-    }
-}
-
-
-
 bool ActivationWrapper::valid() noexcept
 {
     if (module_ref_ == nullptr || module_ref_->valid() == false)

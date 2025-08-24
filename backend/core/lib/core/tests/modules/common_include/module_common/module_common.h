@@ -42,7 +42,6 @@ namespace aergo::tests::core_1
         uint32_t last_channel_id_;
         aergo::module::ChannelIdentifier last_source_channel_;
 
-    protected:
         void processMessage(uint32_t subscribe_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override
         {
             if (message.data_len_ != sizeof(int))
@@ -94,8 +93,6 @@ namespace aergo::tests::core_1
             last_source_channel_ = source_channel;
         }
 
-        void cycleImpl() noexcept override {}
-
         bool valid() noexcept override
         {
             return true;
@@ -105,6 +102,11 @@ namespace aergo::tests::core_1
         { 
             if (id == typeid(BaseModule)) return static_cast<BaseModule*>(this);
             return nullptr;
+        }
+
+        virtual IngressDecision onIngress(ProcessingType kind, uint32_t local_channel_id, aergo::module::ChannelIdentifier src, const aergo::module::message::MessageHeader& msg, QueueStatus queue_status) noexcept override
+        {
+            return IngressDecision::ACCEPT;
         }
     };
 }

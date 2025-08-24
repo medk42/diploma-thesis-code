@@ -20,7 +20,6 @@ namespace aergo::module::helpers::activation_wrapper
         virtual void processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
         virtual void processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
         virtual void processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
-        virtual void cycleImpl() noexcept override;
         virtual bool valid() noexcept override;
         virtual void* query_capability(const std::type_info& id) noexcept override;
 

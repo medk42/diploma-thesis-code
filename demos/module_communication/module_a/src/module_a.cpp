@@ -22,12 +22,34 @@ small_message_counter_(0), gen_(), dist_(0, 255)
         logger->log(logging::LogType::ERROR, "Failed to create allocators.");
         throw std::exception("Failed to create allocators.");
     }
+
+    cycle_thread_ = std::thread([&]()
+    {
+        while (!stop_thread_)
+        {
+            cycleImpl();
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
+}
+
+
+
+ModuleA::~ModuleA()
+{
+    stop_thread_ = true;
+    if (cycle_thread_.joinable())
+    {
+        cycle_thread_.join();
+    }
 }
 
 
 
 void ModuleA::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
-{}
+{
+
+}
 
 
 
@@ -101,8 +123,9 @@ void ModuleA::processResponse(uint32_t request_consumer_id, ChannelIdentifier so
 
 
 
-void ModuleA::cycleImpl() noexcept
+void ModuleA::cycleImpl()
 {
+    
     uint64_t time_ms = nowMs();
     if (time_ms > next_small_message_)
     {
@@ -175,4 +198,11 @@ void* ModuleA::query_capability(const std::type_info& id) noexcept
 { 
     if (id == typeid(BaseModule)) return static_cast<BaseModule*>(this);
     return nullptr;
+}
+
+
+
+aergo::module::IModule::IngressDecision ModuleA::onIngress(ProcessingType kind, uint32_t local_channel_id, aergo::module::ChannelIdentifier src, const aergo::module::message::MessageHeader& msg, QueueStatus queue_status) noexcept
+{
+    return IngressDecision::ACCEPT;
 }

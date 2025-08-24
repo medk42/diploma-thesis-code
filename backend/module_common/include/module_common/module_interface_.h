@@ -15,6 +15,11 @@ namespace aergo::module
             const char* channel_type_identifier_;   // uniquely identifies channel type (for inter-module communication), e.g. "image_rgb"
             const char* display_name_;              // human-friendly displayed channel name, e.g. "Camera #1"
             const char* display_description_;       // human-friendly displayed channel description, e.g. "First camera, raw video without any image processing"
+            
+            /// Only for ResponseProducer; if true, requests to this response channel are prioritized (processed by separate thread) 
+            /// over non-prioritized channels. ONLY for channels that need low latency even after load (e.g. control commands, GUI etc).
+            bool prioritized_ = false;
+            uint16_t message_queue_capacity_ = 4; // maximum number of waiting requests in the queue (beyond that, new requests are dropped), min 1
         };
 
         /// @brief 2 types:
@@ -35,6 +40,11 @@ namespace aergo::module
             const char* channel_type_identifier_;   // uniquely identifies channel type (for inter-module communication), e.g. "image_rgb"
             const char* display_name_;              // human-friendly displayed channel name, e.g. "Camera #1"
             const char* display_description_;       // human-friendly displayed channel description, e.g. "First camera, raw video without any image processing"
+
+            /// If true, responses/messages to this channel are prioritized (processed by separate thread) 
+            /// over non-prioritized channels. ONLY for channels that need low latency even after load (e.g. control commands, GUI etc).
+            bool prioritized_ = false;
+            uint16_t message_queue_capacity_ = 4; // maximum number of waiting messages/responses in the queue (beyond that, new messages/responses are dropped), min 1
         };
     };
 
@@ -64,6 +74,9 @@ namespace aergo::module
 
         /// @brief If true, automatically create a single instance of module. Can be used for example for visualizer modules that need to exist to set up other modules.
         bool auto_create_;
+
+        uint8_t prioritized_workers_count_ = 1;  // number of prioritized worker threads (for prioritized channels), min 1
+        uint8_t regular_workers_count_ = 1;      // number of regular worker threads (for non-prioritized channels), min 1
     };
 
     struct ChannelIdentifier
@@ -319,14 +332,36 @@ namespace aergo::module
     class IModule : public virtual IModuleBase
     {
     public:
+        enum class ProcessingType { MESSAGE, REQUEST, RESPONSE };
 
-        /// @brief Cycle method of the module. Called in each period after all messages/request/responses are handled. 
-        /// If cycleImpl contains sleep, consider disabling sleep in ModuleWrapper by passing thread_sleep_ms = 0 in ModuleWrapper's constructor.
-        virtual void cycleImpl() noexcept = 0;
+        enum class QueueStatus 
+        { 
+            NORMAL,     // queue has space for this message
+            QUEUE_FULL  // queue is full, message can not be accepted (on ACCEPT response, message will be dropped)
+        };
+
+        enum class IngressDecision
+        { 
+            ACCEPT,                   // accept message, push to processing queue (or drop if queue is full)
+            DROP,                     // drop message, do not push to processing queue
+            ACCEPT_DROP_QUEUE_FIRST,  // accept message, drop oldest message from processing queue and push this message to the back of the queue
+            ACCEPT_REPLACE_QUEUE      // accept message, clear processing queue and push this message to the back of the queue (useful for data streams like video, only keep the latest data)
+        };
         
+        /// @brief True if module was successfully created, false otherwise. Please check after calling the constructor.
         virtual bool valid() noexcept = 0;
 
+        /// @brief Query internal module for type. Module can implement for example IActivable and ISavable, query can be used to recover the correct
+        /// interface from the base module.
+        /// @return Pointer to requested interface or nullptr if module does not implement it.
         virtual void* query_capability(const std::type_info& id) noexcept = 0;
+
+        /// @brief Called when a message/request/response is received, before it is pushed to a processing queue. This method must be non-blocking and return immediately.
+        /// If queue is full, queue needs to be cleared (ACCEPT_DROP_QUEUE_FIRST or ACCEPT_REPLACE_QUEUE) or message dropped (DROP or ACCEPT).
+        /// Otherwise message can be accepted (ACCEPT, add to end of queue), dropped (DROP), or added to queue after dropping oldest message (ACCEPT_DROP_QUEUE_FIRST) 
+        /// or clearing the queue (ACCEPT_REPLACE_QUEUE, to only keep the latest data - useful for video).
+        /// @return decision on what to do with the message.
+        virtual IngressDecision onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, QueueStatus queue_status) noexcept = 0;
 
         /// @brief Query internal module for type. Module can implement for example IActivable and ISavable, query can be used to recover the correct
         /// interface from the base module.
