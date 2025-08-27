@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <set>
+#include <unordered_map>
 
 #include "module_common/module_interface_.h"
 
@@ -35,14 +36,21 @@ public:
     virtual message::SharedDataBlob allocate(uint64_t number_of_bytes) noexcept override
     {
         number_of_bytes_set_.insert(number_of_bytes); // to easily track the allocated data from the test
-        std::cout << "\tAllocating " << number_of_bytes << " bytes with id " << alloc_id_ << std::endl;
-        return message::SharedDataBlob(new TestSharedData(true, (uint8_t*)alloc_id_++, number_of_bytes), this);
+        auto* data = new TestSharedData(true, (uint8_t*)alloc_id_++, number_of_bytes);
+        data_map_[number_of_bytes] = data;
+        std::cout << "\tAllocating " << number_of_bytes << " bytes with id " << alloc_id_ - 1 << std::endl;
+        return message::SharedDataBlob(data, this);
     }
 
     bool exists(uint64_t number_of_bytes)
     {
         std::cout << "Checking existence of " << number_of_bytes << " exists: " << (number_of_bytes_set_.contains(number_of_bytes) ? "exists" : "DOES NOT EXIST") << std::endl;
         return number_of_bytes_set_.contains(number_of_bytes);
+    }
+
+    uint64_t refCount(uint64_t number_of_bytes)
+    {
+        return data_map_.at(number_of_bytes)->ref_count_;
     }
 
 protected:
@@ -59,6 +67,7 @@ protected:
         if (((TestSharedData*)data)->ref_count_ == 0)
         {
             number_of_bytes_set_.erase((uint64_t)data->size());
+            data_map_.erase((uint64_t)data->size());
             std::cout << "\tDeleting data with id " << (uint64_t)data->data() << std::endl;
             delete data;
         }
@@ -67,6 +76,7 @@ private:
     uint64_t alloc_id_ = 0;
 
     std::set<uint64_t> number_of_bytes_set_;
+    std::unordered_map<uint64_t, TestSharedData*> data_map_;
 };
 
 
@@ -129,5 +139,31 @@ TEST_CASE("SharedDataBlob basic functionality", "[shared_data_blob]")
         REQUIRE(allocator.exists(4));
     }
     REQUIRE(!allocator.exists(4));
+
+    REQUIRE(!allocator.exists(5));
+    {
+        auto blob = allocator.allocate(5);
+        REQUIRE(allocator.exists(5));
+        REQUIRE(allocator.refCount(5) == 1);
+        blob = blob;
+        REQUIRE(allocator.refCount(5) == 1);
+    }
+    REQUIRE(!allocator.exists(5));
+
+    REQUIRE(!allocator.exists(6));
+    REQUIRE(!allocator.exists(7));
+    {
+        auto blob_a = allocator.allocate(6);
+        auto blob_b = allocator.allocate(7);
+        REQUIRE(allocator.refCount(6) == 1);
+        REQUIRE(allocator.refCount(7) == 1);
+
+        blob_a = blob_b;
+
+        REQUIRE(!allocator.exists(6));
+        REQUIRE(allocator.exists(7));
+        REQUIRE(allocator.refCount(7) == 2);
+    }
+    REQUIRE(!allocator.exists(7));
 
 }
