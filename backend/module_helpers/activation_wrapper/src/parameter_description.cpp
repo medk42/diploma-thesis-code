@@ -95,7 +95,7 @@ ParameterList::ParameterList(std::vector<ParameterDescription>&& parameters)
 
 std::string ParameterList::toString()
 {
-    if (cashed_string_.empty())
+    if (cached_string_.empty())
     {
         std::stringstream stream;
         stream.precision(std::numeric_limits<double>::max_digits10);
@@ -108,10 +108,10 @@ std::string ParameterList::toString()
             param.toStringStream(stream);
         }
 
-        cashed_string_ = stream.str();
+        cached_string_ = stream.str();
     }
 
-    return cashed_string_;
+    return cached_string_;
 }
 
 
