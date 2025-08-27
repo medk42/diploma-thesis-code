@@ -68,6 +68,6 @@ namespace aergo::module::helpers::activation_wrapper::params
 
     private:
         std::vector<ParameterDescription> parameters_;
-        std::string cashed_string_;
+        std::string cached_string_;
     };
 }
