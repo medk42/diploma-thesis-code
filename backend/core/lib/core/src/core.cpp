@@ -108,6 +108,7 @@ void Core::loadModules(const char* modules_dir, const char* data_dir)
                     break;
                 case ModuleLoadError::FAILED_TO_MAP_METHODS:
                     log_message += "(FAILED_TO_MAP_METHODS): " + module_filename;
+                    break;
                 default:
                     log_message += "(UNKNOWN): " + module_filename;
             }
