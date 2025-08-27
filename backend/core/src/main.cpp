@@ -38,7 +38,7 @@ void printLoadedModules(logging::ConsoleLogger& logger, Core& core)
             {
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t{");
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay name: " << module_info->publish_producers_[j].display_name_);
-                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->publish_producers_[j].display_name_);
+                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->publish_producers_[j].display_description_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tChannel type identifier: " << module_info->publish_producers_[j].channel_type_identifier_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t}");
             }
@@ -56,7 +56,7 @@ void printLoadedModules(logging::ConsoleLogger& logger, Core& core)
             {
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t{");
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay name: " << module_info->response_producers_[j].display_name_);
-                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->response_producers_[j].display_name_);
+                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->response_producers_[j].display_description_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tChannel type identifier: " << module_info->response_producers_[j].channel_type_identifier_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t}");
             }
@@ -74,7 +74,7 @@ void printLoadedModules(logging::ConsoleLogger& logger, Core& core)
             {
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t{");
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay name: " << module_info->subscribe_consumers_[j].display_name_);
-                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->subscribe_consumers_[j].display_name_);
+                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->subscribe_consumers_[j].display_description_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tChannel type identifier: " << module_info->subscribe_consumers_[j].channel_type_identifier_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tCount: " << (int)module_info->subscribe_consumers_[j].count_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tMin: " << (int)module_info->subscribe_consumers_[j].min_);
@@ -95,7 +95,7 @@ void printLoadedModules(logging::ConsoleLogger& logger, Core& core)
             {
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t{");
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay name: " << module_info->request_consumers_[j].display_name_);
-                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->request_consumers_[j].display_name_);
+                log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tDisplay description: " << module_info->request_consumers_[j].display_description_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tChannel type identifier: " << module_info->request_consumers_[j].channel_type_identifier_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tCount: " << (int)module_info->request_consumers_[j].count_);
                 log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "\t\t\t\t\tMin: " << (int)module_info->request_consumers_[j].min_);
