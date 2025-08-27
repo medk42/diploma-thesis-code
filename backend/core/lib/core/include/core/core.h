@@ -13,7 +13,13 @@ namespace aergo::core
         using AllocatorPtr = std::unique_ptr<aergo::module::IAllocator, std::function<void(aergo::module::IAllocator*)>>;
 
     public:
-        enum class RemoveResult { SUCCESS, DOES_NOT_EXIST, HAS_DEPENDENCIES, FAILED_TO_STOP_THREADS };
+        /// @brief Outcome codes for module removal attempts.
+        enum class RemoveResult {
+            SUCCESS,             ///< Module (and optionally dependencies) was removed.
+            DOES_NOT_EXIST,      ///< No module with the given ID exists or it was already removed.
+            HAS_DEPENDENCIES,    ///< Module has dependent modules and @p recursive was false.
+            FAILED_TO_STOP_THREADS ///< Module threads could not be stopped during removal.
+        };
 
         Core(logging::ILogger* logger);
         ~Core() override;
@@ -52,13 +58,18 @@ namespace aergo::core
         /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
         const std::vector<aergo::module::ChannelIdentifier>& getExistingResponseChannels(const char* channel_type_identifier);
 
-        /// @brief Return module specified by ID. Module will only be removed if it exists (id < getCreatedModulesCount() and wasn't yet removed)
-        /// and it does not have dependencies (modules connected to its outputs). If it has dependencies and recursive is true, module and all 
-        /// of its (recursive) dependencies will be removed. AUTO_ALL dependencies are not considered / removed, only SINGLE and RANGE.
-        /// @param id id of the module to remove
-        /// @param recursive remove all dependencies too, if module has dependencies and recursive is false, module will not be removed and method will return false
-        /// @return true if module (and possibly dependencies, if recursive is true) was removed, false otherwise 
-        /// (module with id does not exist, was already removed or has dependencies if recursive is false).
+        /// @brief Attempt to remove the module specified by ID.
+        /// Module will only be removed if it exists (id < getCreatedModulesCount() and wasn't yet removed)
+        /// and it does not have dependencies (modules connected to its outputs). If it has dependencies and recursive is true,
+        /// the module and all of its (recursive) dependencies will be removed. AUTO_ALL dependencies are not considered / removed,
+        /// only SINGLE and RANGE.
+        /// @param id ID of the module to remove.
+        /// @param recursive Remove all dependencies too; if false and the module has dependencies the result is RemoveResult::HAS_DEPENDENCIES.
+        /// @return Removal result:
+        /// - RemoveResult::SUCCESS - module (and dependencies, if recursive is true) was removed.
+        /// - RemoveResult::DOES_NOT_EXIST - module with the given ID does not exist or was already removed.
+        /// - RemoveResult::HAS_DEPENDENCIES - module has dependencies and @p recursive is false.
+        /// - RemoveResult::FAILED_TO_STOP_THREADS - module threads could not be stopped.
         RemoveResult removeModule(uint64_t id, bool recursive);
 
         /// @brief Attempt to create a new module. Creation fails if loaded_module_id is out of range of loaded modules,
