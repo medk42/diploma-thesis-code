@@ -28,7 +28,7 @@ namespace aergo::module::dll
 
         /// @brief Start the background thread.
         /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the thread to start.
-        /// @return true if started within timeout_ms. false on fail to start / timeout. Thread may exist if false.
+        /// @return true if started within timeout_ms. false on fail to start / timeout.
         virtual bool threadStart(uint32_t timeout_ms) noexcept = 0;
 
         /// @brief Stop and join the background thread.

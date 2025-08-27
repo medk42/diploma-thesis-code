@@ -20,6 +20,8 @@ namespace aergo::demo_modules_1::module_a
         bool valid() noexcept override;
         void* query_capability(const std::type_info& id) noexcept override;
         IngressDecision onIngress(ProcessingType kind, uint32_t local_channel_id, aergo::module::ChannelIdentifier src, const aergo::module::message::MessageHeader& msg, QueueStatus queue_status) noexcept override;
+        bool threadStart(uint32_t timeout_ms) noexcept override;
+        bool threadStop(uint32_t timeout_ms) noexcept override;
 
     private:
         void cycleImpl();

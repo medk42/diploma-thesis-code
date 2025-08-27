@@ -111,7 +111,9 @@ bool DllModuleWrapper::threadStart(uint32_t timeout_ms) noexcept
     {
         if (prioritized_worker_running_count_ == prioritized_workers_count && regular_worker_running_count_ == regular_workers_count)
         {
-            return true;
+            auto time_used = nowMs() - start_time;
+            if (time_used >= timeout_ms) return false;
+            return module_->threadStart((uint32_t)(timeout_ms - time_used)); // notify module to start its threads if any
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -170,7 +172,9 @@ bool DllModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
 
         metrics_.printLogs(logger_);
 
-        return true;
+        auto time_used = nowMs() - start_time;
+        if (time_used >= timeout_ms) return false;
+        return module_->threadStop((uint32_t)(timeout_ms - time_used)); // notify module to stop its threads if any
     }
     else
     {

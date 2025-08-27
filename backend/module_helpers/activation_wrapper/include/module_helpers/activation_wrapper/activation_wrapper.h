@@ -25,6 +25,8 @@ namespace aergo::module::helpers::activation_wrapper
         virtual bool valid() noexcept override;
         virtual void* query_capability(const std::type_info& id) noexcept override;
         virtual aergo::module::IModule::IngressDecision onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept override;
+        virtual bool threadStart(uint32_t timeout_ms) noexcept override;
+        virtual bool threadStop(uint32_t timeout_ms) noexcept override;
 
     private:
         /// @brief Initialize parameters to specified default values (or system defaults if not specified).

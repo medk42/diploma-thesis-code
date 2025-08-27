@@ -372,6 +372,14 @@ namespace aergo::module
         /// @return decision on what to do with the message.
         virtual IngressDecision onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, QueueStatus queue_status) noexcept = 0;
 
+        /// @brief If module needs to start worker threads, it should do so here. This method should return within "timeout_ms" milliseconds at most.
+        /// @return true if started within timeout_ms. false on fail to start / timeout.
+        virtual bool threadStart(uint32_t timeout_ms) noexcept = 0;
+
+        /// @brief If module has worker threads, it should stop them here. This method should return within "timeout_ms" milliseconds at most.
+        /// @return true if the thread was running, stopped within "timeout_ms" milliseconds and joined. false otherwise.
+        virtual bool threadStop(uint32_t timeout_ms) noexcept = 0;
+
         /// @brief Query internal module for type. Module can implement for example IActivable and ISavable, query can be used to recover the correct
         /// interface from the base module.
         template<class T>

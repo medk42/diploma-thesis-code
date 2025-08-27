@@ -22,27 +22,11 @@ small_message_counter_(0), gen_(), dist_(0, 255)
         logger->log(logging::LogType::ERROR, "Failed to create allocators.");
         throw std::exception("Failed to create allocators.");
     }
-
-    cycle_thread_ = std::thread([&]()
-    {
-        while (!stop_thread_)
-        {
-            cycleImpl();
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-    });
 }
 
 
 
-ModuleA::~ModuleA()
-{
-    stop_thread_ = true;
-    if (cycle_thread_.joinable())
-    {
-        cycle_thread_.join();
-    }
-}
+ModuleA::~ModuleA() {}
 
 
 
@@ -198,4 +182,33 @@ void* ModuleA::query_capability(const std::type_info& id) noexcept
 aergo::module::IModule::IngressDecision ModuleA::onIngress(ProcessingType kind, uint32_t local_channel_id, aergo::module::ChannelIdentifier src, const aergo::module::message::MessageHeader& msg, QueueStatus queue_status) noexcept
 {
     return IngressDecision::ACCEPT;
+}
+
+
+
+bool ModuleA::threadStart(uint32_t timeout_ms) noexcept
+{
+    cycle_thread_ = std::thread([&]()
+    {
+        while (!stop_thread_)
+        {
+            cycleImpl();
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
+
+    return true;
+}
+
+
+
+bool ModuleA::threadStop(uint32_t timeout_ms) noexcept
+{
+    stop_thread_ = true;
+    if (cycle_thread_.joinable())
+    {
+        cycle_thread_.join();
+    }
+
+    return true;
 }

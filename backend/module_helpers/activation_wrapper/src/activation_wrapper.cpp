@@ -214,6 +214,20 @@ aergo::module::IModule::IngressDecision ActivationWrapper::onIngress(aergo::modu
 
 
 
+bool ActivationWrapper::threadStart(uint32_t timeout_ms) noexcept
+{
+    return module_ref_->threadStart(timeout_ms);
+}
+
+
+
+bool ActivationWrapper::threadStop(uint32_t timeout_ms) noexcept
+{
+    return module_ref_->threadStop(timeout_ms);
+}
+
+
+
 bool ActivationWrapper::initializeDefaultParameters()
 {
     if (parameters_ == nullptr)

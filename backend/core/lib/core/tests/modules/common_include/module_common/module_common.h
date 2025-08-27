@@ -107,5 +107,15 @@ namespace aergo::tests::core_1
         {
             return IngressDecision::ACCEPT;
         }
+
+        virtual bool threadStart(uint32_t timeout_ms) noexcept override
+        {
+            return true;
+        }
+
+        virtual bool threadStop(uint32_t timeout_ms) noexcept override
+        {
+            return true;
+        }
     };
 }
