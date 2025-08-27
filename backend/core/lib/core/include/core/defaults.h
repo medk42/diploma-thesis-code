@@ -6,5 +6,5 @@
 
 namespace aergo::core::defaults
 {
-    uint32_t module_thread_timeout_ms_ = 100;   
+    uint32_t module_thread_timeout_ms_ = 1000;   
 }

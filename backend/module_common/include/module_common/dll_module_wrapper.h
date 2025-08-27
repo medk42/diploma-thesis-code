@@ -19,7 +19,7 @@ namespace aergo::module::dll
     {
     public:
         /// @brief module must be non-nullptr and valid (check IModule::valid()), module_info must be non-nullptr.
-        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, const aergo::module::logging::ILogger* logger);
+        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger);
 
         ~DllModuleWrapper() override = default;
 
@@ -74,7 +74,15 @@ namespace aergo::module::dll
         bool popRegularProcessingData(ProcessingData& data); // pops data from any non-empty regular queue, returns false if all queues are empty
         bool popPrioritizedProcessingData(ProcessingData& data); // pops data from any non-empty prioritized queue, returns false if all queues are empty
 
+        void sendFailedResponse(uint32_t local_channel_id, ChannelIdentifier source_channel, uint64_t message_id);
+
         int64_t nowMs();
+
+        inline uint64_t nowNs() noexcept
+        {
+            using namespace std::chrono;
+            return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+        }
 
         std::mutex mutex_;
 
@@ -107,6 +115,8 @@ namespace aergo::module::dll
         std::unique_ptr<aergo::module::IModule> module_;
         const aergo::module::ModuleInfo* module_info_;
         const aergo::module::logging::ILogger* logger_;
+        aergo::module::ICore* core_;
+        uint64_t module_id_;
 
         Metrics metrics_;
     };

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <typeinfo>
+#include <vector>
 
 namespace aergo::module
 {
@@ -305,6 +306,13 @@ namespace aergo::module
     class ICore : public virtual ICoreBase, public virtual ICoreControl
     {};
 
+    struct ResponseData
+    {
+        bool success_;
+        std::vector<uint8_t> data_;
+        std::vector<message::SharedDataBlob> blobs_;
+    };
+
     class IModuleBase
     {
     public:
@@ -320,7 +328,8 @@ namespace aergo::module
         /// Message request/response pair is identified by ID in MessageHeader. 
         /// @param response_producer_id ID of this module's channel from which the message came
         /// @param source_channel identifies the source request channel (module and channel ID)
-        virtual void processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept = 0;
+        /// @return ResponseData containing success flag, response data and blobs.
+        virtual ResponseData processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept = 0;
 
         /// @brief Process response that came from request consumer channel "request_consumer_id" from module "module_id".
         /// Message request/response pair is identified by ID in MessageHeader. 

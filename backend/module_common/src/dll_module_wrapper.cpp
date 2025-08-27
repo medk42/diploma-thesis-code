@@ -7,8 +7,8 @@ using namespace aergo::module::dll;
 
 
 
-DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, const aergo::module::logging::ILogger* logger)
-: module_(std::move(module)), module_info_(module_info), logger_(logger), metrics_(module_info)
+DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger)
+: module_(std::move(module)), module_info_(module_info), core_(core), module_id_(module_id), logger_(logger), metrics_(module_info)
 {
     if (module_ == nullptr || !module_->valid() || module_info_ == nullptr)
     {
@@ -236,12 +236,22 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
 
     if (decision == aergo::module::IModule::IngressDecision::DROP || (decision == aergo::module::IModule::IngressDecision::ACCEPT && queue_full))
     {
+        if (type == aergo::module::IModule::ProcessingType::REQUEST)
+        {
+            sendFailedResponse(local_channel_id, source_channel, message.id_);
+        }
         return; // drop message
     }
     else if (decision == aergo::module::IModule::IngressDecision::ACCEPT_DROP_QUEUE_FIRST)
     {
         if (queue_full)
         {
+            ProcessingData data = std::move(target_queue.front());
+            if (data.processing_type_ == aergo::module::IModule::ProcessingType::REQUEST)
+            {
+                sendFailedResponse(data.local_channel_id_, data.source_channel_, data.message_.id_);
+            }
+
             target_queue.pop(); // drop oldest message
         }
     }
@@ -249,6 +259,12 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
     {
         while (!target_queue.empty())
         {
+            ProcessingData data = std::move(target_queue.front());
+            if (data.processing_type_ == aergo::module::IModule::ProcessingType::REQUEST)
+            {
+                sendFailedResponse(data.local_channel_id_, data.source_channel_, data.message_.id_);
+            }
+
             target_queue.pop(); // clear the queue
         }
     }
@@ -285,6 +301,26 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
 
 
 
+void DllModuleWrapper::sendFailedResponse(uint32_t local_channel_id, ChannelIdentifier source_channel, uint64_t message_id)
+{
+    core_->sendResponse({
+            .producer_module_id_ = module_id_, 
+            .producer_channel_id_ = local_channel_id
+        },
+        source_channel, {
+            .data_ = nullptr,
+            .data_len_ = 0,
+            .blobs_ = nullptr,
+            .blob_count_ = 0,
+            .id_ = message_id,
+            .timestamp_ns_ = nowNs(),
+            .success_ = false
+        }
+    );
+}
+
+
+
 void DllModuleWrapper::regularWorkerThreadFunc()
 {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -304,13 +340,29 @@ void DllModuleWrapper::regularWorkerThreadFunc()
         }
 
         lock.unlock();
+
+        aergo::module::ResponseData resp;
         switch (processing_data.processing_type_)
         {
             case aergo::module::IModule::ProcessingType::MESSAGE:
                 module_->processMessage(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
                 break;
             case aergo::module::IModule::ProcessingType::REQUEST:
-                module_->processRequest(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                resp = module_->processRequest(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                core_->sendResponse({
+                        .producer_module_id_ = module_id_, 
+                        .producer_channel_id_ = processing_data.local_channel_id_
+                    },
+                    processing_data.source_channel_, {
+                        .data_ = resp.data_.data(),
+                        .data_len_ = static_cast<uint64_t>(resp.data_.size()),
+                        .blobs_ = resp.blobs_.data(),
+                        .blob_count_ = static_cast<uint64_t>(resp.blobs_.size()),
+                        .id_ = processing_data.message_.id_,
+                        .timestamp_ns_ = nowNs(),
+                        .success_ = resp.success_
+                    }
+                );
                 break;
             case aergo::module::IModule::ProcessingType::RESPONSE:
                 module_->processResponse(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
@@ -342,13 +394,29 @@ void DllModuleWrapper::prioritizedWorkerThreadFunc()
         }
 
         lock.unlock();
+
+        aergo::module::ResponseData resp;
         switch (processing_data.processing_type_)
         {
             case aergo::module::IModule::ProcessingType::MESSAGE:
                 module_->processMessage(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
                 break;
             case aergo::module::IModule::ProcessingType::REQUEST:
-                module_->processRequest(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                resp = module_->processRequest(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                core_->sendResponse({
+                        .producer_module_id_ = module_id_, 
+                        .producer_channel_id_ = processing_data.local_channel_id_
+                    },
+                    processing_data.source_channel_, {
+                        .data_ = resp.data_.data(),
+                        .data_len_ = static_cast<uint64_t>(resp.data_.size()),
+                        .blobs_ = resp.blobs_.data(),
+                        .blob_count_ = static_cast<uint64_t>(resp.blobs_.size()),
+                        .id_ = processing_data.message_.id_,
+                        .timestamp_ns_ = nowNs(),
+                        .success_ = resp.success_
+                    }
+                );
                 break;
             case aergo::module::IModule::ProcessingType::RESPONSE:
                 module_->processResponse(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);

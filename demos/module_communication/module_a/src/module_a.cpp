@@ -53,15 +53,14 @@ void ModuleA::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier s
 
 
 
-void ModuleA::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+aergo::module::ResponseData ModuleA::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
     if (response_producer_id == 0)
     {
         if (message.data_len_ != sizeof(messages::request_response::LargeVariableReq))
         {
             LOG(logging::LogType::WARNING, "Unexpected message data length: " << message.data_len_ << "B (expected " << sizeof(messages::request_response::LargeVariableReq) << "B)")
-            sendResponse(0, source_channel, message.id_, {.success_ = false});
-            return;
+            return { .success_ = false };
         }
         messages::request_response::LargeVariableReq* request = (messages::request_response::LargeVariableReq*)message.data_;
 
@@ -81,14 +80,12 @@ void ModuleA::processRequest(uint32_t response_producer_id, ChannelIdentifier so
         if (!data_blob.valid())
         {
             log(logging::LogType::WARNING, "Allocated data blob is not valid!");
-            sendResponse(0, source_channel, message.id_, {.success_ = false});
-            return;
+            return { .success_ = false };
         }
         if (data_blob.size() != request->requested_size_)
         {
             LOG(logging::LogType::WARNING, "Data blob size is not " << request->requested_size_ << "B (actual size = " << data_blob.size() << "B)")
-            sendResponse(0, source_channel, message.id_, {.success_ = false});
-            return;
+            return { .success_ = false };
         }
 
         uint8_t* raw_data = data_blob.data();
@@ -99,20 +96,16 @@ void ModuleA::processRequest(uint32_t response_producer_id, ChannelIdentifier so
             raw_data[i] = counter;
         }
 
-        message::MessageHeader resp_message {
-            .data_ = (uint8_t*)(&response),
-            .data_len_ = sizeof(response),
-            .blobs_ = &data_blob,
-            .blob_count_ = 1,
-            .success_ = true
-        };
-        sendResponse(0, source_channel, message.id_, resp_message);
+        return std::move(aergo::module::ResponseData{
+            .success_ = true,
+            .data_ = std::vector<uint8_t>((uint8_t*)(&response), (uint8_t*)(&response) + sizeof(response)),
+            .blobs_ = std::vector<message::SharedDataBlob>{ data_blob }
+        });
     }
     else
     {
         LOG(logging::LogType::WARNING, "Unknown request source: " << response_producer_id)
-        sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false});
-        return;
+        return { .success_ = false };
     }
 }
 

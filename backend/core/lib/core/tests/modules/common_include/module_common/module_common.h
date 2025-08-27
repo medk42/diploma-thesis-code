@@ -56,7 +56,7 @@ namespace aergo::tests::core_1
             last_source_channel_ = source_channel;
         }
 
-        void processRequest(uint32_t response_producer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override
+        aergo::module::ResponseData processRequest(uint32_t response_producer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override
         {
             if (message.data_len_ != sizeof(int))
             {
@@ -70,14 +70,13 @@ namespace aergo::tests::core_1
             last_channel_id_ = response_producer_id;
             last_source_channel_ = source_channel;
 
-            sendResponse(response_producer_id, source_channel, message.id_, {
-                .data_ = (uint8_t*) &last_msg_data_,
-                .data_len_ = sizeof(last_msg_data_),
-                .blobs_ = nullptr,
-                .blob_count_ = 0,
-                .success_ = true
+            return std::move(aergo::module::ResponseData {
+                .success_ = true,
+                .data_ = std::vector<uint8_t>(message.data_, message.data_ + message.data_len_),
+                .blobs_ = std::vector<aergo::module::message::SharedDataBlob>()
             });
         }
+
         void processResponse(uint32_t request_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override
         {
             if (message.data_len_ != sizeof(int))

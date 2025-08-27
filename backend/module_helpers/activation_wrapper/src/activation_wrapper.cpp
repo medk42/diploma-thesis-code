@@ -97,15 +97,14 @@ void ActivationWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelId
 
 
 
-void ActivationWrapper::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+aergo::module::ResponseData ActivationWrapper::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
     if (response_producer_id == expected_response_producer_id_)
     {
         if (message.data_len_ != sizeof(message_types::Request))
         {
             base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid message size.");
-            base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false}); // respond with error
-            return;
+            return { .success_ = false };
         }
 
         auto* request = reinterpret_cast<message_types::Request*>(message.data_);
@@ -115,33 +114,30 @@ void ActivationWrapper::processRequest(uint32_t response_producer_id, ChannelIde
             if (message.blob_count_ != 1 || message.blobs_ == nullptr || !message.blobs_[0].valid())
             {
                 base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid blob count.");
-                base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false}); // respond with error
-                return;
+                return { .success_ = false };
             }
         }
         else if (message.blob_count_ != 0)
         {
             base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid blob count.");
-            base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false}); // respond with error
-            return;
+            return { .success_ = false };
         }
 
         
         auto [response, extra_data] = processActivationRequest(*request, message.blobs_); // process request, locked inside
 
-        aergo::module::message::MessageHeader resp_message {
-            .data_ = (uint8_t*)(&response),
-            .data_len_ = sizeof(response),
-            .blobs_ = extra_data.valid() ? &extra_data : nullptr,
-            .blob_count_ = extra_data.valid() ? 1u : 0u,
-            .success_ = true
-        };
-        base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, message);
+        return std::move(aergo::module::ResponseData{ 
+            .success_ = true, 
+            .data_ = std::vector<uint8_t>((uint8_t*)(&response), (uint8_t*)(&response) + sizeof(response)), 
+            .blobs_ = extra_data.valid() ? std::vector<message::SharedDataBlob>{extra_data} : std::vector<message::SharedDataBlob>{} 
+        });
     }
     else if (activated_.load(std::memory_order_relaxed))
     {
-        module_ref_->processRequest(response_producer_id, source_channel, message);
+        return std::move(module_ref_->processRequest(response_producer_id, source_channel, message));
     }
+
+    return { .success_ = false };
 }
 
 

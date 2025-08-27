@@ -4,7 +4,7 @@
 #include "core_structures.h"
 
 #include <map>
-#include <mutex>
+#include <shared_mutex>
 
 namespace aergo::core
 {
@@ -117,6 +117,12 @@ namespace aergo::core
         /// @param channel_type_identifier_function return channel name and if it needs to be removed from "existing_channels"
         void removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<std::pair<const char*, bool>(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels);
 
+        inline uint64_t nowNs() noexcept
+        {
+            using namespace std::chrono;
+            return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+        }
+
         bool initialized_;
         std::vector<structures::ModuleLoaderData> loaded_modules_;
         std::vector<std::unique_ptr<structures::ModuleData>> running_modules_;
@@ -128,7 +134,8 @@ namespace aergo::core
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_subscribe_auto_all_channels_;
         std::map<std::string, std::vector<aergo::module::ChannelIdentifier>> existing_request_auto_all_channels_;
 
-        std::mutex core_mutex_;
+        std::shared_mutex core_mutex_;
+        std::mutex add_remove_mutex_; // mutex to protect add/remove module operations
 
         logging::ILogger* logger_;
 
