@@ -43,11 +43,18 @@ SharedDataBlob::SharedDataBlob(const SharedDataBlob& other)
 
 SharedDataBlob& SharedDataBlob::operator=(SharedDataBlob& other)
 {
-    allocator_ = other.allocator_;
-    data_ = other.data_;
-    if (allocator_)
+    if (this != &other)
     {
-        allocator_->addOwner(data_);
+        if (allocator_)
+        {
+            allocator_->removeOwner(data_);
+        }
+        allocator_ = other.allocator_;
+        data_ = other.data_;
+        if (allocator_)
+        {
+            allocator_->addOwner(data_);
+        }
     }
 
     return *this;
