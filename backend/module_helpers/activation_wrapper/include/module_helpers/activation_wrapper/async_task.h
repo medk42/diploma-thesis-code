@@ -8,10 +8,10 @@ namespace aergo::module::helpers::activation_wrapper
 {
     enum class AsyncTaskState
     {
-        NOT_STARTED,
-        RUNNING,
-        CANCELLED,
-        COMPLETED
+        NOT_STARTED,  // task not started yet
+        RUNNING,      // task is running
+        CANCELLED,    // task finished due to cancellation
+        COMPLETED     // task finished normally
     };
 
 

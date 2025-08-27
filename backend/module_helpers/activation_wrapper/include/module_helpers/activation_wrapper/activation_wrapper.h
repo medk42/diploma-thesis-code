@@ -7,6 +7,8 @@
 
 #include <tuple>
 #include <vector>
+#include <mutex>
+#include <atomic>
 
 namespace aergo::module::helpers::activation_wrapper
 {
@@ -22,6 +24,7 @@ namespace aergo::module::helpers::activation_wrapper
         virtual void processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
         virtual bool valid() noexcept override;
         virtual void* query_capability(const std::type_info& id) noexcept override;
+        virtual aergo::module::IModule::IngressDecision onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept override;
 
     private:
         /// @brief Initialize parameters to specified default values (or system defaults if not specified).
@@ -35,26 +38,28 @@ namespace aergo::module::helpers::activation_wrapper
         void handleActivationTask();
         void setCustomValueOnReceive(message::MessageHeader message);
 
-        bool valid_;                              // is the wrapper valid (correctly initialized)
+        bool valid_;                              // is the wrapper valid (correctly initialized); only changed during initialization, no need to synchronize
 
-        aergo::module::IModule* module_ref_;      // reference to module to send IModule calls to
+        aergo::module::IModule* module_ref_;      // reference to module to send IModule calls to; only changed during initialization, no need to synchronize
         BaseModule* base_module_ref_;             // reference to base module to allow sending messages and logging
         IActivableModule* activable_module_ref_;  // reference to activable module to allow activation/deactivation logic
-        params::ParameterList* parameters_;       // reference to parameter list
+        params::ParameterList* parameters_;       // reference to parameter list; only changed during initialization, no need to synchronize
 
         aergo::module::BaseModule::AllocatorPtr dynamic_allocator_; // dynamic allocator for responses (READ_VALUE, READ_ACTIVATION_PARAMETERS)
 
         uint32_t expected_response_producer_id_;  // ID of the response producer channel for activation wrapper messages
 
-        bool activated_;                          // is the module currently activated
+        std::atomic<bool> activated_;                // is the module currently activated; be careful when assigning, activated_ is accessed without locking mutex_
         std::unique_ptr<AsyncTask> activation_task_; // currently running activation/deactivation task (if any)
 
         std::vector<std::vector<std::vector<uint8_t>>> parameter_values_; // current parameter values (for lists, each list entry is a vector of bytes; for non-lists, only first entry is used)
 
         struct {
-            bool expected_;  // true if we are waiting for a CUSTOM message/response, false otherwise
-            size_t param_id_; // ID of the parameter we are changing
-            size_t list_id_; // ID into the list inside the parameter (0 for non-lists)
-        } message_wait_; // waiting for CUSTOM message/response.
+            std::atomic<bool> expected_;  // true if we are waiting for a CUSTOM message/response, false otherwise
+            size_t param_id_;             // ID of the parameter we are changing
+            size_t list_id_;              // ID into the list inside the parameter (0 for non-lists)
+        } message_wait_;                  // waiting for CUSTOM message/response.
+
+        std::mutex mutex_; // mutex for thread safety
     };
 }

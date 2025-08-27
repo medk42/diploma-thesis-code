@@ -75,17 +75,23 @@ ActivationWrapper::ActivationWrapper(aergo::module::IModule* module, aergo::modu
 
 void ActivationWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    if (activated_)
+    if (message_wait_.expected_.load(std::memory_order_relaxed)) // quick check to filter out unnecessary locking
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (message_wait_.expected_.load(std::memory_order_acquire)) // double check after locking
+        {
+            auto& param = parameters_->getParameters()[message_wait_.param_id_];
+            if (param.custom_channel_type_ == params::CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == subscribe_consumer_id)
+            {
+                setCustomValueOnReceive(message);
+                return;
+            }
+        }
+    }
+    
+    if (activated_.load(std::memory_order_relaxed))
     {
         module_ref_->processMessage(subscribe_consumer_id, source_channel, message);
-    }
-    else if (message_wait_.expected_)
-    {
-        auto& param = parameters_->getParameters()[message_wait_.param_id_];
-        if (param.custom_channel_type_ == params::CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == subscribe_consumer_id)
-        {
-            setCustomValueOnReceive(message);
-        }
     }
 }
 
@@ -93,15 +99,12 @@ void ActivationWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelId
 
 void ActivationWrapper::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    if (activated_ && response_producer_id != expected_response_producer_id_)
-    {
-        module_ref_->processRequest(response_producer_id, source_channel, message);
-    }
-    else if (response_producer_id == expected_response_producer_id_)
+    if (response_producer_id == expected_response_producer_id_)
     {
         if (message.data_len_ != sizeof(message_types::Request))
         {
             base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid message size.");
+            base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false}); // respond with error
             return;
         }
 
@@ -112,17 +115,19 @@ void ActivationWrapper::processRequest(uint32_t response_producer_id, ChannelIde
             if (message.blob_count_ != 1 || message.blobs_ == nullptr || !message.blobs_[0].valid())
             {
                 base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid blob count.");
+                base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false}); // respond with error
                 return;
             }
         }
         else if (message.blob_count_ != 0)
         {
             base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid blob count.");
+            base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, {.success_ = false}); // respond with error
             return;
         }
 
         
-        auto [response, extra_data] = processActivationRequest(*request, message.blobs_);
+        auto [response, extra_data] = processActivationRequest(*request, message.blobs_); // process request, locked inside
 
         aergo::module::message::MessageHeader resp_message {
             .data_ = (uint8_t*)(&response),
@@ -133,23 +138,33 @@ void ActivationWrapper::processRequest(uint32_t response_producer_id, ChannelIde
         };
         base_module_ref_->sendResponse(response_producer_id, source_channel, message.id_, message);
     }
+    else if (activated_.load(std::memory_order_relaxed))
+    {
+        module_ref_->processRequest(response_producer_id, source_channel, message);
+    }
 }
 
 
 
 void ActivationWrapper::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    if (activated_)
+    if (message_wait_.expected_.load(std::memory_order_relaxed)) // quick check to filter out unnecessary locking
+    {
+        std::lock_guard<std::mutex> lock(mutex_); // accessing message_wait_, we need synchronization
+        if (message_wait_.expected_.load(std::memory_order_acquire)) // double check after locking
+        {
+            auto& param = parameters_->getParameters()[message_wait_.param_id_];
+            if (param.custom_channel_type_ == params::CustomChannelType::REQUEST && param.custom_channel_id_ == request_consumer_id)
+            {
+                setCustomValueOnReceive(message);
+                return;
+            }
+        }
+    }
+
+    if (activated_.load(std::memory_order_relaxed))
     {
         module_ref_->processResponse(request_consumer_id, source_channel, message);
-    }
-    else if (message_wait_.expected_)
-    {
-        auto& param = parameters_->getParameters()[message_wait_.param_id_];
-        if (param.custom_channel_type_ == params::CustomChannelType::REQUEST && param.custom_channel_id_ == request_consumer_id)
-        {
-            setCustomValueOnReceive(message);
-        }
     }
 }
 
@@ -157,7 +172,7 @@ void ActivationWrapper::processResponse(uint32_t request_consumer_id, ChannelIde
 
 bool ActivationWrapper::valid() noexcept
 {
-    if (module_ref_ == nullptr || module_ref_->valid() == false)
+    if (module_ref_ == nullptr || module_ref_->valid() == false) // no need to synchronize, module_ref_/valid is not changed after initialization
     {
         return false;
     }
@@ -169,7 +184,36 @@ bool ActivationWrapper::valid() noexcept
 
 void* ActivationWrapper::query_capability(const std::type_info& id) noexcept
 {
-    return module_ref_->query_capability(id);
+    return module_ref_->query_capability(id); // no need to synchronize, module_ref_ is not changed after initialization
+}
+
+
+
+aergo::module::IModule::IngressDecision ActivationWrapper::onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept
+{
+    if (activated_.load(std::memory_order_relaxed))
+    {
+        return module_ref_->onIngress(kind, local_channel_id, src, msg, queue_status);
+    }
+    
+    if (kind == aergo::module::IModule::ProcessingType::REQUEST && local_channel_id == expected_response_producer_id_)
+    {
+        return aergo::module::IModule::IngressDecision::ACCEPT;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);  // accessing message_wait_, we need synchronization
+
+    if (message_wait_.expected_.load(std::memory_order_acquire))
+    {
+        auto& param = parameters_->getParameters()[message_wait_.param_id_];
+        if ((kind == aergo::module::IModule::ProcessingType::MESSAGE && param.custom_channel_type_ == params::CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == local_channel_id) ||
+            (kind == aergo::module::IModule::ProcessingType::RESPONSE && param.custom_channel_type_ == params::CustomChannelType::REQUEST && param.custom_channel_id_ == local_channel_id))
+        {
+            return aergo::module::IModule::IngressDecision::ACCEPT;
+        }
+    }
+
+    return aergo::module::IModule::IngressDecision::DROP;
 }
 
 
@@ -320,13 +364,15 @@ bool ActivationWrapper::initializeDefaultParameters()
 
 std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::processActivationRequest(message_types::Request& request, message::SharedDataBlob* blob)
 {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     handleActivationTask();
 
     message_types::Response response;
     response.request_type_ = request.request_type_;
-    response.activated_ = activated_;
+    response.activated_ = activated_.load(std::memory_order_acquire);
 
-    bool parameter_change_forbidden = activated_ || message_wait_.expected_ || activation_task_.get() != nullptr; // do not allow changing parameters while activated or waiting for CUSTOM message
+    bool parameter_change_forbidden = response.activated_ || message_wait_.expected_.load(std::memory_order_acquire) || activation_task_.get() != nullptr; // do not allow changing parameters while activated or waiting for CUSTOM message
 
     switch (request.request_type_)
     {
@@ -346,7 +392,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
         }
         case message_types::ReqType::GET_STATUS: // any time
         {
-            response.result_ = (message_wait_.expected_ || activation_task_.get() != nullptr) ? message_types::Result::RUNNING : message_types::Result::SUCCESS;
+            response.result_ = (message_wait_.expected_.load(std::memory_order_relaxed) || activation_task_.get() != nullptr) ? message_types::Result::RUNNING : message_types::Result::SUCCESS;
             if (activation_task_.get() != nullptr)
             {
                 response.progress_ = activable_module_ref_->getActivationProgress();
@@ -355,7 +401,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
         }
         case message_types::ReqType::ACTIVATE: // only when not activated, in process of de/activating and not waiting for CUSTOM message
         {
-            if (activated_ || message_wait_.expected_ || activation_task_.get() != nullptr)
+            if (response.activated_ || message_wait_.expected_.load(std::memory_order_relaxed) || activation_task_.get() != nullptr)
             {
                 response.result_ = message_types::Result::FAIL;
                 return {response, {}};
@@ -369,7 +415,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
         }
         case message_types::ReqType::DEACTIVATE: // only when activated, in process of de/activating and not waiting for CUSTOM message
         {
-            if (!activated_ || message_wait_.expected_ || activation_task_.get() != nullptr)
+            if (!response.activated_ || message_wait_.expected_.load(std::memory_order_relaxed) || activation_task_.get() != nullptr)
             {
                 response.result_ = message_types::Result::FAIL;
                 return {response, {}};
@@ -410,9 +456,9 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
                 activation_task_->cancel();
                 response.result_ = message_types::Result::FAIL;
             }
-            else if (message_wait_.expected_)
+            else if (message_wait_.expected_.load(std::memory_order_relaxed))
             {
-                message_wait_.expected_ = false;
+                message_wait_.expected_.store(false, std::memory_order::memory_order_release);
                 response.result_ = message_types::Result::SUCCESS;
             }
             else
@@ -571,9 +617,9 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
     }
     else
     {
-        message_wait_.expected_ = true;
         message_wait_.param_id_ = request.param_id_;
         message_wait_.list_id_ = list_id;
+        message_wait_.expected_.store(true, std::memory_order::memory_order_release);
 
         if (param.custom_channel_type_ == params::CustomChannelType::REQUEST)
         {
@@ -681,6 +727,11 @@ void ActivationWrapper::handleActivationTask()
         auto state = activation_task_->getState();
         if (state == AsyncTaskState::COMPLETED || state == AsyncTaskState::CANCELLED)
         {
+            if (state == AsyncTaskState::COMPLETED)
+            {
+                bool activated = activated_.load(std::memory_order_relaxed);
+                activated_.store(!activated, std::memory_order_release); // currently activated_ is false when activating, true when deactivating
+            }
             activation_task_.reset();
         };
     }
@@ -699,6 +750,10 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
             reinterpret_cast<const uint8_t*>(&message.data_len_) + sizeof(uint64_t));
     chosen_value.insert(chosen_value.end(), message.data_, message.data_ + message.data_len_);
     
+    chosen_value.insert(chosen_value.end(),
+            reinterpret_cast<const uint8_t*>(&message.blob_count_),
+            reinterpret_cast<const uint8_t*>(&message.blob_count_) + sizeof(uint64_t));
+
     for (uint64_t blob_id = 0; blob_id < message.blob_count_; ++blob_id)
     {
         if (message.blobs_[blob_id].valid())
@@ -720,5 +775,5 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
         }
     }
 
-    message_wait_.expected_ = false;
+    message_wait_.expected_.store(false, std::memory_order::memory_order_release);
 }
