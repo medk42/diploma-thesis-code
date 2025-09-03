@@ -24,11 +24,14 @@ namespace aergo::module::helpers::activation_wrapper::message_types
         DEACTIVATE,                  // attempt to deactivate the module
         GET_STATUS,                  // read activation status of the module
 
-        /// @brief set/change value of parameter, existing list value or add new list value (if list_id_ is larger than list size)
+        /// @brief set/change value of parameter or existing list value.
         SET_VALUE,
         
         /// @brief Read values of all parameters. Custom values are not read.
         READ_VALUES,
+
+        /// @brief Add a new value to the end of the list without any value.
+        LIST_ADD,
 
         /// @brief Remove a specific value from the list.
         LIST_REMOVE,

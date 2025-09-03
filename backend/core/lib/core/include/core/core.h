@@ -27,6 +27,7 @@ namespace aergo::core
         /// @brief Load all available modules from the modules_dir. Data for each module is in data_dir (with same folder name as the module library filename).
         /// For example "${modules_dir}/module_a.dll" will have data directory pointed to "${data_dir}/module_a". Auto-create modules with flag auto_create_.
         /// Only call this method once. Subsequent calls are ignored.
+        /// Modules are auto-created after loading all modules (so getLoadedModulesInfo and getLoadedModulesCount will work correctly in module constructors).
         void initialize(const char* modules_dir, const char* data_dir);
 
         virtual void sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override final;
@@ -36,7 +37,9 @@ namespace aergo::core
         virtual aergo::module::IAllocator* createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept override final;
         virtual void deleteAllocator(aergo::module::IAllocator* allocator) noexcept override final;
 
-        /// @return nullptr if out of range
+        /// @brief Returns information about loaded module. If loaded_module_id is out of range, returns nullptr.
+        /// Modules are loaded at startup and cannot be unloaded, so this data is constant after initialization.
+        /// @return Data about the loaded module or nullptr if loaded_module_id is out of range.
         virtual const aergo::module::ModuleInfo* getLoadedModulesInfo(uint64_t loaded_module_id) noexcept override final;
         virtual uint64_t getLoadedModulesCount() noexcept override final;
 

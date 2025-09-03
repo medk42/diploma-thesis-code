@@ -31,25 +31,26 @@ namespace aergo::module::helpers::activation_wrapper::params
 
     struct ParameterDescription
     {
-        ParameterType type_;
+        ParameterType type_ = ParameterType::BOOL;
         
         std::string param_name_;
         std::string param_desc_;
 
-        bool limit_min_, limit_max_;    // with limit checking
-        double min_value_double_, max_value_double_;  // min/max double value
-        int64_t min_value_long_, max_value_long_; // min/max long value
-        bool as_slider_;                // display value as a slider
+        bool limit_min_ = false, limit_max_ = false;    // with limit checking
+        double min_value_double_ = 0, max_value_double_ = 1;  // min/max double value
+        int64_t min_value_long_ = 0, max_value_long_ = 100; // min/max long value
+        bool as_slider_ = false;                // display value as a slider, for DOUBLE only, requires min_value_double_ and max_value_double_
 
-        std::vector<std::string> enum_values_;
+        std::vector<std::string> enum_values_;   // has to be non-empty for ENUM type
 
-        CustomChannelType custom_channel_type_;
-        uint32_t custom_channel_id_;
+        CustomChannelType custom_channel_type_ = CustomChannelType::SUBSCRIBE;
+        uint32_t custom_channel_id_ = 0;
 
-        bool as_list_;
-        uint16_t list_size_min_, list_size_max_;
+        bool as_list_ = false;
+        uint16_t list_size_min_ = 0; // only used if as_list_ is true, no limits if 0
+        uint16_t list_size_max_ = 0; // only used if as_list_ is true, no limits if 0
 
-        std::string default_value_; // default value as a string (for all types, except CUSTOM and lists of types)
+        std::string default_value_; // default value as a string (for all types, except CUSTOM; for lists, value is used for all entries), for enum it is the enum string value (if empty, first enum value is used)
         
 
         void toStringStream(std::stringstream& stream);

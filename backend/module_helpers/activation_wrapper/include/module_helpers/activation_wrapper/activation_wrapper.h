@@ -36,9 +36,14 @@ namespace aergo::module::helpers::activation_wrapper
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> processActivationRequest(message_types::Request& request, aergo::module::message::SharedDataBlob* blob);
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> setValue(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> readValues(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
+        std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> listAdd(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> listRemove(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
         void handleActivationTask();
         void setCustomValueOnReceive(message::MessageHeader message);
+
+        /// @brief Check if current parameter values are valid (types, ranges, enum values, list sizes).
+        /// @return true if valid, false otherwise
+        bool areParametersValid();
 
         bool valid_;                              // is the wrapper valid (correctly initialized); only changed during initialization, no need to synchronize
 

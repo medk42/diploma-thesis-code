@@ -417,6 +417,12 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
                 return {response, {}};
             }
 
+            if (areParametersValid() == false)
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+
             activation_task_ = std::make_unique<AsyncTask>([this](std::atomic<bool>& cancel_flag) { return activable_module_ref_->activate(parameter_values_, cancel_flag); });
             activation_task_->start();
             response.result_ = message_types::Result::RUNNING;
@@ -449,6 +455,15 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
         case message_types::ReqType::READ_VALUES: // any time
         {
             return readValues(request, blob, response);
+        }
+        case message_types::ReqType::LIST_ADD: // only when not activated, not in process of de/activating and not waiting for CUSTOM message
+        {
+            if (parameter_change_forbidden)
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+            return listAdd(request, blob, response);
         }
         case message_types::ReqType::LIST_REMOVE: // only when not activated, not in process of de/activating and not waiting for CUSTOM message
         {
@@ -506,10 +521,10 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
     size_t list_id = request.list_id_;
     if (param.as_list_)
     {
-        if (list_id >= param_value.size())
+        if (list_id >= param_value.size()) // out of range, use LIST_ADD to extend the list first
         {
-            list_id = param_value.size();
-            param_value.resize(list_id + 1);
+            response.result_ = message_types::Result::FAIL;
+            return {response, {}};
         }
     }
     else
@@ -694,6 +709,41 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
 
 
 
+std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> ActivationWrapper::listAdd(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response)
+{
+    if (request.param_id_ >= parameters_->getParameters().size()) // invalid parameter ID
+    {
+        response.result_ = message_types::Result::FAIL;
+        return {response, {}};
+    }
+
+    auto& param = parameters_->getParameters()[request.param_id_];
+    auto& param_value = parameter_values_[request.param_id_];
+    if (param.type_ != request.parameter_type_) // parameter type mismatch
+    {
+        response.result_ = message_types::Result::FAIL;
+        return {response, {}};
+    }
+    
+    if (!param.as_list_) // not a list
+    {
+        response.result_ = message_types::Result::FAIL;
+        return {response, {}};
+    }
+
+    if (param_value.size() >= static_cast<size_t>(param.list_size_max_))
+    {
+        response.result_ = message_types::Result::FAIL;
+        return {response, {}};
+    }
+
+    param_value.emplace_back(); // add new empty item to the list
+    response.result_ = message_types::Result::SUCCESS;
+    return {response, {}};
+}
+
+
+
 std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> ActivationWrapper::listRemove(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response)
 {
     if (request.param_id_ >= parameters_->getParameters().size()) // invalid parameter ID
@@ -787,3 +837,119 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
 
     message_wait_.expected_.store(false, std::memory_order::memory_order_release);
 }
+
+
+
+bool ActivationWrapper::areParametersValid()
+{
+    auto& params = parameters_->getParameters();
+
+    if (params.size() != parameter_values_.size())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < params.size(); ++i)
+    {
+        auto& param = params[i];
+        auto& param_value = parameter_values_[i];
+
+        if (param.as_list_)
+        {
+            if (param_value.size() < static_cast<size_t>(param.list_size_min_) || param_value.size() > static_cast<size_t>(param.list_size_max_)) 
+                return false;
+        }
+        else
+        {
+            if (param_value.size() != 1)
+                return false;
+        }
+
+        for (const auto& item : param_value)
+        {
+            switch (param.type_)
+            {
+                case params::ParameterType::BOOL:
+                {
+                    if (item.size() != 1 || (item[0] != 0 && item[0] != 1))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case params::ParameterType::LONG:
+                {
+                    if (item.size() != sizeof(int64_t))
+                    {
+                        return false;
+                    }
+
+                    int64_t value;
+                    memcpy(&value, item.data(), sizeof(int64_t));
+
+                    if (param.limit_min_ && value < (int64_t)param.min_value_long_)
+                    {
+                        return false;
+                    }
+                    if (param.limit_max_ && value > (int64_t)param.max_value_long_)
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case params::ParameterType::DOUBLE:
+                {
+                    if (item.size() != sizeof(double))
+                    {
+                        return false;
+                    }
+
+                    double value;
+                    memcpy(&value, item.data(), sizeof(double));
+
+                    if (param.limit_min_ && value < param.min_value_double_)
+                    {
+                        return false;
+                    }
+                    if (param.limit_max_ && value > param.max_value_double_)
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case params::ParameterType::STRING:
+                {
+                    // any size is valid
+                    break;
+                }
+                case params::ParameterType::ENUM:
+                {
+                    if (item.size() != sizeof(size_t))
+                    {
+                        return false;
+                    }
+
+                    size_t enum_id;
+                    memcpy(&enum_id, item.data(), sizeof(size_t));
+                    if (enum_id >= param.enum_values_.size())
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case params::ParameterType::CUSTOM:
+                {
+                    // any size is valid
+                    break;
+                }
+                default:
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+            
