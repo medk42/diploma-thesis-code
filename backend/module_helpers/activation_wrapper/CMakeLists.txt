@@ -10,7 +10,7 @@ target_include_directories(${LIB_NAME} PUBLIC
     include
 )
 
-target_link_libraries(${LIB_NAME} PRIVATE module_common helpers___helper_base)
+target_link_libraries(${LIB_NAME} PRIVATE module_common)
 
 # MSVC: force dynamic CRT
 if (MSVC)

@@ -103,10 +103,10 @@
             "name": "core",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/backend/binaries/core.exe",
-            "args": ["${workspaceFolder}/demos/binaries/demo_modules", "."],
+            "program": "${workspaceFolder}/binaries/core.exe",
+            "args": ["modules", "data"],
             "stopAtEntry": false,
-            "cwd": ".",
+            "cwd": "${workspaceFolder}/binaries",
             "environment": [],
             "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"

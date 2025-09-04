@@ -19,7 +19,7 @@ namespace aergo::module::helpers::activation_wrapper
 
         /// @brief Send request from activation wrapper to the module. Used to request CUSTOM parameter values.
         /// @param request_consumer_id ID of the request consumer channel to send the request to
-        virtual uint64_t sendRequestFromActivation(uint32_t request_consumer_id) = 0;
+        virtual void sendRequestFromActivation(uint32_t request_consumer_id) = 0;
 
         /// @brief Get current de/activation status of the module.
         virtual message_types::ProgressData getActivationProgress() = 0;

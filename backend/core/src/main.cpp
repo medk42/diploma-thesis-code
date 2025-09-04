@@ -6,7 +6,20 @@
 #include <iostream>
 #include <sstream>
 
+#include <csignal>
+#include <thread>
+#include <chrono>
+
 using namespace aergo::core;
+
+
+
+volatile sig_atomic_t stop = 0;
+
+void signal_handler(int signal) {
+    stop = 1;
+}
+
 
 
 void log(logging::ConsoleLogger& logger, aergo::module::logging::LogType type, std::stringstream ss)
@@ -112,7 +125,8 @@ void printLoadedModules(logging::ConsoleLogger& logger, Core& core)
     }
 }
 
-
+#include "module_common/dll_module_wrapper.h" // TODO remove
+#include "module_helpers/activation_wrapper/activable_module.h" // TODO remove
 
 int main(int argc, char** argv)
 {
@@ -134,4 +148,49 @@ int main(int argc, char** argv)
     core.initialize(module_dir.c_str(), data_dir.c_str());
 
     printLoadedModules(logger, core);
+    
+    
+    ///  TODO REMOVE START
+
+    if (!core.addModule(0, {}))
+    {
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add module with ID 0");
+        return -1;
+    }
+    else
+    {
+        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 0");
+    }
+
+    int64_t camera_id = 0;
+
+    auto module_info = core.getCreatedModulesInfo(0);
+    auto wrapper = (aergo::module::dll::DllModuleWrapper*)module_info->module_.get();
+    auto activable_module = wrapper->getModule()->query<aergo::module::helpers::activation_wrapper::IActivableModule>();
+    std::vector<std::vector<std::vector<uint8_t>>> parameter_values; // no parameters for camera module
+    auto& first_param = parameter_values.emplace_back(); // one parameter group
+    auto& first_param_first = first_param.emplace_back(); // one parameter in group
+    first_param_first.resize(sizeof(int64_t));
+    memcpy(&first_param_first[0], &camera_id, sizeof(int64_t));
+    std::atomic<bool> cancel_flag(false);
+    activable_module->activate(parameter_values, cancel_flag); 
+
+    /// TODO REMOVE END
+
+
+    signal(SIGINT, signal_handler);
+
+    log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Core is running, press Ctrl+C to stop.");
+    while (!stop) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Stopping core...");
+
+    /// TODO REMOVE START
+
+    activable_module->deactivate(cancel_flag);
+
+    /// TODO REMOVE END
+
+    return 0;
 }

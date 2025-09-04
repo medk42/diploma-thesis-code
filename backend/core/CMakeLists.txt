@@ -7,7 +7,7 @@ add_executable(core
     src/main.cpp
 )
 
-target_link_libraries(core PRIVATE core_project utils___logging)
+target_link_libraries(core PRIVATE core_project utils___logging helpers___activation_wrapper)
 
 # MSVC: force dynamic CRT
 if (MSVC)
@@ -22,3 +22,4 @@ set_target_properties(core PROPERTIES
 
 cmake_policy(SET CMP0177 NEW)
 install(TARGETS core DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
+install(TARGETS core DESTINATION ${PROJECT_SOURCE_DIR}/binaries)
