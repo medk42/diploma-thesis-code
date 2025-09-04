@@ -152,7 +152,34 @@ int main(int argc, char** argv)
     
     ///  TODO REMOVE START
 
-    if (!core.addModule(0, {}))
+    if (!core.addModule(1, {})) // add camera module
+    {
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add module with ID 1");
+        return -1;
+    }
+    else
+    {
+        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 1");
+    }
+
+    aergo::module::ChannelIdentifier channel_id_a {0, 0}; // camera module publish channel
+
+    aergo::module::InputChannelMapInfo::IndividualChannelInfo camera_channel_info
+    {
+        .channel_identifier_count_ = 1,
+        .channel_identifier_ = &channel_id_a
+    };
+
+    aergo::module::InputChannelMapInfo channel_map_info 
+    {
+        .subscribe_consumer_info_ = &camera_channel_info,
+        .subscribe_consumer_info_count_ = 1,
+
+        .request_consumer_info_ = nullptr,
+        .request_consumer_info_count_ = 0
+    };
+
+    if (!core.addModule(0, channel_map_info)) // add camera calibration module
     {
         log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add module with ID 0");
         return -1;

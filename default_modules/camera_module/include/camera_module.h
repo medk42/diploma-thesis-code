@@ -1,6 +1,6 @@
 #pragma once
 
-#include "image_structure.h"
+#include "message_structure.h"
 
 #include "module_common/base_module.h"
 #include "module_helpers/activation_wrapper/activable_module.h"
