@@ -166,8 +166,8 @@ int main(int argc, char** argv)
 
     aergo::module::InputChannelMapInfo::IndividualChannelInfo camera_channel_info
     {
-        .channel_identifier_count_ = 1,
-        .channel_identifier_ = &channel_id_a
+        .channel_identifier_ = &channel_id_a,
+        .channel_identifier_count_ = 1
     };
 
     aergo::module::InputChannelMapInfo channel_map_info 
