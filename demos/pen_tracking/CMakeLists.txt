@@ -1,5 +1,6 @@
-include_directories(include)
-include_directories(../pen_calib/include)
+# Find OpenCV
+find_package(OpenCV 4 REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
 
 # Find SimpleBLE
 find_package(simpleble REQUIRED CONFIG)
@@ -7,7 +8,9 @@ find_package(simpleble REQUIRED CONFIG)
 # Find Pangolin
 find_package(Pangolin CONFIG REQUIRED)
 
-# Add the executable
+
+
+# Add the executables
 add_executable(pen_tracking 
     src/main.cpp
     src/marker_tracker.cpp
@@ -51,10 +54,15 @@ target_link_libraries(ble_test simpleble::simpleble ${OpenCV_LIBS})
 target_link_libraries(pen_visualization_test simpleble::simpleble ${OpenCV_LIBS})
 target_link_libraries(pen_drawing_test simpleble::simpleble ${OpenCV_LIBS} ${Pangolin_LIBRARIES})
 
+target_include_directories(pen_tracking PRIVATE include ../pen_calib/include)
+target_include_directories(pen_tracking_performance_test PRIVATE include ../pen_calib/include)
+target_include_directories(pen_tracking_accuracy_test PRIVATE include ../pen_calib/include)
+target_include_directories(ble_test PRIVATE include ../pen_calib/include)
+target_include_directories(pen_visualization_test PRIVATE include ../pen_calib/include)
+target_include_directories(pen_drawing_test PRIVATE include ../pen_calib/include)
+
 cmake_policy(SET CMP0177 NEW)
-install(TARGETS pen_tracking DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
-install(TARGETS pen_tracking_performance_test DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
-install(TARGETS pen_tracking_accuracy_test DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
-install(TARGETS ble_test DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
-install(TARGETS pen_visualization_test DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
-install(TARGETS pen_drawing_test DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
+install(
+    DIRECTORY ${CMAKE_BINARY_DIR}/demos/pen_tracking/Debug/ 
+    DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries/pen_tracking
+)

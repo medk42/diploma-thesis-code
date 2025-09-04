@@ -1,4 +1,6 @@
-include_directories(include)
+# Find OpenCV
+find_package(OpenCV 4 REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
 
 # Add the executable
 add_executable(camera_calib 
@@ -6,8 +8,13 @@ add_executable(camera_calib
     src/camera_calibration.cpp
 )
 
+target_include_directories(camera_calib PRIVATE include)
+
 # Link against OpenCV (already found by the root CMakeLists.txt)
-target_link_libraries(camera_calib ${OpenCV_LIBS})
+target_link_libraries(camera_calib PRIVATE ${OpenCV_LIBS})
 
 cmake_policy(SET CMP0177 NEW)
-install(TARGETS camera_calib DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
+install(
+    DIRECTORY ${CMAKE_BINARY_DIR}/demos/camera_calib/Debug/ 
+    DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries/camera_calib
+)
