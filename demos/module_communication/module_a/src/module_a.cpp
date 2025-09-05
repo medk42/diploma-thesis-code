@@ -2,6 +2,7 @@
 #include "module_a/module_a_data_types.h"
 
 #include <sstream>
+#include <stdexcept>
 
 using namespace aergo::demo_modules_1::module_a;
 using namespace aergo::module;
@@ -20,7 +21,7 @@ small_message_counter_(0), gen_(), dist_(0, 255)
     if (large_fixed_allocator_ == nullptr || request_dynamic_allocator_ == nullptr)
     {
         logger->log(logging::LogType::ERROR, "Failed to create allocators.");
-        throw std::exception("Failed to create allocators.");
+        throw std::runtime_error("Failed to create allocators.");
     }
 }
 

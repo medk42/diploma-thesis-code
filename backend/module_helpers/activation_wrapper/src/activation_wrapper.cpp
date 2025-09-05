@@ -804,16 +804,27 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
 {
     
     auto& chosen_value = parameter_values_[message_wait_.param_id_][message_wait_.list_id_];
-    chosen_value.resize(0);
-    
-    chosen_value.insert(chosen_value.end(),
-            reinterpret_cast<const uint8_t*>(&message.data_len_),
-            reinterpret_cast<const uint8_t*>(&message.data_len_) + sizeof(uint64_t));
-    chosen_value.insert(chosen_value.end(), message.data_, message.data_ + message.data_len_);
-    
-    chosen_value.insert(chosen_value.end(),
-            reinterpret_cast<const uint8_t*>(&message.blob_count_),
-            reinterpret_cast<const uint8_t*>(&message.blob_count_) + sizeof(uint64_t));
+
+    std::vector<uint8_t> out;
+
+    // helper to append POD
+    auto append_pod = [&](const auto& v) {
+        const uint8_t* p = reinterpret_cast<const uint8_t*>(&v);
+        out.insert(out.end(), p, p + sizeof(v));
+    };
+
+    uint64_t message_data_len = (message.data_ == nullptr) ? 0 : message.data_len_;
+
+    // data_len_
+    append_pod(message_data_len);
+
+    // inline data
+    if (message_data_len > 0) {
+        out.insert(out.end(), message.data_, message.data_ + message_data_len);
+    }
+
+    // blob_count_
+    append_pod(message.blob_count_);
 
     for (uint64_t blob_id = 0; blob_id < message.blob_count_; ++blob_id)
     {
@@ -822,19 +833,25 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
             uint64_t blob_size = message.blobs_[blob_id].size();
             uint8_t* blob_data = message.blobs_[blob_id].data();
 
-            chosen_value.insert(chosen_value.end(),
-                reinterpret_cast<const uint8_t*>(&blob_size),
-                reinterpret_cast<const uint8_t*>(&blob_size) + sizeof(uint64_t));
-            chosen_value.insert(chosen_value.end(), blob_data, blob_data + blob_size);
+            if (blob_data == nullptr)
+            {
+                blob_size = 0;
+            }
+
+            append_pod(blob_size);
+            if (blob_size > 0)
+            {
+                out.insert(out.end(), blob_data, blob_data + blob_size);
+            }
         }
         else
         {
             uint64_t blob_size = 0;
-            chosen_value.insert(chosen_value.end(),
-                reinterpret_cast<const uint8_t*>(&blob_size),
-                reinterpret_cast<const uint8_t*>(&blob_size) + sizeof(uint64_t));
+            append_pod(blob_size);
         }
     }
+
+    chosen_value = std::move(out);
 
     message_wait_.expected_.store(false, std::memory_order_release);
 }

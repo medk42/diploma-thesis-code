@@ -3,6 +3,8 @@
 
 #include "pen_calibration_helper.h"
 
+#include <optional>
+
 using namespace aergo::pen_calibration::helper;
 
 namespace aergo::pen_tracking
