@@ -162,11 +162,13 @@ int main(int argc, char** argv)
         log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 1");
     }
 
-    aergo::module::ChannelIdentifier channel_id_a {0, 0}; // camera module publish channel
+    
+
+    aergo::module::ChannelIdentifier channel_id {0, 0}; // camera module publish channel
 
     aergo::module::InputChannelMapInfo::IndividualChannelInfo camera_channel_info
     {
-        .channel_identifier_ = &channel_id_a,
+        .channel_identifier_ = &channel_id,
         .channel_identifier_count_ = 1
     };
 
@@ -187,6 +189,20 @@ int main(int argc, char** argv)
     else
     {
         log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 0");
+    }
+
+
+
+    channel_id = {1, 0}; // camera calibration module publish channel
+
+    if (!core.addModule(2, channel_map_info)) // add pen tracking module
+    {
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add module with ID 2");
+        return -1;
+    }
+    else
+    {
+        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 2");
     }
 
     int64_t camera_id = 0;
