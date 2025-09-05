@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 namespace aergo::core::memory_allocation
 {
     class IMemoryAllocator

@@ -127,6 +127,7 @@ void printLoadedModules(logging::ConsoleLogger& logger, Core& core)
 
 #include "module_common/dll_module_wrapper.h" // TODO remove
 #include "module_helpers/activation_wrapper/activable_module.h" // TODO remove
+#include <cstring> // TODO remove
 
 int main(int argc, char** argv)
 {

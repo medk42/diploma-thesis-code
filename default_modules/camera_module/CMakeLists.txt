@@ -33,7 +33,6 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
     POSITION_INDEPENDENT_CODE ON
 )
-# target_link_options("${MODULE_NAME}" PRIVATE /NOIMPLIB)
 
 
 cmake_policy(SET CMP0177 NEW)

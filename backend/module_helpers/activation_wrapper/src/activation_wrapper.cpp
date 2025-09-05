@@ -4,6 +4,7 @@
 
 
 #include <unordered_map>
+#include <cstring>
 
 
 
@@ -483,7 +484,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
             }
             else if (message_wait_.expected_.load(std::memory_order_relaxed))
             {
-                message_wait_.expected_.store(false, std::memory_order::memory_order_release);
+                message_wait_.expected_.store(false, std::memory_order_release);
                 response.result_ = message_types::Result::SUCCESS;
             }
             else
@@ -644,7 +645,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
     {
         message_wait_.param_id_ = request.param_id_;
         message_wait_.list_id_ = list_id;
-        message_wait_.expected_.store(true, std::memory_order::memory_order_release);
+        message_wait_.expected_.store(true, std::memory_order_release);
 
         if (param.custom_channel_type_ == params::CustomChannelType::REQUEST)
         {
@@ -835,7 +836,7 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
         }
     }
 
-    message_wait_.expected_.store(false, std::memory_order::memory_order_release);
+    message_wait_.expected_.store(false, std::memory_order_release);
 }
 
 
