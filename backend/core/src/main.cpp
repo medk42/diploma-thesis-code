@@ -150,17 +150,43 @@ int main(int argc, char** argv)
 
     printLoadedModules(logger, core);
     
-    
+
     ///  TODO REMOVE START
 
-    if (!core.addModule(1, {})) // add camera module
+    uint64_t camera_module_id, camera_calibration_module_id, pen_tracking_module_id;
+
+    if (core.getLoadedModulesCount() != 3)
     {
-        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add module with ID 1");
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to create all 3 modules");
+        return -1;
+    }
+
+    for (uint64_t i = 0; i < 3; ++i)
+    {
+        auto name = core.getLoadedModulesInfo(i)->display_name_;
+        if (name == std::string("Camera Input Module"))
+        {
+            camera_module_id = i;   
+        }
+        if (name == std::string("Camera Calibration Module"))
+        {
+            camera_calibration_module_id = i;
+        }
+        if (name == std::string("Pen Tracking Module"))
+        {
+            pen_tracking_module_id = i;
+        }
+    }
+    
+
+    if (!core.addModule(camera_module_id, {})) // add camera module
+    {
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add camera module");
         return -1;
     }
     else
     {
-        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 1");
+        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added camera module");
     }
 
     
@@ -182,28 +208,28 @@ int main(int argc, char** argv)
         .request_consumer_info_count_ = 0
     };
 
-    if (!core.addModule(0, channel_map_info)) // add camera calibration module
+    if (!core.addModule(camera_calibration_module_id, channel_map_info)) // add camera calibration module
     {
-        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add module with ID 0");
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add camera calibration module");
         return -1;
     }
     else
     {
-        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 0");
+        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added camera calibration module");
     }
 
 
 
     channel_id = {1, 0}; // camera calibration module publish channel
 
-    if (!core.addModule(2, channel_map_info)) // add pen tracking module
+    if (!core.addModule(pen_tracking_module_id, channel_map_info)) // add pen tracking module
     {
-        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add module with ID 2");
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add pen tracking module");
         return -1;
     }
     else
     {
-        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added module with ID 2");
+        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added pen tracking module");
     }
 
     int64_t camera_id = 0;

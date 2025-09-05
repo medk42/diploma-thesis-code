@@ -1,0 +1,16 @@
+{
+  "name": "aergo-core",
+  "version-string": "0.1.0",
+  "dependencies": [
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["contrib"]
+    },
+    "eigen3",
+    "ceres",
+    "catch2",
+    "pangolin",
+    "simpleble"
+  ]
+}

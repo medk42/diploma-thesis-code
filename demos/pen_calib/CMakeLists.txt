@@ -1,5 +1,5 @@
 # Find OpenCV
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV 4 REQUIRED world)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # Find Ceres Solver
@@ -15,7 +15,7 @@ add_executable(pen_calib
 target_include_directories(pen_calib PRIVATE include)
 
 # Link against OpenCV (already found by the root CMakeLists.txt)
-target_link_libraries(pen_calib ${OpenCV_LIBS} Ceres::ceres)
+target_link_libraries(pen_calib opencv_world Ceres::ceres)
 
 cmake_policy(SET CMP0177 NEW)
 install(
