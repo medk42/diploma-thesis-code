@@ -14,7 +14,7 @@ using namespace aergo::module;
 
 static constexpr communication_channel::Producer pen_tracking_module_publish_producers[] = {
     { 
-        .channel_type_identifier_ = "pen_3d_pose", // TODO finish
+        .channel_type_identifier_ = "pen_3d_pose/v1:struct{tvec:double[3],rvec:double[3]}",
         .display_name_ = "Calibrated Camera Frame", 
         .display_description_ = "Output channel for calibrated camera frames in 8-bit BGR format with 3 channels, extended with camera calibration data (camera matrix and distortion coefficients) for further OpenCV processing.",
     }
