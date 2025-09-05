@@ -5,6 +5,7 @@
 #include <memory>
 #include <functional>
 #include <chrono>
+#include <string>
 
 namespace aergo::module
 {
@@ -16,8 +17,8 @@ namespace aergo::module
         using AllocatorPtr = std::unique_ptr<IAllocator, std::function<void(IAllocator*)>>;
 
         /// @brief Log message of specific type (info, warning, error).
+        void log(logging::LogType type, std::string message);
         void log(logging::LogType type, const char* message);
-
 
 
         /// @brief Publish message to channel "publish_producer_id".

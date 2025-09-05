@@ -21,52 +21,8 @@ CameraCalibrationModule::CameraCalibrationModule(const char* data_path, aergo::m
         return;
     }
 
-    auto& data_path_str = getDataPath();
-    if (data_path_str.empty())
+    if (!loadCameraCalibration())
     {
-        log(aergo::module::logging::LogType::ERROR, "Camera calibration module data path is empty");
-        return;
-    }
-
-    std::filesystem::path base(data_path_str);
-    auto path_calibration_data = base / "camera_parameters.xml";
-
-    if (!std::filesystem::exists(path_calibration_data))
-    {
-        log(aergo::module::logging::LogType::ERROR, "Camera calibration data file does not exist: " + path_calibration_data.string());
-        return;
-    }
-
-    cv::FileStorage fs(path_calibration_data.string(), cv::FileStorage::READ);
-    if (!fs.isOpened())
-    {
-        log(aergo::module::logging::LogType::ERROR, "Failed to open camera calibration data file with OpenCV");
-        return;
-    }
-
-
-    try
-    {
-        fs["CAMERA_MATRIX"] >> camera_matrix_;
-        fs["DISTORTION_COEFFICIENTS"] >> distortion_coefficients_;
-        fs.release();
-    }
-    catch (const cv::Exception& e)
-    {
-        fs.release();
-        log(aergo::module::logging::LogType::ERROR, std::string("Failed to read camera calibration data from file: ") + e.what());
-        return;
-    }
-
-    if (camera_matrix_.empty() || camera_matrix_.rows != 3 || camera_matrix_.cols != 3 || camera_matrix_.type() != CV_64F)
-    {
-        log(aergo::module::logging::LogType::ERROR, "Invalid camera matrix in calibration data");
-        return;
-    }
-
-    if (distortion_coefficients_.empty() || distortion_coefficients_.rows != 1 || (distortion_coefficients_.cols != 5) || distortion_coefficients_.type() != CV_64F)
-    {
-        log(aergo::module::logging::LogType::ERROR, "Invalid distortion coefficients in calibration data");
         return;
     }
 
@@ -148,4 +104,60 @@ void CameraCalibrationModule::processMessage(uint32_t subscribe_consumer_id, aer
     };
     
     sendMessage(0, calibrated_image_msg); // publish on channel 0
+}
+
+
+
+bool CameraCalibrationModule::loadCameraCalibration()
+{
+    auto& data_path_str = getDataPath();
+    if (data_path_str.empty())
+    {
+        log(aergo::module::logging::LogType::ERROR, "Camera calibration module data path is empty");
+        return false;
+    }
+
+    std::filesystem::path base(data_path_str);
+    auto path_calibration_data = base / "camera_parameters.xml";
+
+    if (!std::filesystem::exists(path_calibration_data))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Camera calibration data file does not exist: " + path_calibration_data.string());
+        return false;
+    }
+
+    cv::FileStorage fs(path_calibration_data.string(), cv::FileStorage::READ);
+    if (!fs.isOpened())
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to open camera calibration data file with OpenCV");
+        return false;
+    }
+
+
+    try
+    {
+        fs["CAMERA_MATRIX"] >> camera_matrix_;
+        fs["DISTORTION_COEFFICIENTS"] >> distortion_coefficients_;
+        fs.release();
+    }
+    catch (const cv::Exception& e)
+    {
+        fs.release();
+        log(aergo::module::logging::LogType::ERROR, std::string("Failed to read camera calibration data from file: ") + e.what());
+        return false;
+    }
+
+    if (camera_matrix_.empty() || camera_matrix_.rows != 3 || camera_matrix_.cols != 3 || camera_matrix_.type() != CV_64F)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Invalid camera matrix in calibration data");
+        return false;
+    }
+
+    if (distortion_coefficients_.empty() || distortion_coefficients_.rows != 1 || (distortion_coefficients_.cols != 5) || distortion_coefficients_.type() != CV_64F)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Invalid distortion coefficients in calibration data");
+        return false;
+    }
+
+    return true;
 }

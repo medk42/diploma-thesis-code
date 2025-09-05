@@ -50,6 +50,13 @@ void BaseModule::log(logging::LogType type, const char* message)
 
 
 
+void BaseModule::log(logging::LogType type, std::string message)
+{
+    logger_->log(type, message.c_str());
+}
+
+
+
 void BaseModule::sendMessage(uint32_t publish_producer_id, message::MessageHeader message)
 {
     message.timestamp_ns_ = nowNs();
