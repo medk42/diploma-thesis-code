@@ -111,6 +111,7 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
 
     if (!result.success) // image not detected
     {
+        log(aergo::module::logging::LogType::INFO, "MODULE,PEN,INTERNAL,INFO=\"tracking fail, processing: " + std::to_string(processing_time_ms) + " ms\"\n\n\n\n\n");
         return;
     }
 
@@ -127,9 +128,11 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
         .blob_count_ = 0
     };
 
-    log(logging::LogType::INFO, "Pen tracking module detected pen at (" + 
-        std::to_string(tvec.at<double>(0)) + ", " + std::to_string(tvec.at<double>(1)) + ", " + std::to_string(tvec.at<double>(2)) + 
-        ") m, processing time: " + std::to_string(processing_time_ms) + " ms\n\n\n\n\n");
+    std::string msg = "Detected at " + 
+        std::to_string(tvec.at<double>(0) * 1000) + ", " + std::to_string(tvec.at<double>(1) * 1000) + ", " + std::to_string(tvec.at<double>(2) * 1000) + 
+        ") mm, processing: " + std::to_string(processing_time_ms) + " ms";
+
+    log(aergo::module::logging::LogType::INFO, "MODULE,PEN,PUBLISH,INFO=\"" + msg + "\"\n\n\n\n\n");
 
     sendMessage(0, pen_pose_message); // publish on channel 0
 }

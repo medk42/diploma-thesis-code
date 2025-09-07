@@ -180,6 +180,10 @@ void CameraModule::captureLoop()
             .blob_count_ = 1
         };
 
+        log(aergo::module::logging::LogType::INFO, "MODULE,CAMERA,PUBLISH,INFO=\"" + std::to_string(frame_header_.width_) + "x" + std::to_string(frame_header_.height_) + "\"");
+
         sendMessage(0, msg); // publish on channel 0
+
+        // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 }
