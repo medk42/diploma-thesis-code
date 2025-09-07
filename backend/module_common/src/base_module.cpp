@@ -60,6 +60,9 @@ void BaseModule::log(logging::LogType type, std::string message)
 void BaseModule::sendMessage(uint32_t publish_producer_id, message::MessageHeader message)
 {
     message.timestamp_ns_ = nowNs();
+
+    std::string log_msg = "SEND,MSG," + std::to_string(module_id_) + "," + std::to_string(publish_producer_id) + "," + std::to_string(message.data_len_) + "," + std::to_string(message.blob_count_) + "," + std::to_string(message.timestamp_ns_);
+    log(logging::LogType::INFO, log_msg.c_str());
     
     core_->sendMessage(
         {
@@ -77,6 +80,10 @@ void BaseModule::sendResponse(uint32_t response_producer_id, ChannelIdentifier t
     message.id_ = request_id;
     message.timestamp_ns_ = nowNs();
 
+    std::string log_msg = "SEND,RESP," + std::to_string(module_id_) + "," + std::to_string(response_producer_id) + "," + std::to_string(target_channel.producer_module_id_) + "," + 
+    std::to_string(target_channel.producer_channel_id_) + "," + std::to_string(message.data_len_) + "," + std::to_string(message.blob_count_) + "," + std::to_string(message.id_) + "," + std::to_string(message.timestamp_ns_);
+    log(logging::LogType::INFO, log_msg.c_str());
+
     core_->sendResponse(
         {
             .producer_module_id_ = module_id_, 
@@ -93,6 +100,10 @@ uint64_t BaseModule::sendRequest(uint32_t request_consumer_id, ChannelIdentifier
 {
     message.id_ = request_id_++;
     message.timestamp_ns_ = nowNs();
+
+    std::string log_msg = "SEND,REQ," + std::to_string(module_id_) + "," + std::to_string(request_consumer_id) + "," + std::to_string(target_channel.producer_module_id_) + "," + 
+    std::to_string(target_channel.producer_channel_id_) + "," + std::to_string(message.data_len_) + "," + std::to_string(message.blob_count_) + "," + std::to_string(message.id_) + "," + std::to_string(message.timestamp_ns_);
+    log(logging::LogType::INFO, log_msg.c_str());
 
     core_->sendRequest(
         {

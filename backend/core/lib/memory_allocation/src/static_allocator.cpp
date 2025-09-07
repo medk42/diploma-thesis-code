@@ -37,7 +37,7 @@ aergo::module::ISharedData* StaticAllocator::allocate(uint64_t number_of_bytes) 
 void StaticAllocator::addOwner(aergo::module::ISharedData* data) noexcept { addOwnerImpl(data); }
 void StaticAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { removeOwnerImpl(data); }
 
-
+#include <sstream>
 
 aergo::module::ISharedData* StaticAllocator::allocateImpl()
 {
@@ -45,6 +45,7 @@ aergo::module::ISharedData* StaticAllocator::allocateImpl()
 
     if (free_memory_slot_ids_.empty())
     {
+        log(aergo::module::logging::LogType::WARNING, "ALLOC,STATIC,FAILED");
         return nullptr;
     }
 
@@ -52,6 +53,9 @@ aergo::module::ISharedData* StaticAllocator::allocateImpl()
     free_memory_slot_ids_.pop_front();
 
     allocated_memory_slots_.insert((size_t)(&preallocated_data_[free_id]));
+    
+    std::string log_msg = "ALLOC,STATIC,SUCCESS," + std::to_string(free_id) + "," + std::to_string(preallocated_data_[free_id].size()) + ",FREE," + std::to_string(free_memory_slot_ids_.size()) + ",ALLOCATED," + std::to_string(allocated_memory_slots_.size());
+    log(aergo::module::logging::LogType::INFO, log_msg.c_str());
 
     return &preallocated_data_[free_id];
 }
@@ -72,6 +76,8 @@ void StaticAllocator::addOwnerImpl(aergo::module::ISharedData* data)
 
     if (data_core && data_core->valid())
     {
+        std::string log_msg = "ADD_OWNER,STATIC," + std::to_string(data_core->id()) + "," + std::to_string(data_core->counter());
+        log(aergo::module::logging::LogType::INFO, log_msg.c_str());
         data_core->increaseCounter();
     }
     else if (!data)
@@ -104,9 +110,13 @@ void StaticAllocator::removeOwnerImpl(aergo::module::ISharedData* data)
 
     if (data_core && data_core->valid())
     {
+        std::string log_msg = "REMOVE_OWNER,STATIC," + std::to_string(data_core->id()) + "," + std::to_string(data_core->counter());
+        log(aergo::module::logging::LogType::INFO, log_msg.c_str());
         data_core->decreaseCounter();
         if (data_core->counter() == 0)
         {
+            std::string log_msg = "FREE,STATIC,SUCCESS," + std::to_string(data_core->id());
+            log(aergo::module::logging::LogType::INFO, log_msg.c_str());
             free_memory_slot_ids_.push_back(data_core->id());
             allocated_memory_slots_.erase((std::size_t)data);
         }
