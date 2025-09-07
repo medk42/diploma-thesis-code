@@ -238,7 +238,7 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
 
     std::string log_msg = "RECV," + std::string(type == aergo::module::IModule::ProcessingType::MESSAGE ? "MSG" : (type == aergo::module::IModule::ProcessingType::REQUEST ? "REQ" : "RESP")) + "," + 
     std::to_string(source_channel.producer_module_id_) + "," + std::to_string(source_channel.producer_channel_id_) + "," + std::to_string(module_id_) + "," + std::to_string(local_channel_id) + "," +
-    std::to_string((int)decision) + "," + std::string((queue_full ? "Q_FULL" : "Q_GOOD")) + "," +
+    std::to_string((int)decision) + "," + std::string((queue_full ? "Q_FULL" : "Q_GOOD")) + "," + std::to_string(target_queue.size()) + "," + std::to_string(capacity) + "," +
     std::to_string(message.data_len_) + "," + std::to_string(message.blob_count_) + "," + std::to_string(message.id_) + "," + std::to_string(message.timestamp_ns_);
     logger_->log(logging::LogType::INFO, log_msg.c_str());
 
