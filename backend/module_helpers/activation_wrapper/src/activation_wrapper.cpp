@@ -424,7 +424,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
                 return {response, {}};
             }
 
-            activation_task_ = std::make_unique<AsyncTask>([this](std::atomic<bool>& cancel_flag) { return activable_module_ref_->activate(parameter_values_, cancel_flag); });
+            activation_task_ = std::make_unique<AsyncTask<bool>>([this](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) { return activable_module_ref_->activate(parameter_values_, cancel_flag, cancelled); });
             activation_task_->start();
             response.result_ = message_types::Result::RUNNING;
             response.progress_ = activable_module_ref_->getActivationProgress();
@@ -438,7 +438,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
                 return {response, {}};
             }
 
-            activation_task_ = std::make_unique<AsyncTask>([this](std::atomic<bool>& cancel_flag) { return activable_module_ref_->deactivate(cancel_flag); });
+            activation_task_ = std::make_unique<AsyncTask<bool>>([this](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) { return activable_module_ref_->deactivate(cancel_flag, cancelled); });
             activation_task_->start();
             response.result_ = message_types::Result::RUNNING;
             response.progress_ = activable_module_ref_->getActivationProgress();
@@ -788,7 +788,7 @@ void ActivationWrapper::handleActivationTask()
         auto state = activation_task_->getState();
         if (state == AsyncTaskState::COMPLETED || state == AsyncTaskState::CANCELLED)
         {
-            if (state == AsyncTaskState::COMPLETED)
+            if (state == AsyncTaskState::COMPLETED && activation_task_->getResult()) // COMPLETED = task finished running; getResult() = task returned true, successfully performed activation/deactivation
             {
                 bool activated = activated_.load(std::memory_order_relaxed);
                 activated_.store(!activated, std::memory_order_release); // currently activated_ is false when activating, true when deactivating

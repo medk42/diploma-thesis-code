@@ -243,7 +243,8 @@ int main(int argc, char** argv)
     first_param_first.resize(sizeof(int64_t));
     memcpy(&first_param_first[0], &camera_id, sizeof(int64_t));
     std::atomic<bool> cancel_flag(false);
-    activable_module->activate(parameter_values, cancel_flag); 
+    std::atomic<bool> cancelled(false);
+    activable_module->activate(parameter_values, cancel_flag, cancelled); 
 
     /// TODO REMOVE END
 
@@ -258,7 +259,7 @@ int main(int argc, char** argv)
 
     /// TODO REMOVE START
 
-    activable_module->deactivate(cancel_flag);
+    activable_module->deactivate(cancel_flag, cancelled);
 
     /// TODO REMOVE END
 
