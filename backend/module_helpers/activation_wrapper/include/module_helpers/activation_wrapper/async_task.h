@@ -135,6 +135,6 @@ namespace aergo::module::helpers::activation_wrapper
     template <typename T>
     std::optional<T> AsyncTask<T>::getResult()
     {
-        return result_;
+        return std::move(result_);
     }
 }
