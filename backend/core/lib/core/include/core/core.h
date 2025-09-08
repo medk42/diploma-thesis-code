@@ -50,7 +50,8 @@ namespace aergo::core
         /// For example if we create A,B,C,D,E -> 5; if we now remove C, D -> 5; if we add F -> 6.
         uint64_t getCreatedModulesCount();
 
-        /// @brief ID of the module mapping state. ID changes when modules get created or destroyed.
+        /// @brief ID of the module mapping state. ID updates when modules get created or destroyed. Each update increases the ID by 1.
+        /// Can be used to detect changes in module mapping and update UI.
         virtual uint64_t getModulesMappingStateId() noexcept override final;
 
         /// @brief Get existing publish channels for specified channel type identifier. 
