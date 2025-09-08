@@ -91,6 +91,7 @@ namespace aergo::core
 
         virtual bool removeModuleById(uint64_t id, bool recursive) noexcept override final;
         virtual aergo::module::RunningModuleInfo getRunningModulesInfo(uint64_t running_module_id) noexcept override final;  // wrapper, does not lock
+        virtual aergo::module::message::SharedDataBlob getRunningModulesChannelMap(uint64_t running_module_id) noexcept override final; // wrapper, does not lock
         virtual uint64_t getRunningModulesCount() noexcept override final; // wrapper, does not lock
         virtual aergo::module::message::SharedDataBlob collectDependencies(uint64_t id) noexcept override final; // wrapper, does not lock
         virtual aergo::module::message::SharedDataBlob getExistingPublishChannelsByName(const char* channel_type_identifier) noexcept override final; // wrapper, does not lock

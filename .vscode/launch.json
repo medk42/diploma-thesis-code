@@ -115,10 +115,10 @@
             "name": "core_test_1",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/backend/core/lib/core/tests/Debug/core_tests.exe",
+            "program": "${workspaceFolder}/build-core-windows/backend/core/lib/core/tests/Debug/core_tests.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/backend/core/lib/core/tests/Debug/",
+            "cwd": "${workspaceFolder}/build-core-windows/backend/core/lib/core/tests/",
             "environment": [],
             "externalConsole": true,
             "preLaunchTask": "Project: Build and Install"
