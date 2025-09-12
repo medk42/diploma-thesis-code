@@ -135,7 +135,10 @@ void FrontendApp::loadUiFromState()
         if (frontend_state_->known_running_modules_[i])
         {
             const aergo::module::ModuleInfo* module_info = frontend_state_->known_running_modules_info_[i];
-            activation_ui_->addModule(i, module_info->display_name_, module_info->display_description_, false, false, {});
+            if (!module_info->auto_create_)
+            {
+                activation_ui_->addModule(i, module_info->display_name_, module_info->display_description_, false, false, {});
+            }
         }
     }
 
@@ -463,10 +466,13 @@ void FrontendApp::refreshRunningModules()
             if (running_info.exists_)
             {
                 auto activation_it = activation_channels_map.find(i);
-                bool can_activate = activation_it != activation_channels_map.end();
+                bool can_activate = activation_it != activation_channels_map.end() && !running_info.module_info_->auto_create_;
                 
                 std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription> empty_params;
-                activation_ui_->addModule(i, running_info.module_info_->display_name_, running_info.module_info_->display_description_, can_activate, can_activate, empty_params);
+                if (!running_info.module_info_->auto_create_)
+                {
+                    activation_ui_->addModule(i, running_info.module_info_->display_name_, running_info.module_info_->display_description_, can_activate, can_activate, empty_params);
+                }
 
 
                 // update state
