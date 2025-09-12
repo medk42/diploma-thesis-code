@@ -88,6 +88,7 @@ body {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
     overflow: hidden;
 }
 
@@ -114,9 +115,12 @@ body {
 
 
 .module-list {
-    width: 28%;
-    min-width: 280px;
-    max-width: 420px;
+    /* kill the responsive %/min/max */
+    flex: 0 0 360px !important;  /* fixed column: no grow, no shrink, 360px basis */
+    width: 360px !important;     /* belt-and-suspenders vs inline style */
+    max-width: none !important;
+    min-width: 0 !important;
+
     border-right: 1px solid #212833;
     background: #0d1116;
     display: flex;
