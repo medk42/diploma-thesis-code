@@ -35,18 +35,18 @@ Core::~Core()
 
 
 
-void Core::initialize(const char* modules_dir, const char* data_dir)
+bool Core::initialize(const char* modules_dir, const char* data_dir)
 {
     std::unique_lock<std::shared_mutex> lock(core_mutex_);
 
     if (initialized_)
     {
-        return;
+        return true; // already initialized, ignore subsequent calls
     }
     initialized_ = true;
 
     loadModules(modules_dir, data_dir);
-    autoCreateModules();
+    return autoCreateModules();
 }
 
 
@@ -119,7 +119,7 @@ void Core::loadModules(const char* modules_dir, const char* data_dir)
 
 
 
-void Core::autoCreateModules()
+bool Core::autoCreateModules()
 {
     aergo::module::InputChannelMapInfo empty_channel_info
     {
@@ -164,6 +164,7 @@ void Core::autoCreateModules()
                 {
                     std::string failure_message = std::string("Failed to auto-create module: ") + loaded_modules_[i].getModuleUniqueName();
                     log(aergo::module::logging::LogType::WARNING, failure_message.c_str());
+                    return false;
                 }
             }
             else
@@ -173,6 +174,8 @@ void Core::autoCreateModules()
             }
         }
     }
+
+    return true;
 }
 
 

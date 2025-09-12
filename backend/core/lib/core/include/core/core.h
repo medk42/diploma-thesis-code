@@ -28,7 +28,8 @@ namespace aergo::core
         /// For example "${modules_dir}/module_a.dll" will have data directory pointed to "${data_dir}/module_a". Auto-create modules with flag auto_create_.
         /// Only call this method once. Subsequent calls are ignored.
         /// Modules are auto-created after loading all modules (so getLoadedModulesInfo and getLoadedModulesCount will work correctly in module constructors).
-        void initialize(const char* modules_dir, const char* data_dir);
+        /// @return true if auto-create modules were created successfully, false if auto-create module creation failed.
+        bool initialize(const char* modules_dir, const char* data_dir);
 
         virtual void sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override final;
         virtual void sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept override final;
@@ -103,7 +104,7 @@ namespace aergo::core
 
         void log(aergo::module::logging::LogType log_type, const char* message);
         void loadModules(const char* modules_dir, const char* data_dir);
-        void autoCreateModules();
+        bool autoCreateModules();
         uint64_t getNextModuleId();
         void registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_, existing_response_channels_, existing_subscribe_auto_all_channels_ and existing_request_auto_all_channels_
 

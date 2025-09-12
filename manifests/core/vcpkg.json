@@ -9,6 +9,8 @@
     },
     "ceres",
     "catch2",
-    "simpleble"
+    "simpleble",
+    "wt",
+    "libharu"
   ]
 }

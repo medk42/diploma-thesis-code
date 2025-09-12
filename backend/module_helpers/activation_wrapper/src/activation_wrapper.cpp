@@ -49,7 +49,7 @@ ActivationWrapper::ActivationWrapper(aergo::module::IModule* module, aergo::modu
         
         std::string channel_type_identifier = module_info.response_producers_[response_producer_id].channel_type_identifier_;
 
-        if (channel_type_identifier == aergo::module::helpers::activation_wrapper::message_types::resp_type_identifier)
+        if (channel_type_identifier == aergo::module::helpers::activation_wrapper::message_types::activation_response_producer.channel_type_identifier_)
         {
             expected_response_producer_id_ = response_producer_id;
             found = true;

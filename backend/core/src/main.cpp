@@ -125,9 +125,9 @@ void printLoadedModules(logging::ConsoleLogger& logger, Core& core)
     }
 }
 
-#include "module_common/dll_module_wrapper.h" // TODO remove
-#include "module_helpers/activation_wrapper/activable_module.h" // TODO remove
-#include <cstring> // TODO remove
+// #include "module_common/dll_module_wrapper.h" // TODO remove
+// #include "module_helpers/activation_wrapper/activable_module.h" // TODO remove
+// #include <cstring> // TODO remove
 
 int main(int argc, char** argv)
 {
@@ -146,105 +146,109 @@ int main(int argc, char** argv)
     log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Data directory: " << data_dir);
     
     Core core(&logger);
-    core.initialize(module_dir.c_str(), data_dir.c_str());
+    if (!core.initialize(module_dir.c_str(), data_dir.c_str()))
+    {
+        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to initialize core");
+        return -1;
+    }
 
     printLoadedModules(logger, core);
     
 
     ///  TODO REMOVE START
 
-    uint64_t camera_module_id, camera_calibration_module_id, pen_tracking_module_id;
+    // uint64_t camera_module_id, camera_calibration_module_id, pen_tracking_module_id;
 
-    if (core.getLoadedModulesCount() != 3)
-    {
-        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to create all 3 modules");
-        return -1;
-    }
+    // if (core.getLoadedModulesCount() != 3)
+    // {
+    //     log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to create all 3 modules");
+    //     return -1;
+    // }
 
-    for (uint64_t i = 0; i < 3; ++i)
-    {
-        auto name = core.getLoadedModulesInfo(i)->display_name_;
-        if (name == std::string("Camera Input Module"))
-        {
-            camera_module_id = i;   
-        }
-        if (name == std::string("Camera Calibration Module"))
-        {
-            camera_calibration_module_id = i;
-        }
-        if (name == std::string("Pen Tracking Module"))
-        {
-            pen_tracking_module_id = i;
-        }
-    }
+    // for (uint64_t i = 0; i < 3; ++i)
+    // {
+    //     auto name = core.getLoadedModulesInfo(i)->display_name_;
+    //     if (name == std::string("Camera Input Module"))
+    //     {
+    //         camera_module_id = i;   
+    //     }
+    //     if (name == std::string("Camera Calibration Module"))
+    //     {
+    //         camera_calibration_module_id = i;
+    //     }
+    //     if (name == std::string("Pen Tracking Module"))
+    //     {
+    //         pen_tracking_module_id = i;
+    //     }
+    // }
     
 
-    if (!core.addModule(camera_module_id, {})) // add camera module
-    {
-        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add camera module");
-        return -1;
-    }
-    else
-    {
-        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added camera module");
-    }
+    // if (!core.addModule(camera_module_id, {})) // add camera module
+    // {
+    //     log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add camera module");
+    //     return -1;
+    // }
+    // else
+    // {
+    //     log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added camera module");
+    // }
 
     
 
-    aergo::module::ChannelIdentifier channel_id {0, 0}; // camera module publish channel
+    // aergo::module::ChannelIdentifier channel_id {0, 0}; // camera module publish channel
 
-    aergo::module::InputChannelMapInfo::IndividualChannelInfo camera_channel_info
-    {
-        .channel_identifier_ = &channel_id,
-        .channel_identifier_count_ = 1
-    };
+    // aergo::module::InputChannelMapInfo::IndividualChannelInfo camera_channel_info
+    // {
+    //     .channel_identifier_ = &channel_id,
+    //     .channel_identifier_count_ = 1
+    // };
 
-    aergo::module::InputChannelMapInfo channel_map_info 
-    {
-        .subscribe_consumer_info_ = &camera_channel_info,
-        .subscribe_consumer_info_count_ = 1,
+    // aergo::module::InputChannelMapInfo channel_map_info 
+    // {
+    //     .subscribe_consumer_info_ = &camera_channel_info,
+    //     .subscribe_consumer_info_count_ = 1,
 
-        .request_consumer_info_ = nullptr,
-        .request_consumer_info_count_ = 0
-    };
+    //     .request_consumer_info_ = nullptr,
+    //     .request_consumer_info_count_ = 0
+    // };
 
-    if (!core.addModule(camera_calibration_module_id, channel_map_info)) // add camera calibration module
-    {
-        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add camera calibration module");
-        return -1;
-    }
-    else
-    {
-        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added camera calibration module");
-    }
+    // if (!core.addModule(camera_calibration_module_id, channel_map_info)) // add camera calibration module
+    // {
+    //     log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add camera calibration module");
+    //     return -1;
+    // }
+    // else
+    // {
+    //     log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added camera calibration module");
+    // }
 
 
 
-    channel_id = {1, 0}; // camera calibration module publish channel
+    // channel_id = {1, 0}; // camera calibration module publish channel
 
-    if (!core.addModule(pen_tracking_module_id, channel_map_info)) // add pen tracking module
-    {
-        log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add pen tracking module");
-        return -1;
-    }
-    else
-    {
-        log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added pen tracking module");
-    }
+    // if (!core.addModule(pen_tracking_module_id, channel_map_info)) // add pen tracking module
+    // {
+    //     log(logger, aergo::module::logging::LogType::ERROR, std::stringstream() << "Failed to add pen tracking module");
+    //     return -1;
+    // }
+    // else
+    // {
+    //     log(logger, aergo::module::logging::LogType::INFO, std::stringstream() << "Added pen tracking module");
+    // }
 
-    int64_t camera_id = 0;
+    // int64_t camera_id = 0;
 
-    auto module_info = core.getCreatedModulesInfo(0);
-    auto wrapper = (aergo::module::dll::DllModuleWrapper*)module_info->module_.get();
-    auto activable_module = wrapper->getModule()->query<aergo::module::helpers::activation_wrapper::IActivableModule>();
-    std::vector<std::vector<std::vector<uint8_t>>> parameter_values; // no parameters for camera module
-    auto& first_param = parameter_values.emplace_back(); // one parameter group
-    auto& first_param_first = first_param.emplace_back(); // one parameter in group
-    first_param_first.resize(sizeof(int64_t));
-    memcpy(&first_param_first[0], &camera_id, sizeof(int64_t));
-    std::atomic<bool> cancel_flag(false);
-    std::atomic<bool> cancelled(false);
-    activable_module->activate(parameter_values, cancel_flag, cancelled); 
+    // auto module_info = core.getCreatedModulesInfo(0);
+    // auto wrapper = (aergo::module::dll::DllModuleWrapper*)module_info->module_.get();
+    // auto activable_module = wrapper->getModule()->query<aergo::module::helpers::activation_wrapper::IActivableModule>();
+    // std::vector<std::vector<std::vector<uint8_t>>> parameter_values; // no parameters for camera module
+    // auto& first_param = parameter_values.emplace_back(); // one parameter group
+    // auto& first_param_first = first_param.emplace_back(); // one parameter in group
+    // first_param_first.resize(sizeof(int64_t));
+    // memcpy(&first_param_first[0], &camera_id, sizeof(int64_t));
+    // std::atomic<bool> cancel_flag(false);
+    // std::atomic<bool> cancelled(false);
+    // activable_module->activate(parameter_values, cancel_flag, cancelled); 
 
     /// TODO REMOVE END
 
@@ -259,7 +263,7 @@ int main(int argc, char** argv)
 
     /// TODO REMOVE START
 
-    activable_module->deactivate(cancel_flag, cancelled);
+    // activable_module->deactivate(cancel_flag, cancelled);
 
     /// TODO REMOVE END
 
