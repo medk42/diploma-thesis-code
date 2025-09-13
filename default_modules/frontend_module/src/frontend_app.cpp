@@ -141,6 +141,7 @@ void FrontendApp::loadUiFromState()
             }
         }
     }
+    // TODO here we only load the modules, but not activation!
 
     refreshRunningModules();
 
@@ -529,12 +530,26 @@ void FrontendApp::refreshRunningModules()
                     };
 
                     // TODO finish activation support
+                    // TODO first we design it as if we start with no running modules
+                    //     later we can add support for activating already running modules
                     base_module_->sendRequest(
                         ACTIVATION_REQUEST_ID,
                         aergo::module::ChannelIdentifier { i, activation_it->second },
                         header
                     );
+
+                    frontend_state_->known_running_modules_activation_data_.push_back(ActivationData { .is_activable_ = true, .waiting_for_parameters_ = true });
                 }
+                else
+                {
+                    frontend_state_->known_running_modules_activation_data_.push_back(ActivationData { .is_activable_ = false });
+                }
+            }
+            else
+            {   // module does not exist, but we need to keep the index
+                frontend_state_->known_running_modules_.push_back(false);
+                frontend_state_->known_running_modules_info_.push_back(nullptr);
+                frontend_state_->known_running_modules_activation_data_.push_back(ActivationData { .is_activable_ = false });
             }
         }
     }
@@ -687,8 +702,26 @@ void FrontendApp::processPendingActivationResponses()
         {
             if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::READ_ACTIVATION_PARAMETERS)
             {
-                base_module_->log(aergo::module::logging::LogType::INFO, "Received activation parameters from module " + std::to_string(response.running_module_index_) + ", success: " + std::to_string(response.success_) + ", data size: " + std::to_string(response.data_blob_.size()));
-                // TODO read activation data from data_blob_ and set it in the UI
+                if (response.running_module_index_ < frontend_state_->known_running_modules_activation_data_.size())
+                {
+                    auto& activation_data = frontend_state_->known_running_modules_activation_data_[response.running_module_index_];
+                    if (activation_data.is_activable_ && activation_data.waiting_for_parameters_)
+                    {
+                        std::string params_str(reinterpret_cast<const char*>(response.data_blob_.data()), response.data_blob_.size());
+                        activation_data.activation_parameters_ = std::move(aergo::module::helpers::activation_wrapper::params::ParameterList::fromString(params_str));
+                        activation_data.waiting_for_parameters_ = false;
+
+                        activation_ui_->setParameters(response.running_module_index_, activation_data.activation_parameters_.getParameters());
+                    }
+                    else
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Received activation parameters for module that is not activable or not waiting for parameters: " + std::to_string(response.running_module_index_));
+                    }
+                }
+                else
+                {
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "Received activation parameters for invalid module index: " + std::to_string(response.running_module_index_));
+                }
             }
             // TODO handle other response types
         }

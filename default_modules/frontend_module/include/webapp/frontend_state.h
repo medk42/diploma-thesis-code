@@ -57,6 +57,13 @@ namespace aergo::default_modules::frontend_module::webapp
         std::vector<uint8_t> data_blob_; // extra data from response, e.g. activation parameters
     };
 
+    struct ActivationData
+    {
+        bool is_activable_;
+        bool waiting_for_parameters_;
+        aergo::module::helpers::activation_wrapper::params::ParameterList activation_parameters_;
+    };
+
     struct FrontendState
     {
         std::mutex mutex_;
@@ -76,6 +83,7 @@ namespace aergo::default_modules::frontend_module::webapp
 
         std::vector<bool> known_running_modules_; // size should correspond to core_->getRunningModulesCount(), true if module exists, false if it was destroyed
         std::vector<const aergo::module::ModuleInfo*> known_running_modules_info_; // size should correspond to core_->getRunningModulesCount(), info of running module
+        std::vector<ActivationData> known_running_modules_activation_data_; // size should correspond to core_->getRunningModulesCount(), activation data of running module, is_activable_ is false if module does not support activation
         std::unordered_map<std::string, std::vector<ui::AddModuleUi::ChannelInfo>> running_modules_publish_channel_lookup_; // map of channel type to list of existing publish channels, used when creating modules
         std::unordered_map<std::string, std::vector<ui::AddModuleUi::ChannelInfo>> running_modules_response_channel_lookup_; // map of channel type to list of existing response channels, used when creating modules
 
