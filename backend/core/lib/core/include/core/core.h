@@ -153,6 +153,7 @@ namespace aergo::core
 
         std::shared_mutex core_mutex_;
         std::mutex add_remove_mutex_; // mutex to protect add/remove module operations
+        std::mutex allocator_mutex_;  // mutex to protect allocator creation/deletion
 
         logging::ILogger* logger_;
 

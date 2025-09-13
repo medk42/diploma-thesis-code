@@ -1213,12 +1213,13 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
 
 aergo::module::IAllocator* Core::createDynamicAllocator() noexcept
 {
-    std::unique_lock<std::shared_mutex> lock(core_mutex_);
-
     auto allocator = std::make_unique<memory_allocation::DynamicAllocator>(logger_);
     auto allocator_wrapper = std::make_unique<memory_allocation::AllocatorWrapper>(std::move(allocator));
     aergo::module::IAllocator* raw_ptr = allocator_wrapper.get();
-    allocators_.push_back(std::move(allocator_wrapper));
+    {
+        std::unique_lock<std::mutex> lock(allocator_mutex_);
+        allocators_.push_back(std::move(allocator_wrapper));
+    }
     return raw_ptr;
 }
 
@@ -1226,12 +1227,13 @@ aergo::module::IAllocator* Core::createDynamicAllocator() noexcept
 
 aergo::module::IAllocator* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
 {
-    std::unique_lock<std::shared_mutex> lock(core_mutex_);
-
     auto allocator = std::make_unique<memory_allocation::StaticAllocator>(slot_size_bytes, number_of_slots, logger_);
     auto allocator_wrapper = std::make_unique<memory_allocation::AllocatorWrapper>(std::move(allocator));
     aergo::module::IAllocator* raw_ptr = allocator_wrapper.get();
-    allocators_.push_back(std::move(allocator_wrapper));
+    {
+        std::unique_lock<std::mutex> lock(allocator_mutex_);
+        allocators_.push_back(std::move(allocator_wrapper));
+    }
     return raw_ptr;
 }
 
@@ -1239,7 +1241,7 @@ aergo::module::IAllocator* Core::createBufferAllocator(uint64_t slot_size_bytes,
 
 void Core::deleteAllocator(aergo::module::IAllocator* allocator) noexcept
 {
-    std::unique_lock<std::shared_mutex> lock(core_mutex_);
+    std::unique_lock<std::mutex> lock(allocator_mutex_);
 
     auto it = std::find_if(allocators_.begin(), allocators_.end(), [allocator](auto& ptr) { return allocator == ptr.get(); });
 
