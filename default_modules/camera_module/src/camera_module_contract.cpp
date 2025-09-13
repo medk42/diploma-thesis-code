@@ -42,7 +42,16 @@ static constexpr ModuleInfo module_info = {
 };
 
 static aergo::module::helpers::activation_wrapper::params::ParameterList parameters(std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription>{
-
+    {
+        .type_ = aergo::module::helpers::activation_wrapper::params::ParameterType::LONG,
+        .param_name_ = "Camera Index",
+        .param_desc_ = "Index of the camera to use (for use with OpenCV VideoCapture)",
+        .limit_min_ = true,
+        .limit_max_ = true,
+        .min_value_long_ = 0,
+        .max_value_long_ = 10,
+        .default_value_ = "0"
+    }
 });
 
 
