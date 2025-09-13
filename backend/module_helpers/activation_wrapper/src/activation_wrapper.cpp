@@ -12,10 +12,10 @@ using namespace aergo::module::helpers::activation_wrapper;
 using namespace aergo::module;
 
 
-ActivationWrapper::ActivationWrapper(aergo::module::IModule* module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_)
-: valid_(false), module_ref_(module), parameters_(parameters_), activated_(false), message_wait_{false, 0, 0}
+ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_)
+: valid_(false), module_ref_(std::move(module)), parameters_(parameters_), activated_(false), message_wait_{false, 0, 0}
 {
-    if (module_ref_ == nullptr || parameters_ == nullptr)
+    if (module_ref_.get() == nullptr || parameters_ == nullptr)
     {
         return;
     }
