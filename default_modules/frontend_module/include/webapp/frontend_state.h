@@ -5,7 +5,9 @@
 #include "ui/helper/parameter_value.h"
 #include "module_helpers/activation_wrapper/async_task.h"
 #include "ui/add_module_ui.h"
+#include "ui/activation_ui.h"
 #include "module_helpers/activation_wrapper/message_types.h"
+#include "module_common/base_module.h"
 
 #include <mutex>
 #include <vector>
@@ -46,7 +48,8 @@ namespace aergo::default_modules::frontend_module::webapp
     {
         NONE,
         CREATE_MODULE,
-        DESTROY_MODULE
+        DESTROY_MODULE,
+        LOAD_CUSTOM_VALUE
     };
 
     struct ActivationResponse
@@ -61,7 +64,10 @@ namespace aergo::default_modules::frontend_module::webapp
     {
         bool is_activable_;
         bool waiting_for_parameters_;
+        bool waiting_for_parameter_values_;
+        uint32_t activation_channel_id_; // channel id of the other module used for activation/deactivation requests and responses
         aergo::module::helpers::activation_wrapper::params::ParameterList activation_parameters_;
+        std::vector<std::vector<ui::helper::value_t>> parameter_values_; // current values of the module's parameters, indexed by parameter index and list index
     };
 
     struct FrontendState
@@ -70,6 +76,7 @@ namespace aergo::default_modules::frontend_module::webapp
         bool setup_done_ = false; // starts as false, set to true once setupState is done; used to load state from the core
 
         FrontendApp* active_app_ = nullptr;
+        aergo::module::BaseModule::AllocatorPtr allocator_; // allocator created for the active_app_, used to allocate memory for messages sent to activable modules
         
         FrontendScreen current_screen_ = FrontendScreen::SETUP_MODULES;
         
@@ -88,6 +95,9 @@ namespace aergo::default_modules::frontend_module::webapp
         std::unordered_map<std::string, std::vector<ui::AddModuleUi::ChannelInfo>> running_modules_response_channel_lookup_; // map of channel type to list of existing response channels, used when creating modules
 
         std::deque<ActivationResponse> pending_activation_responses_; // list of pending activation/deactivation responses to be processed by the frontend app
+
+        ui::ActivationUi::ModuleSingleParameter current_custom_parameter_; // identifies the module, parameter and list index for which we are currently loading a custom value
+        std::string current_custom_value_name_; // the name of the custom value we are currently loading
 
         struct {
             /// @brief Map of required channel type to existing channels. Keys are subscribe channel types that are required by one or more modules to be created.

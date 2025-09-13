@@ -242,23 +242,23 @@ bool ActivationWrapper::initializeDefaultParameters()
     for (size_t i = 0; i < params.size(); ++i)
     {
         auto& param = params[i];
-        if (!param.as_list_)
+        uint16_t list_size = param.as_list_ ? param.list_size_min_ : 1;
+        parameter_values_[i].resize(list_size); // CUSTOM will only be resized, not set to anything
+        for (uint16_t j = 0; j < list_size; ++j)
         {
-            parameter_values_[i].resize(1); // CUSTOM will only be resized, not set to anything
-
             switch (param.type_)
             {
                 case params::ParameterType::BOOL:
                 {
                     if (param.default_value_ == "1")
                     {
-                        parameter_values_[i][0].resize(1);
-                        parameter_values_[i][0][0] = 1;
+                        parameter_values_[i][j].resize(1);
+                        parameter_values_[i][j][0] = 1;
                     }
                     else if (param.default_value_ == "0" || param.default_value_.empty())
                     {
-                        parameter_values_[i][0].resize(1);
-                        parameter_values_[i][0][0] = 0;
+                        parameter_values_[i][j].resize(1);
+                        parameter_values_[i][j][0] = 0;
                     }
                     else
                     {
@@ -291,8 +291,8 @@ bool ActivationWrapper::initializeDefaultParameters()
                         value = param.max_value_long_;
                     }
 
-                    parameter_values_[i][0].resize(sizeof(int64_t));
-                    memcpy(&parameter_values_[i][0][0], &value, sizeof(int64_t));
+                    parameter_values_[i][j].resize(sizeof(int64_t));
+                    memcpy(&parameter_values_[i][j][0], &value, sizeof(int64_t));
                     break;
                 }
                 case params::ParameterType::DOUBLE:
@@ -319,14 +319,14 @@ bool ActivationWrapper::initializeDefaultParameters()
                         dvalue = param.max_value_double_;
                     }
 
-                    parameter_values_[i][0].resize(sizeof(double));
-                    memcpy(&parameter_values_[i][0][0], &dvalue, sizeof(double));
+                    parameter_values_[i][j].resize(sizeof(double));
+                    memcpy(&parameter_values_[i][j][0], &dvalue, sizeof(double));
                     break;
                 }
                 case params::ParameterType::STRING:
                 {
-                    parameter_values_[i][0].resize(param.default_value_.size());
-                    memcpy(&parameter_values_[i][0][0], param.default_value_.data(), param.default_value_.size());
+                    parameter_values_[i][j].resize(param.default_value_.size());
+                    memcpy(&parameter_values_[i][j][0], param.default_value_.data(), param.default_value_.size());
                     break;
                 }
                     
@@ -353,8 +353,8 @@ bool ActivationWrapper::initializeDefaultParameters()
 
                     if (found)
                     {
-                        parameter_values_[i][0].resize(sizeof(size_t));
-                        memcpy(&parameter_values_[i][0][0], &enum_id, sizeof(size_t));
+                        parameter_values_[i][j].resize(sizeof(size_t));
+                        memcpy(&parameter_values_[i][j][0], &enum_id, sizeof(size_t));
                     }
                     else
                     {
@@ -535,125 +535,141 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
 
     auto& chosen_value = param_value[list_id];
 
-    if (param.type_ != params::ParameterType::CUSTOM)
+    switch (param.type_)
     {
-        switch (param.type_)
+        case params::ParameterType::BOOL:
         {
-            case params::ParameterType::BOOL:
-            {
-                if (blob->size() != 1 || (blob->data()[0] != 0 && blob->data()[0] != 1))
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-
-                chosen_value.resize(1);
-                chosen_value[0] = blob->data()[0];
-                response.result_ = message_types::Result::SUCCESS;
-                return {response, {}};
-            }
-            case params::ParameterType::LONG:
-            {
-                if (blob->size() != sizeof(int64_t))
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-
-                int64_t value;
-                memcpy(&value, blob->data(), sizeof(int64_t));
-
-                if (param.limit_min_ && value < (int64_t)param.min_value_long_)
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-                if (param.limit_max_ && value > (int64_t)param.max_value_long_)
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-
-                chosen_value.resize(sizeof(int64_t));
-                memcpy(&chosen_value[0], &value, sizeof(int64_t));
-                response.result_ = message_types::Result::SUCCESS;
-                return {response, {}};
-            }
-            case params::ParameterType::DOUBLE:
-            {
-                if (blob->size() != sizeof(double))
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-
-                double value;
-                memcpy(&value, blob->data(), sizeof(double));
-
-                if (param.limit_min_ && value < param.min_value_double_)
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-                if (param.limit_max_ && value > param.max_value_double_)
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-
-                chosen_value.resize(sizeof(double));
-                memcpy(&chosen_value[0], &value, sizeof(double));
-                response.result_ = message_types::Result::SUCCESS;
-                return {response, {}};
-            }
-            case params::ParameterType::STRING:
-            {
-                chosen_value.resize(blob->size());
-                memcpy(&chosen_value[0], blob->data(), blob->size());
-                response.result_ = message_types::Result::SUCCESS;
-                return {response, {}};
-            }
-            case params::ParameterType::ENUM:
-            {
-                if (blob->size() != sizeof(size_t))
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-
-                size_t enum_id;
-                memcpy(&enum_id, blob->data(), sizeof(size_t));
-                if (enum_id >= param.enum_values_.size())
-                {
-                    response.result_ = message_types::Result::FAIL;
-                    return {response, {}};
-                }
-
-                chosen_value.resize(sizeof(size_t));
-                memcpy(&chosen_value[0], &enum_id, sizeof(size_t));
-                response.result_ = message_types::Result::SUCCESS;
-                return {response, {}};
-            }
-            default:
+            if (blob->size() != 1 || (blob->data()[0] != 0 && blob->data()[0] != 1))
             {
                 response.result_ = message_types::Result::FAIL;
                 return {response, {}};
             }
-        }
-    }
-    else
-    {
-        message_wait_.param_id_ = request.param_id_;
-        message_wait_.list_id_ = list_id;
-        message_wait_.expected_.store(true, std::memory_order_release);
 
-        if (param.custom_channel_type_ == params::CustomChannelType::REQUEST)
+            chosen_value.resize(1);
+            chosen_value[0] = blob->data()[0];
+            response.result_ = message_types::Result::SUCCESS;
+            return {response, {}};
+        }
+        case params::ParameterType::LONG:
         {
-            activable_module_ref_->sendRequestFromActivation(param.custom_channel_id_);
-        }
+            if (blob->size() != sizeof(int64_t))
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
 
-        response.result_ = message_types::Result::RUNNING;
-        return {response, {}};
+            int64_t value;
+            memcpy(&value, blob->data(), sizeof(int64_t));
+
+            if (param.limit_min_ && value < (int64_t)param.min_value_long_)
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+            if (param.limit_max_ && value > (int64_t)param.max_value_long_)
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+
+            chosen_value.resize(sizeof(int64_t));
+            memcpy(&chosen_value[0], &value, sizeof(int64_t));
+            response.result_ = message_types::Result::SUCCESS;
+            return {response, {}};
+        }
+        case params::ParameterType::DOUBLE:
+        {
+            if (blob->size() != sizeof(double))
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+
+            double value;
+            memcpy(&value, blob->data(), sizeof(double));
+
+            if (param.limit_min_ && value < param.min_value_double_)
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+            if (param.limit_max_ && value > param.max_value_double_)
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+
+            chosen_value.resize(sizeof(double));
+            memcpy(&chosen_value[0], &value, sizeof(double));
+            response.result_ = message_types::Result::SUCCESS;
+            return {response, {}};
+        }
+        case params::ParameterType::STRING:
+        {
+            chosen_value.resize(blob->size());
+            memcpy(&chosen_value[0], blob->data(), blob->size());
+            response.result_ = message_types::Result::SUCCESS;
+            return {response, {}};
+        }
+        case params::ParameterType::ENUM:
+        {
+            if (blob->size() != sizeof(size_t))
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+
+            size_t enum_id;
+            memcpy(&enum_id, blob->data(), sizeof(size_t));
+            if (enum_id >= param.enum_values_.size())
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+
+            chosen_value.resize(sizeof(size_t));
+            memcpy(&chosen_value[0], &enum_id, sizeof(size_t));
+            response.result_ = message_types::Result::SUCCESS;
+            return {response, {}};
+        }
+        case params::ParameterType::CUSTOM:
+        {
+            if (blob->size() != 1 || (blob->data()[0] != 0 && blob->data()[0] != 1))
+            {
+                response.result_ = message_types::Result::FAIL;
+                return {response, {}};
+            }
+            bool custom_set_requested = blob->data()[0] == 1;
+
+            if (custom_set_requested)
+            {
+                message_wait_.param_id_ = request.param_id_;
+                message_wait_.list_id_ = list_id;
+                message_wait_.expected_.store(true, std::memory_order_release);
+
+                if (param.custom_channel_type_ == params::CustomChannelType::REQUEST)
+                {
+                    activable_module_ref_->sendRequestFromActivation(param.custom_channel_id_);
+                }
+
+                response.result_ = message_types::Result::RUNNING;
+                return {response, {}};
+            }
+            else
+            {
+                chosen_value.clear();
+                
+                response.result_ = message_types::Result::SUCCESS;
+                return {response, {}};
+            }
+            
+            break;
+        }
+        default:
+        {
+            response.result_ = message_types::Result::FAIL;
+            return {response, {}};
+        }
     }
 }
 
@@ -682,11 +698,11 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
             size_t item_size = item.size();
             // If parameter is CUSTOM, write 0 and skip data
             if (params[param_idx].type_ == params::ParameterType::CUSTOM) {
-                item_size = 0;
+                size_t custom_item_size = 1;
                 all_parameters_data.insert(all_parameters_data.end(),
-                    reinterpret_cast<const uint8_t*>(&item_size),
-                    reinterpret_cast<const uint8_t*>(&item_size) + sizeof(size_t));
-                // Do not insert item data
+                    reinterpret_cast<const uint8_t*>(&custom_item_size),
+                    reinterpret_cast<const uint8_t*>(&custom_item_size) + sizeof(size_t));
+                all_parameters_data.push_back(item_size > 0 ? 1 : 0); // 1 if data is present, 0 if empty
             } else {
                 all_parameters_data.insert(all_parameters_data.end(),
                     reinterpret_cast<const uint8_t*>(&item_size),

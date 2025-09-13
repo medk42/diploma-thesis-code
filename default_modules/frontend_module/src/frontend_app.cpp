@@ -11,6 +11,8 @@
 
 
 using namespace aergo::default_modules::frontend_module::webapp;
+using namespace aergo::module;
+using namespace aergo::module::helpers::activation_wrapper;
 
 
 
@@ -128,6 +130,9 @@ void FrontendApp::loadUiFromState()
         case RunningTask::DESTROY_MODULE:
             createModuleDestroyedDialog();
             break;
+        case RunningTask::LOAD_CUSTOM_VALUE:
+            createLoadCustomValueDialog();
+            break;
     }
 
     for (uint64_t i = 0; i < frontend_state_->known_running_modules_.size(); ++i)
@@ -179,6 +184,10 @@ void FrontendApp::setupCallbacks()
 
         handleModuleDestructionDependencyCheck(running_module_index);
     });
+
+    activation_ui_->addListEntry().connect([this](ui::ActivationUi::ModuleSingleParameter param) { requestAddRemoveListEntry(param, true); });
+    activation_ui_->removeListEntry().connect([this](ui::ActivationUi::ModuleSingleParameter param) { requestAddRemoveListEntry(param, false); });
+    activation_ui_->onParameterChanged().connect([this](ui::ActivationUi::ModuleSingleParameter param, ui::helper::value_t new_value) { requestParameterChange(param, new_value); });
 }
 
 
@@ -387,6 +396,26 @@ void FrontendApp::timerUpdate()
             refreshRunningModules();
         }
     }
+    else if (frontend_state_->running_task_ == RunningTask::LOAD_CUSTOM_VALUE)
+    {
+        message_types::Request progress_request { .request_type_ = message_types::ReqType::GET_STATUS };
+        message::MessageHeader header {
+            .data_ = reinterpret_cast<uint8_t*>(&progress_request),
+            .data_len_ = sizeof(progress_request),
+            .blobs_ = nullptr,
+            .blob_count_ = 0
+        };
+        base_module_->sendRequest(
+            ACTIVATION_REQUEST_ID, 
+            ChannelIdentifier {
+                frontend_state_->current_custom_parameter_.running_module_id_, 
+                frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
+            }, 
+            header
+        );
+
+        processPendingActivationResponses();
+    }
 }
 
 
@@ -538,7 +567,12 @@ void FrontendApp::refreshRunningModules()
                         header
                     );
 
-                    frontend_state_->known_running_modules_activation_data_.push_back(ActivationData { .is_activable_ = true, .waiting_for_parameters_ = true });
+                    frontend_state_->known_running_modules_activation_data_.push_back(ActivationData { 
+                        .is_activable_ = true, 
+                        .waiting_for_parameters_ = true,
+                        .waiting_for_parameter_values_ = true,
+                        .activation_channel_id_ = activation_it->second
+                    });
                 }
                 else
                 {
@@ -698,37 +732,130 @@ void FrontendApp::processPendingActivationResponses()
 
     for (const auto& response : frontend_state_->pending_activation_responses_)
     {
-        if (response.success_)
+        if (!response.success_)
         {
-            if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::READ_ACTIVATION_PARAMETERS)
-            {
-                if (response.running_module_index_ < frontend_state_->known_running_modules_activation_data_.size())
-                {
-                    auto& activation_data = frontend_state_->known_running_modules_activation_data_[response.running_module_index_];
-                    if (activation_data.is_activable_ && activation_data.waiting_for_parameters_)
-                    {
-                        std::string params_str(reinterpret_cast<const char*>(response.data_blob_.data()), response.data_blob_.size());
-                        activation_data.activation_parameters_ = std::move(aergo::module::helpers::activation_wrapper::params::ParameterList::fromString(params_str));
-                        activation_data.waiting_for_parameters_ = false;
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Received failed activation response from module: " + std::to_string(response.running_module_index_));
+            continue;
+        }
 
-                        activation_ui_->setParameters(response.running_module_index_, activation_data.activation_parameters_.getParameters());
-                    }
-                    else
-                    {
-                        base_module_->log(aergo::module::logging::LogType::ERROR, "Received activation parameters for module that is not activable or not waiting for parameters: " + std::to_string(response.running_module_index_));
-                    }
-                }
-                else
+        if (response.running_module_index_ >= frontend_state_->known_running_modules_activation_data_.size())
+        {
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Received activation response for invalid module index: " + std::to_string(response.running_module_index_));
+            continue;
+        }
+
+        auto& activation_data = frontend_state_->known_running_modules_activation_data_[response.running_module_index_];
+        if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::READ_ACTIVATION_PARAMETERS)
+        {
+            if (!activation_data.is_activable_ || !activation_data.waiting_for_parameters_)
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received activation parameters for module that is not activable or not waiting for parameters: " + std::to_string(response.running_module_index_));
+                continue;
+            }
+
+            if (response.response_.result_ != message_types::Result::SUCCESS)
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received failed READ_ACTIVATION_PARAMETERS response from module: " + std::to_string(response.running_module_index_));
+                continue;
+            }
+            
+            std::string params_str(reinterpret_cast<const char*>(response.data_blob_.data()), response.data_blob_.size());
+            activation_data.activation_parameters_ = std::move(aergo::module::helpers::activation_wrapper::params::ParameterList::fromString(params_str));
+            activation_data.waiting_for_parameters_ = false;
+
+            activation_ui_->setParameters(response.running_module_index_, activation_data.activation_parameters_.getParameters());
+            
+            requestReadCurrentParameters(response.running_module_index_);
+        }
+        else if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::READ_VALUES)
+        {
+            if (!activation_data.is_activable_ || activation_data.waiting_for_parameters_)
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received current parameters for module that is not activable or still waiting for parameters: " + std::to_string(response.running_module_index_));
+                continue;
+            }
+
+            if (response.response_.result_ != message_types::Result::SUCCESS)
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received failed READ_VALUES response from module: " + std::to_string(response.running_module_index_));
+                continue;
+            }
+            
+            if (parseParameterValues(response.data_blob_, activation_data))
+            {
+
+                activation_data.waiting_for_parameter_values_ = false;
+                activation_ui_->setParameterValues(response.running_module_index_, activation_data.parameter_values_);
+            }
+            else
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to parse current parameters for module: " + std::to_string(response.running_module_index_));
+            }
+        }
+        else if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::SET_VALUE)
+        {
+            if (!activation_data.is_activable_ || activation_data.waiting_for_parameters_ || activation_data.waiting_for_parameter_values_)
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received set parameters response for module that is not activable or still waiting for parameters/values: " + std::to_string(response.running_module_index_));
+                continue;
+            }
+
+            if (response.response_.result_ == message_types::Result::FAIL)
+            {
+                requestReadCurrentParameters(response.running_module_index_); // read to confirm
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received failed READ_ACTIVATION_PARAMETERS response from module: " + std::to_string(response.running_module_index_));
+                continue;
+            }
+        }
+        else if (response.response_.request_type_ == message_types::ReqType::CANCEL_TASK)
+        {
+            if (frontend_state_->running_task_ == RunningTask::LOAD_CUSTOM_VALUE)
+            {
+                dismissDialog();
+                if (response.response_.result_ == message_types::Result::FAIL) // task finished before cancel, we need to show that we read the custom value
                 {
-                    base_module_->log(aergo::module::logging::LogType::ERROR, "Received activation parameters for invalid module index: " + std::to_string(response.running_module_index_));
+                    activation_ui_->setValue( // show in UI that we received the custom value
+                        frontend_state_->current_custom_parameter_.running_module_id_,
+                        0,
+                        frontend_state_->current_custom_parameter_.parameter_id_,
+                        true,
+                        frontend_state_->current_custom_parameter_.list_id_
+                    );
+                }
+                frontend_state_->running_task_ = RunningTask::NONE;
+            }
+            else
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received CANCEL_TASK response from module: " + std::to_string(response.running_module_index_) + ", but no task was running");
+            }
+        }
+        else if (response.response_.request_type_ == message_types::ReqType::GET_STATUS)
+        {
+            if (frontend_state_->running_task_ == RunningTask::LOAD_CUSTOM_VALUE)
+            {
+                if (response.response_.result_ == message_types::Result::SUCCESS)
+                {
+                    activation_ui_->setValue( // show in UI that we received the custom value
+                        frontend_state_->current_custom_parameter_.running_module_id_,
+                        0,
+                        frontend_state_->current_custom_parameter_.parameter_id_,
+                        true,
+                        frontend_state_->current_custom_parameter_.list_id_
+                    );
+                    
+                    dismissDialog();
+
+                    frontend_state_->running_task_ = RunningTask::NONE;
                 }
             }
-            // TODO handle other response types
         }
         else
         {
-            base_module_->log(aergo::module::logging::LogType::ERROR, "Module failed to produce response for activation request: " + std::to_string(response.running_module_index_));
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Received unknown activation response type from module: " + std::to_string(response.running_module_index_) + ", type: " + std::to_string((uint32_t)response.response_.request_type_));
         }
+
+        activation_ui_->setActive(response.running_module_index_, response.response_.activated_);
+        // TODO handle other response types
     }
 
     frontend_state_->pending_activation_responses_.clear();
@@ -750,8 +877,427 @@ void FrontendApp::setupState()
         frontend_state_->available_modules_.push_back(base_module_->getCoreControl()->getLoadedModulesInfo(i));
     }
 
-    frontend_state_->setup_done_ = true;
+    frontend_state_->allocator_ = base_module_->createDynamicAllocator();
 
-    // TODO load correctly known running modules
-    // TODO also load activation state / activated modules
+    frontend_state_->setup_done_ = true;
+}
+
+
+
+void FrontendApp::requestReadCurrentParameters(uint64_t running_module_index)
+{
+    if (!connected_) return;
+
+    if (running_module_index >= frontend_state_->known_running_modules_activation_data_.size())
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid running_module_index in requestReadCurrentParameters");
+        return;
+    }
+    auto& activation_data = frontend_state_->known_running_modules_activation_data_[running_module_index];
+    if (!activation_data.is_activable_ || activation_data.waiting_for_parameters_)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Module is not activable or still waiting for parameters in requestReadCurrentParameters: " + std::to_string(running_module_index));
+        return;
+    }
+
+    aergo::module::helpers::activation_wrapper::message_types::Request request {
+        .request_type_ = aergo::module::helpers::activation_wrapper::message_types::ReqType::READ_VALUES
+    };
+    
+    aergo::module::message::MessageHeader header
+    {
+        .data_ = reinterpret_cast<uint8_t*>(&request),
+        .data_len_ = sizeof(request),
+        .blobs_ = nullptr,
+        .blob_count_ = 0
+    };
+
+    base_module_->sendRequest(
+        ACTIVATION_REQUEST_ID,
+        aergo::module::ChannelIdentifier { running_module_index, activation_data.activation_channel_id_ },
+        header
+    );
+}
+
+
+
+bool FrontendApp::parseParameterValues(const std::vector<uint8_t>& data_blob, ActivationData& activation_data)
+{
+    const auto& params = activation_data.activation_parameters_.getParameters();
+
+    const uint8_t* data = data_blob.data();
+    size_t data_size = data_blob.size();
+
+    auto read_values = [&data, &data_size](void* dest, size_t size) -> bool {
+        if (data_size < size) return false;
+        memcpy(dest, data, size);
+        data += size;
+        data_size -= size;
+        return true;
+    };
+
+    size_t param_count;
+    if (!read_values(&param_count, sizeof(param_count)))
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read param_count in parseParameterValues");
+        return false;
+    }
+
+    if (param_count != activation_data.activation_parameters_.getParameters().size())
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Parameter count mismatch in parseParameterValues");
+        return false;
+    }
+
+    std::vector<std::vector<ui::helper::value_t>> parameter_values;
+    for (size_t i = 0; i < param_count; ++i)
+    {
+        const auto& param = params[i];
+
+        size_t list_size;
+        if (!read_values(&list_size, sizeof(list_size)))
+        {
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read value_count in parseParameterValues");
+            return false;
+        }
+
+        if ((!param.as_list_ && list_size != 1) || (param.as_list_ && (list_size < param.list_size_min_ || list_size > param.list_size_max_)))
+        {
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Value count mismatch in parseParameterValues for parameter: " + param.param_name_);
+            return false;
+        }
+
+        std::vector<ui::helper::value_t> values;
+        for (size_t j = 0; j < list_size; ++j)
+        {
+            size_t param_value_size;
+            if (!read_values(&param_value_size, sizeof(param_value_size)))
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read param_value_size in parseParameterValues");
+                return false;
+            }
+
+            switch (param.type_)
+            {
+                case aergo::module::helpers::activation_wrapper::params::ParameterType::LONG:
+                {
+                    if (param_value_size != sizeof(int64_t))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid long parameter value size in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    int64_t long_value;
+                    if (!read_values(&long_value, sizeof(long_value)))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read long parameter value in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    if ((param.limit_min_ && long_value < param.min_value_long_) || (param.limit_max_ && long_value > param.max_value_long_))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Long parameter value out of range in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    values.push_back(long_value);
+                    break;
+                }
+                case aergo::module::helpers::activation_wrapper::params::ParameterType::DOUBLE:
+                {
+                    if (param_value_size != sizeof(double))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid double parameter value size in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    double double_value;
+                    if (!read_values(&double_value, sizeof(double_value)))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read double parameter value in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    if ((param.limit_min_ && double_value < param.min_value_double_) || (param.limit_max_ && double_value > param.max_value_double_))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Double parameter value out of range in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    values.push_back(double_value);
+                    break;
+                }
+                case aergo::module::helpers::activation_wrapper::params::ParameterType::STRING:
+                {
+                    if (param_value_size > data_size)
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid string parameter value size in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    std::string string_value(reinterpret_cast<const char*>(data), param_value_size);
+                    data_size -= param_value_size;
+                    data += param_value_size;
+                    values.push_back(string_value);
+                    break;
+                }
+                case aergo::module::helpers::activation_wrapper::params::ParameterType::ENUM:
+                {
+                    if (param_value_size != sizeof(size_t))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid enum parameter value size in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    size_t enum_index;
+                    if (!read_values(&enum_index, sizeof(enum_index)))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read enum parameter value in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    if (enum_index >= param.enum_values_.size())
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid enum parameter value in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    values.push_back(static_cast<int>(enum_index)); // store as int, value is the index of the selected enum value
+                    break;
+                }
+                case aergo::module::helpers::activation_wrapper::params::ParameterType::BOOL:
+                case aergo::module::helpers::activation_wrapper::params::ParameterType::CUSTOM:
+                {
+                    if (param_value_size != 1)
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid custom/bool parameter value size in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    uint8_t bool_value;
+                    if (!read_values(&bool_value, sizeof(bool_value)))
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read custom/bool parameter value in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    if (bool_value != 0 && bool_value != 1)
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid custom/bool parameter value in parseParameterValues for parameter: " + param.param_name_);
+                        return false;
+                    }
+                    values.push_back(bool_value == 1); // store as bool, value is 1 if custom/bool value is set, 0 if not
+                    break;
+                }
+            }
+        }
+
+        parameter_values.push_back(std::move(values));
+    }
+
+    activation_data.parameter_values_ = std::move(parameter_values);
+    return true;
+}
+
+
+
+void FrontendApp::requestAddRemoveListEntry(ui::ActivationUi::ModuleSingleParameter param, bool add)
+{
+    if (!connected_) return;
+
+    std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+
+    if (param.running_module_id_ >= frontend_state_->known_running_modules_.size() || !frontend_state_->known_running_modules_[param.running_module_id_] || 
+        !frontend_state_->known_running_modules_activation_data_[param.running_module_id_].is_activable_ || frontend_state_->known_running_modules_activation_data_[param.running_module_id_].waiting_for_parameters_)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid running_module_id or module not activable or waiting for parameters in add/remove list entry callback");
+        return;
+    }
+
+    const auto& activation_data = frontend_state_->known_running_modules_activation_data_[param.running_module_id_];
+    const auto& params_list = activation_data.activation_parameters_.getParameters();
+    if (param.parameter_id_ >= params_list.size())
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid parameter_id in add/remove list entry callback");
+        return;
+    }
+
+    message_types::Request add_list_request {
+        .request_type_ = add ? message_types::ReqType::LIST_ADD : message_types::ReqType::LIST_REMOVE,
+        .parameter_type_ = params_list[param.parameter_id_].type_,
+        .param_id_ = param.parameter_id_,
+        .list_id_ = param.list_id_
+    };
+
+    message::MessageHeader header {
+        .data_ = reinterpret_cast<uint8_t*>(&add_list_request),
+        .data_len_ = sizeof(add_list_request),
+        .blobs_ = nullptr,
+        .blob_count_ = 0
+    };
+
+    base_module_->sendRequest(
+        ACTIVATION_REQUEST_ID,
+        ChannelIdentifier {param.running_module_id_, activation_data.activation_channel_id_},
+        header
+    );
+}
+
+
+
+void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter param, const ui::helper::value_t& value)
+{
+    if (!connected_) return;
+
+    std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+    
+    if (param.running_module_id_ >= frontend_state_->known_running_modules_.size() || !frontend_state_->known_running_modules_[param.running_module_id_] || 
+        !frontend_state_->known_running_modules_activation_data_[param.running_module_id_].is_activable_ || frontend_state_->known_running_modules_activation_data_[param.running_module_id_].waiting_for_parameters_)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid running_module_id or module not activable or waiting for parameters in parameterChange callback");
+        return;
+    }
+
+    const auto& activation_data = frontend_state_->known_running_modules_activation_data_[param.running_module_id_];
+    const auto& params_list = activation_data.activation_parameters_.getParameters();
+    if (param.parameter_id_ >= params_list.size())
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid parameter_id in parameterChange callback");
+        return;
+    }
+
+    auto type = params_list[param.parameter_id_].type_;
+
+    message::SharedDataBlob value_blob;
+    switch (type)
+    {
+        case aergo::module::helpers::activation_wrapper::params::ParameterType::LONG:
+        {
+            int64_t long_value = std::get<int64_t>(value);
+            value_blob = frontend_state_->allocator_->allocate(sizeof(long_value));
+            if (!value_blob.valid() || value_blob.size() != sizeof(long_value))
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to allocate memory for long parameter value in parameterChange callback");
+                return;
+            }
+            memcpy(value_blob.data(), &long_value, sizeof(long_value));
+            break;
+        }
+        case aergo::module::helpers::activation_wrapper::params::ParameterType::DOUBLE:
+        {
+            double double_value = std::get<double>(value);
+            value_blob = frontend_state_->allocator_->allocate(sizeof(double_value));
+            if (!value_blob.valid() || value_blob.size() != sizeof(double_value))
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to allocate memory for double parameter value in parameterChange callback");
+                return;
+            }
+            memcpy(value_blob.data(), &double_value, sizeof(double_value));
+            break;
+        }
+        case aergo::module::helpers::activation_wrapper::params::ParameterType::STRING:
+        {
+            const std::string& string_value = std::get<std::string>(value);
+            value_blob = frontend_state_->allocator_->allocate(string_value.size());
+            if (!value_blob.valid() || value_blob.size() != string_value.size())
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to allocate memory for string parameter value in parameterChange callback");
+                return;
+            }
+            memcpy(value_blob.data(), string_value.data(), string_value.size());
+            break;
+        }
+        case aergo::module::helpers::activation_wrapper::params::ParameterType::ENUM:
+        {
+            size_t enum_index = static_cast<size_t>(std::get<int>(value));
+            value_blob = frontend_state_->allocator_->allocate(sizeof(enum_index));
+            if (!value_blob.valid() || value_blob.size() != sizeof(enum_index))
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to allocate memory for enum parameter value in parameterChange callback");
+                return;
+            }
+            memcpy(value_blob.data(), &enum_index, sizeof(enum_index));
+            break;
+        }
+        case aergo::module::helpers::activation_wrapper::params::ParameterType::BOOL:
+        case aergo::module::helpers::activation_wrapper::params::ParameterType::CUSTOM:
+        {
+            uint8_t bool_value = std::get<bool>(value) ? 1 : 0;
+            value_blob = frontend_state_->allocator_->allocate(sizeof(bool_value));
+            if (!value_blob.valid() || value_blob.size() != sizeof(bool_value))
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to allocate memory for bool/custom parameter value in parameterChange callback");
+                return;
+            }
+            memcpy(value_blob.data(), &bool_value, sizeof(bool_value));
+            break;
+        }
+    }
+
+    message_types::Request param_change_request {
+        .request_type_ = message_types::ReqType::SET_VALUE,
+        .parameter_type_ = type,
+        .param_id_ = param.parameter_id_,
+        .list_id_ = param.list_id_
+    };
+
+    message::MessageHeader header {
+        .data_ = reinterpret_cast<uint8_t*>(&param_change_request),
+        .data_len_ = sizeof(param_change_request),
+        .blobs_ = &value_blob,
+        .blob_count_ = 1
+    };
+
+    ChannelIdentifier channel_id {param.running_module_id_, activation_data.activation_channel_id_};
+    base_module_->sendRequest(ACTIVATION_REQUEST_ID, channel_id, header);
+
+    if (type == params::ParameterType::CUSTOM) 
+    {
+        if (value_blob.data()[0] == 1) // display dialog waiting to finish loading the custom value
+        {
+            frontend_state_->running_task_ = RunningTask::LOAD_CUSTOM_VALUE;
+            frontend_state_->current_custom_value_name_ = params_list[param.parameter_id_].param_name_;
+            frontend_state_->current_custom_parameter_ = param;
+
+            createLoadCustomValueDialog();
+        }
+        else // removing is instant, so we can just update the UI
+        {
+            activation_ui_->setValue( // show in UI that we deleted the custom value
+                param.running_module_id_,
+                0,
+                param.parameter_id_,
+                false,
+                param.list_id_
+            );
+        }
+    }
+}
+
+
+
+void FrontendApp::createLoadCustomValueDialog()
+{
+    dismissDialog();
+    reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>(
+        "Loading Custom Value", 
+        "Loading custom value for parameter \"" + frontend_state_->current_custom_value_name_ + "\". Please wait...", 
+        std::vector<ui::helper::ButtonDescription> { 
+            ui::helper::ButtonDescription {
+                .text_ = "Cancel",
+                .style_ = ui::helper::ButtonStyle::Danger,
+                .enabled_ = true
+            }
+        }
+    ));
+
+    reusable_dialog_->onButtonClicked().connect([this](size_t button_index) {
+        message_types::Request cancel_request {
+            .request_type_ = message_types::ReqType::CANCEL_TASK
+        };
+
+        message::MessageHeader header {
+            .data_ = reinterpret_cast<uint8_t*>(&cancel_request),
+            .data_len_ = sizeof(cancel_request),
+            .blobs_ = nullptr,
+            .blob_count_ = 0
+        };
+
+        base_module_->sendRequest(
+            ACTIVATION_REQUEST_ID, 
+            {
+                .producer_module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
+                .producer_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
+            }, 
+            header
+        );
+    });
 }

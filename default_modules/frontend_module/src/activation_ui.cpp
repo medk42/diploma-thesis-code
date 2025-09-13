@@ -300,6 +300,22 @@ void ActivationUi::setActive(uint64_t running_module_id, bool active)
 
 
 
+bool ActivationUi::setValue(uint64_t running_module_id, size_t section_id, size_t param_id, const helper::value_t& value, size_t index)
+{
+    auto it = running_module_id_to_inner_index_.find(running_module_id);
+    if (it == running_module_id_to_inner_index_.end())
+    {
+        return false; // not found
+    }
+
+    size_t inner_index = it->second;
+    auto right_module_view = detail_views_[inner_index];
+
+    return right_module_view->setValue(section_id, param_id, value, index);
+}
+
+
+
 void ActivationUi::showDialog(std::unique_ptr<helper::ReusableDialog> dialog)
 {
     if (parameter_dialog_)

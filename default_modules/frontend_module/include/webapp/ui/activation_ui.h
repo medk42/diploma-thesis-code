@@ -35,6 +35,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         void setParameters(uint64_t running_module_id, const std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription>& parameters); // resets all set values to defaults
         bool setParameterValues(uint64_t running_module_id, const std::vector<std::vector<helper::value_t>>& values); // sets all parameters of the module, size of values and inner vectors must match the parameter descriptions, returns true if successful, false if not (e.g. invalid running_module_id or size mismatch)
         void setActive(uint64_t running_module_id, bool active);
+        bool setValue(uint64_t running_module_id, size_t section_id, size_t param_id, const helper::value_t& value, size_t index = 0); // returns true if set (successful), false if not (invalid running_module_id or section_id or param_id or index or type mismatch)
 
 
         Wt::Signal<>& onClose() { return onClose_; } // close button clicked
