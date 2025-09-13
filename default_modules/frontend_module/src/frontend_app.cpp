@@ -133,6 +133,11 @@ void FrontendApp::loadUiFromState()
         case RunningTask::LOAD_CUSTOM_VALUE:
             createLoadCustomValueDialog();
             break;
+        case RunningTask::ACTIVATING:
+        case RunningTask::DEACTIVATING:
+            createActivationDialog();
+            updateActivationDialogProgress();
+            break;
     }
 
     for (uint64_t i = 0; i < frontend_state_->known_running_modules_.size(); ++i)
@@ -188,6 +193,9 @@ void FrontendApp::setupCallbacks()
     activation_ui_->addListEntry().connect([this](ui::ActivationUi::ModuleSingleParameter param) { requestAddRemoveListEntry(param, true); });
     activation_ui_->removeListEntry().connect([this](ui::ActivationUi::ModuleSingleParameter param) { requestAddRemoveListEntry(param, false); });
     activation_ui_->onParameterChanged().connect([this](ui::ActivationUi::ModuleSingleParameter param, ui::helper::value_t new_value) { requestParameterChange(param, new_value); });
+
+    activation_ui_->onActivate().connect([this](uint64_t running_module_index) { requestActivate(running_module_index, true);});
+    activation_ui_->onDeactivate().connect([this](uint64_t running_module_index) { requestActivate(running_module_index, false); });
 }
 
 
@@ -396,7 +404,9 @@ void FrontendApp::timerUpdate()
             refreshRunningModules();
         }
     }
-    else if (frontend_state_->running_task_ == RunningTask::LOAD_CUSTOM_VALUE)
+    else if (frontend_state_->running_task_ == RunningTask::LOAD_CUSTOM_VALUE
+    || frontend_state_->running_task_ == RunningTask::ACTIVATING
+    || frontend_state_->running_task_ == RunningTask::DEACTIVATING)
     {
         message_types::Request progress_request { .request_type_ = message_types::ReqType::GET_STATUS };
         message::MessageHeader header {
@@ -792,7 +802,9 @@ void FrontendApp::processPendingActivationResponses()
                 base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to parse current parameters for module: " + std::to_string(response.running_module_index_));
             }
         }
-        else if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::SET_VALUE)
+        else if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::SET_VALUE
+        || response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::LIST_ADD
+        || response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::LIST_REMOVE)
         {
             if (!activation_data.is_activable_ || activation_data.waiting_for_parameters_ || activation_data.waiting_for_parameter_values_)
             {
@@ -803,7 +815,7 @@ void FrontendApp::processPendingActivationResponses()
             if (response.response_.result_ == message_types::Result::FAIL)
             {
                 requestReadCurrentParameters(response.running_module_index_); // read to confirm
-                base_module_->log(aergo::module::logging::LogType::ERROR, "Received failed READ_ACTIVATION_PARAMETERS response from module: " + std::to_string(response.running_module_index_));
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received failed response from module for changing parameters: " + std::to_string(response.running_module_index_));
                 continue;
             }
         }
@@ -824,6 +836,9 @@ void FrontendApp::processPendingActivationResponses()
                 }
                 frontend_state_->running_task_ = RunningTask::NONE;
             }
+            else if (frontend_state_->running_task_ == RunningTask::ACTIVATING
+                  || frontend_state_->running_task_ == RunningTask::DEACTIVATING)
+            {} // do nothing, cancel request was processed, we will find out the result after the activation/deactivation finishes/cancels via GET_STATUS requests
             else
             {
                 base_module_->log(aergo::module::logging::LogType::ERROR, "Received CANCEL_TASK response from module: " + std::to_string(response.running_module_index_) + ", but no task was running");
@@ -842,16 +857,91 @@ void FrontendApp::processPendingActivationResponses()
                         true,
                         frontend_state_->current_custom_parameter_.list_id_
                     );
-                    
-                    dismissDialog();
 
+                    dismissDialog();
                     frontend_state_->running_task_ = RunningTask::NONE;
                 }
             }
+            else if (frontend_state_->running_task_ == RunningTask::ACTIVATING || frontend_state_->running_task_ == RunningTask::DEACTIVATING)
+            {
+                if (response.response_.result_ == message_types::Result::SUCCESS)
+                {
+                    dismissDialog();
+                    frontend_state_->running_task_ = RunningTask::NONE;
+                }
+                else if (response.response_.result_ == message_types::Result::RUNNING)
+                {
+                    frontend_state_->current_progress_ = response.response_.progress_;
+                    updateActivationDialogProgress();
+                }
+            }
         }
-        else
+        else if (response.response_.request_type_ == message_types::ReqType::ACTIVATE)
         {
-            base_module_->log(aergo::module::logging::LogType::ERROR, "Received unknown activation response type from module: " + std::to_string(response.running_module_index_) + ", type: " + std::to_string((uint32_t)response.response_.request_type_));
+            if (frontend_state_->running_task_ != RunningTask::ACTIVATING)
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received ACTIVATE response from module: " + std::to_string(response.running_module_index_) + ", but no activation was in progress");
+                continue;
+            }
+
+            if (response.response_.result_ == message_types::Result::FAIL)
+            {
+                dismissDialog();
+                frontend_state_->running_task_ = RunningTask::NONE;
+
+                reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>( // overlay, dismissible
+                    "Activating Module", 
+                    "The module activation has failed. Double check the parameters and try again.",
+                    std::vector<ui::helper::ButtonDescription> { 
+                        ui::helper::ButtonDescription {
+                            .text_ = "OK",
+                            .style_ = ui::helper::ButtonStyle::Secondary,
+                            .enabled_ = true
+                        }
+                    }
+                ));
+                reusable_dialog_->onButtonClicked().connect(this, &FrontendApp::dismissDialog);
+                reusable_dialog_->onBackgroundClicked().connect(this, &FrontendApp::dismissDialog);
+            }
+            else if (response.response_.result_ == message_types::Result::RUNNING)
+            {
+                frontend_state_->current_progress_ = response.response_.progress_;
+                updateActivationDialogProgress();
+            }
+            
+        }
+        else if (response.response_.request_type_ == message_types::ReqType::DEACTIVATE)
+        {
+            if (frontend_state_->running_task_ != RunningTask::DEACTIVATING)
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Received DEACTIVATE response from module: " + std::to_string(response.running_module_index_) + ", but no deactivation was in progress");
+                continue;
+            }
+
+            if (response.response_.result_ == message_types::Result::FAIL)
+            {
+                dismissDialog();
+                frontend_state_->running_task_ = RunningTask::NONE;
+
+                reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>( // overlay, dismissible
+                    "Deactivating Module", 
+                    "The module deactivation has failed. Please try again.",
+                    std::vector<ui::helper::ButtonDescription> { 
+                        ui::helper::ButtonDescription {
+                            .text_ = "OK",
+                            .style_ = ui::helper::ButtonStyle::Secondary,
+                            .enabled_ = true
+                        }
+                    }
+                ));
+                reusable_dialog_->onButtonClicked().connect(this, &FrontendApp::dismissDialog);
+                reusable_dialog_->onBackgroundClicked().connect(this, &FrontendApp::dismissDialog);
+            }
+            else if (response.response_.result_ == message_types::Result::RUNNING)
+            {
+                frontend_state_->current_progress_ = response.response_.progress_;
+                updateActivationDialogProgress();
+            }
         }
 
         activation_ui_->setActive(response.running_module_index_, response.response_.activated_);
@@ -1300,4 +1390,120 @@ void FrontendApp::createLoadCustomValueDialog()
             header
         );
     });
+}
+
+
+
+void FrontendApp::requestActivate(uint64_t running_module_index, bool activate)
+{
+    if (!connected_) return;
+
+    std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+
+    if (running_module_index >= frontend_state_->known_running_modules_.size() || !frontend_state_->known_running_modules_[running_module_index])
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid running_module_index in requestActivate");
+        return;
+    }
+
+    auto& activation_data = frontend_state_->known_running_modules_activation_data_[running_module_index];
+    if (!activation_data.is_activable_)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Module is not activable in requestActivate: " + std::to_string(running_module_index));
+        return;
+    }
+
+    if (activation_data.waiting_for_parameter_values_ || activation_data.waiting_for_parameters_)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Module is still waiting for parameters/values in requestActivate: " + std::to_string(running_module_index));
+        return;
+    }
+
+    message_types::Request activation_request {
+        .request_type_ = activate ? message_types::ReqType::ACTIVATE : message_types::ReqType::DEACTIVATE
+    };
+
+    message::MessageHeader header {
+        .data_ = reinterpret_cast<uint8_t*>(&activation_request),
+        .data_len_ = sizeof(activation_request),
+        .blobs_ = nullptr,
+        .blob_count_ = 0
+    };
+
+    frontend_state_->current_custom_parameter_.running_module_id_ = running_module_index;
+
+    base_module_->sendRequest(
+        ACTIVATION_REQUEST_ID,
+        ChannelIdentifier { running_module_index, activation_data.activation_channel_id_ },
+        header
+    );
+
+    frontend_state_->running_task_ = activate ? RunningTask::ACTIVATING : RunningTask::DEACTIVATING;
+    frontend_state_->current_progress_.progress_type_ = message_types::ProgressType::NONE; // reset progress since we are starting a new task
+    createActivationDialog();
+}
+
+
+
+void FrontendApp::createActivationDialog()
+{
+    dismissDialog();
+
+    reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>(
+        frontend_state_->running_task_ == RunningTask::ACTIVATING ? "Activating Module" : "Deactivating Module", 
+        frontend_state_->running_task_ == RunningTask::ACTIVATING ? "Activating module. Please wait..." : "Deactivating module. Please wait...", 
+        std::vector<ui::helper::ButtonDescription> { 
+            ui::helper::ButtonDescription {
+                .text_ = "Cancel",
+                .style_ = ui::helper::ButtonStyle::Danger,
+                .enabled_ = true
+            }
+        }
+    ));
+
+    reusable_dialog_->onButtonClicked().connect([this](size_t button_index) {
+        message_types::Request cancel_request {
+            .request_type_ = message_types::ReqType::CANCEL_TASK
+        };
+
+        message::MessageHeader header {
+            .data_ = reinterpret_cast<uint8_t*>(&cancel_request),
+            .data_len_ = sizeof(cancel_request),
+            .blobs_ = nullptr,
+            .blob_count_ = 0
+        };
+
+        base_module_->sendRequest(
+            ACTIVATION_REQUEST_ID, 
+            {
+                .producer_module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
+                .producer_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
+            }, 
+            header
+        );
+    });
+}
+
+void FrontendApp::updateActivationDialogProgress()
+{
+    if (!reusable_dialog_) return;
+
+    std::string progress_text;
+    if (frontend_state_->current_progress_.progress_type_ == message_types::ProgressType::NONE)
+    {
+        progress_text = frontend_state_->running_task_ == RunningTask::ACTIVATING ? "Activating module. Please wait..." : "Deactivating module. Please wait...";
+    }
+    else if (frontend_state_->current_progress_.progress_type_ == message_types::ProgressType::DOUBLE)
+    {
+        progress_text = (frontend_state_->running_task_ == RunningTask::ACTIVATING ? "Activating module: " : "Deactivating module: ") + 
+            std::to_string(static_cast<int>(frontend_state_->current_progress_.progress_current_value_double_ * 100 + 0.5)) + "% completed. Please wait...";
+    }
+    else if (frontend_state_->current_progress_.progress_type_ == message_types::ProgressType::INT)
+    {
+        progress_text = (frontend_state_->running_task_ == RunningTask::ACTIVATING ? "Activating module: " : "Deactivating module: ") + 
+            std::to_string(frontend_state_->current_progress_.progress_current_value_int_) + "/" + 
+            std::to_string(frontend_state_->current_progress_.progress_max_int_) + ". Please wait...";
+    }
+
+    reusable_dialog_->setContent(progress_text);
 }

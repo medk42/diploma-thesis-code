@@ -49,7 +49,9 @@ namespace aergo::default_modules::frontend_module::webapp
         NONE,
         CREATE_MODULE,
         DESTROY_MODULE,
-        LOAD_CUSTOM_VALUE
+        LOAD_CUSTOM_VALUE,
+        ACTIVATING,
+        DEACTIVATING
     };
 
     struct ActivationResponse
@@ -98,6 +100,8 @@ namespace aergo::default_modules::frontend_module::webapp
 
         ui::ActivationUi::ModuleSingleParameter current_custom_parameter_; // identifies the module, parameter and list index for which we are currently loading a custom value
         std::string current_custom_value_name_; // the name of the custom value we are currently loading
+
+        aergo::module::helpers::activation_wrapper::message_types::ProgressData current_progress_; // current progress data, updated when processing activation/deactivation responses
 
         struct {
             /// @brief Map of required channel type to existing channels. Keys are subscribe channel types that are required by one or more modules to be created.

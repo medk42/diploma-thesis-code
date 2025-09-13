@@ -41,6 +41,8 @@ namespace aergo::default_modules::frontend_module::webapp
         void createModuleCreatedDialog();
         void createModuleDestroyedDialog();
         void createLoadCustomValueDialog();
+        void createActivationDialog();
+        void updateActivationDialogProgress();
 
         void refreshRunningModules(); // refreshes the list of running modules in the setup modules screen, does NOT lock the frontend_state_ mutex
         void processPendingActivationResponses(); // process pending activation/deactivation responses, must be called with the frontend_state_ mutex locked
@@ -52,6 +54,7 @@ namespace aergo::default_modules::frontend_module::webapp
         bool parseParameterValues(const std::vector<uint8_t>& data_blob, ActivationData &activation_data); // parse parameter values from data_blob and set to activation_data, does not lock
         void requestAddRemoveListEntry(ui::ActivationUi::ModuleSingleParameter param, bool add); // lock, send request adding or removing a list entry from the module
         void requestParameterChange(ui::ActivationUi::ModuleSingleParameter param, const ui::helper::value_t& value); // lock, send request changing a parameter value in the module
+        void requestActivate(uint64_t running_module_index, bool activate); // lock, send request to activate or deactivate the module
 
         std::atomic_bool connected_;
 
