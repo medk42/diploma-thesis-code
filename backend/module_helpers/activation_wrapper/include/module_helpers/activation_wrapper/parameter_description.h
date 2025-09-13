@@ -60,6 +60,7 @@ namespace aergo::module::helpers::activation_wrapper::params
     class ParameterList
     {
     public:
+        ParameterList() = default;
         ParameterList(std::vector<ParameterDescription>&& parameters);
 
         std::string toString();

@@ -53,9 +53,11 @@ ParameterDescription ParameterDescription::fromStringStream(std::stringstream& s
     description.type_ = (ParameterType)param_type;
     CHECKED_READ(stream >> param_name_length)
     description.param_name_.resize(param_name_length);
+    stream >> std::ws; // eat whitespace
     CHECKED_READ(stream.read(&description.param_name_[0], param_name_length))
     CHECKED_READ(stream >> param_desc_length)
     description.param_desc_.resize(param_desc_length);
+    stream >> std::ws; // eat whitespace
     CHECKED_READ(stream.read(&description.param_desc_[0], param_desc_length))
     CHECKED_READ(stream >> description.limit_min_)
     CHECKED_READ(stream >> description.limit_max_)
@@ -71,6 +73,7 @@ ParameterDescription ParameterDescription::fromStringStream(std::stringstream& s
         size_t enum_value_size;
         CHECKED_READ(stream >> enum_value_size)
         enum_value.resize(enum_value_size);
+        stream >> std::ws; // eat whitespace
         CHECKED_READ(stream.read(&enum_value[0], enum_value_size))
         description.enum_values_.push_back(std::move(enum_value));
     }
@@ -83,6 +86,7 @@ ParameterDescription ParameterDescription::fromStringStream(std::stringstream& s
     CHECKED_READ(stream >> description.list_size_max_)
     CHECKED_READ(stream >> default_value_length)
     description.default_value_.resize(default_value_length);
+    stream >> std::ws; // eat whitespace
     CHECKED_READ(stream.read(&description.default_value_[0], default_value_length))
 
     return description;
