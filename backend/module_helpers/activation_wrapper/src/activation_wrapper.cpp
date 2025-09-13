@@ -188,14 +188,14 @@ void* ActivationWrapper::query_capability(const std::type_info& id) noexcept
 
 aergo::module::IModule::IngressDecision ActivationWrapper::onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept
 {
-    if (activated_.load(std::memory_order_relaxed))
-    {
-        return module_ref_->onIngress(kind, local_channel_id, src, msg, queue_status);
-    }
-    
     if (kind == aergo::module::IModule::ProcessingType::REQUEST && local_channel_id == expected_response_producer_id_)
     {
         return aergo::module::IModule::IngressDecision::ACCEPT;
+    }
+
+    if (activated_.load(std::memory_order_relaxed))
+    {
+        return module_ref_->onIngress(kind, local_channel_id, src, msg, queue_status);
     }
 
     std::lock_guard<std::mutex> lock(mutex_);  // accessing message_wait_, we need synchronization
@@ -658,7 +658,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
             else
             {
                 chosen_value.clear();
-                
+
                 response.result_ = message_types::Result::SUCCESS;
                 return {response, {}};
             }
@@ -804,7 +804,7 @@ void ActivationWrapper::handleActivationTask()
         auto state = activation_task_->getState();
         if (state == AsyncTaskState::COMPLETED || state == AsyncTaskState::CANCELLED)
         {
-            if (state == AsyncTaskState::COMPLETED && activation_task_->getResult()) // COMPLETED = task finished running; getResult() = task returned true, successfully performed activation/deactivation
+            if (state == AsyncTaskState::COMPLETED && activation_task_->getResult().value()) // COMPLETED = task finished running; getResult() = task returned true, successfully performed activation/deactivation
             {
                 bool activated = activated_.load(std::memory_order_relaxed);
                 activated_.store(!activated, std::memory_order_release); // currently activated_ is false when activating, true when deactivating
