@@ -1,0 +1,16 @@
+{
+  "name": "aergo-demos",
+  "version-string": "0.1.0",
+  "dependencies": [
+    {
+      "name": "opencv4",
+      "default-features": true,
+      "features": ["contrib","world","ffmpeg"]
+    },
+    "eigen3",
+    "ceres",
+    "catch2",
+    "pangolin",
+    "simpleble"
+  ]
+}

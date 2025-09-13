@@ -34,9 +34,9 @@ namespace aergo::default_modules::camera_calibration_module
         /// @brief Module does not use threads.
         virtual bool threadStop(uint32_t timeout_ms) noexcept override { return true; }
 
-        virtual bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, std::atomic<bool>& cancel_flag) override { return true; }
+        virtual bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override { return true; }
 
-        virtual bool deactivate(std::atomic<bool>& cancel_flag) override { return true; }
+        virtual bool deactivate(const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override { return true; }
 
         /// @brief No requests needed for activation.
         virtual void sendRequestFromActivation(uint32_t request_consumer_id) override {}

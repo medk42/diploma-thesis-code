@@ -1,0 +1,76 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 23 },
+  "configurePresets": [
+    {
+      "name": "core-linux",
+      "displayName": "Core (Linux: static+PIC split OpenCV)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build-core-linux",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-pic-static",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
+        "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/core",
+        "AERGO_BUILD_BACKEND": "ON",
+        "AERGO_BUILD_DEFAULT_MODULES": "ON",
+        "AERGO_BUILD_DEMOS": "OFF"
+      }
+    },
+    {
+      "name": "demos-linux",
+      "displayName": "Demos (Linux: dynamic opencv_world)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build-demos-linux",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
+        "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/demos",
+        "AERGO_BUILD_BACKEND": "OFF",
+        "AERGO_BUILD_DEFAULT_MODULES": "OFF",
+        "AERGO_BUILD_DEMOS": "ON"
+      }
+    },
+    {
+      "name": "core-windows",
+      "displayName": "Core (Windows: static split OpenCV, /MD)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build-core-windows",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
+        "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/core",
+        "AERGO_BUILD_BACKEND": "ON",
+        "AERGO_BUILD_DEFAULT_MODULES": "ON",
+        "AERGO_BUILD_DEMOS": "OFF"
+      }
+    },
+    {
+      "name": "demos-windows",
+      "displayName": "Demos (Windows: dynamic opencv_world, /MD)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build-demos-windows",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-dynamic",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
+        "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/demos",
+        "AERGO_BUILD_BACKEND": "OFF",
+        "AERGO_BUILD_DEFAULT_MODULES": "OFF",
+        "AERGO_BUILD_DEMOS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "core-linux-Debug",    "configurePreset": "core-linux",   "configuration": "Debug" },
+    { "name": "core-linux-Release",  "configurePreset": "core-linux",   "configuration": "Release" },
+    { "name": "demos-linux-Debug",   "configurePreset": "demos-linux",  "configuration": "Debug" },
+    { "name": "demos-linux-Release", "configurePreset": "demos-linux",  "configuration": "Release" },
+    { "name": "core-windows-Debug",    "configurePreset": "core-windows",   "configuration": "Debug" },
+    { "name": "core-windows-Release",  "configurePreset": "core-windows",   "configuration": "Release" },
+    { "name": "demos-windows-Debug",   "configurePreset": "demos-windows",  "configuration": "Debug" },
+    { "name": "demos-windows-Release", "configurePreset": "demos-windows",  "configuration": "Release" }
+  ]
+}

@@ -28,7 +28,8 @@ namespace aergo::core
         /// For example "${modules_dir}/module_a.dll" will have data directory pointed to "${data_dir}/module_a". Auto-create modules with flag auto_create_.
         /// Only call this method once. Subsequent calls are ignored.
         /// Modules are auto-created after loading all modules (so getLoadedModulesInfo and getLoadedModulesCount will work correctly in module constructors).
-        void initialize(const char* modules_dir, const char* data_dir);
+        /// @return true if auto-create modules were created successfully, false if auto-create module creation failed.
+        bool initialize(const char* modules_dir, const char* data_dir);
 
         virtual void sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override final;
         virtual void sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::module::ChannelIdentifier target_channel, aergo::module::message::MessageHeader message) noexcept override final;
@@ -50,7 +51,8 @@ namespace aergo::core
         /// For example if we create A,B,C,D,E -> 5; if we now remove C, D -> 5; if we add F -> 6.
         uint64_t getCreatedModulesCount();
 
-        /// @brief ID of the module mapping state. ID changes when modules get created or destroyed.
+        /// @brief ID of the module mapping state. ID updates when modules get created or destroyed. Each update increases the ID by 1.
+        /// Can be used to detect changes in module mapping and update UI.
         virtual uint64_t getModulesMappingStateId() noexcept override final;
 
         /// @brief Get existing publish channels for specified channel type identifier. 
@@ -90,6 +92,7 @@ namespace aergo::core
 
         virtual bool removeModuleById(uint64_t id, bool recursive) noexcept override final;
         virtual aergo::module::RunningModuleInfo getRunningModulesInfo(uint64_t running_module_id) noexcept override final;  // wrapper, does not lock
+        virtual aergo::module::message::SharedDataBlob getRunningModulesChannelMap(uint64_t running_module_id) noexcept override final; // wrapper, does not lock
         virtual uint64_t getRunningModulesCount() noexcept override final; // wrapper, does not lock
         virtual aergo::module::message::SharedDataBlob collectDependencies(uint64_t id) noexcept override final; // wrapper, does not lock
         virtual aergo::module::message::SharedDataBlob getExistingPublishChannelsByName(const char* channel_type_identifier) noexcept override final; // wrapper, does not lock
@@ -101,7 +104,7 @@ namespace aergo::core
 
         void log(aergo::module::logging::LogType log_type, const char* message);
         void loadModules(const char* modules_dir, const char* data_dir);
-        void autoCreateModules();
+        bool autoCreateModules();
         uint64_t getNextModuleId();
         void registerModuleChannelNames(uint64_t module_id, const aergo::module::ModuleInfo* module_info);  // register to existing_publish_channels_, existing_response_channels_, existing_subscribe_auto_all_channels_ and existing_request_auto_all_channels_
 
@@ -150,6 +153,7 @@ namespace aergo::core
 
         std::shared_mutex core_mutex_;
         std::mutex add_remove_mutex_; // mutex to protect add/remove module operations
+        std::mutex allocator_mutex_;  // mutex to protect allocator creation/deletion
 
         logging::ILogger* logger_;
 

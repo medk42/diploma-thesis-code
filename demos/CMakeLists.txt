@@ -1,5 +1,5 @@
 add_subdirectory(camera_calib)
 add_subdirectory(pen_calib)
 add_subdirectory(pen_tracking)
-add_subdirectory(module_communication)
+# add_subdirectory(module_communication)
 add_subdirectory(catch2_test)

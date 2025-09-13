@@ -202,11 +202,6 @@ namespace aergo::module
     {
         bool exists_;                      // does the module exist (was not destroyed)
         const ModuleInfo* module_info_;    // reference to module info (loaded module)
-
-        /// @brief Mapping of input channels (subscribe/request) to other modules and their output channels (publish/response).
-        /// Structure is {uint32_t subscribe_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[subscribe_consumer_count],
-        ///               uint32_t request_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[request_consumer_count]}
-        message::SharedDataBlob channel_map_; 
     };
 
     /// @brief Interface provided by the core to modules.
@@ -261,6 +256,11 @@ namespace aergo::module
         /// @brief Returns information about created module. If module was destroyed, exists_ will be false.
         /// @return Check returned blob for validity by calling the valid() function.
         virtual RunningModuleInfo getRunningModulesInfo(uint64_t running_module_id) noexcept = 0;
+
+        /// @brief Mapping of input channels (subscribe/request) to other modules and their output channels (publish/response). Invalid if module does not exist.
+        /// Structure is {uint32_t subscribe_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[subscribe_consumer_count],
+        ///               uint32_t request_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[request_consumer_count]}
+        virtual message::SharedDataBlob getRunningModulesChannelMap(uint64_t running_module_id) noexcept = 0;
 
         /// @brief Returns the number of created modules over the lifetime of this object (even if they were later destroyed).
         /// For example if we create A,B,C,D,E -> 5; if we now remove C, D -> 5; if we add F -> 6.

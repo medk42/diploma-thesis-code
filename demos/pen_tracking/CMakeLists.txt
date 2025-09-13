@@ -1,5 +1,5 @@
 # Find OpenCV
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV 4 REQUIRED world)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # Find SimpleBLE
@@ -46,13 +46,17 @@ add_executable(pen_drawing_test
     ../pen_calib/src/pen_calibration_helper.cpp
 )
 
+set(OPENCV_NEEDED_LIBS 
+    opencv_world
+)
+
 # Link against OpenCV (already found by the root CMakeLists.txt)
-target_link_libraries(pen_tracking ${OpenCV_LIBS})
-target_link_libraries(pen_tracking_performance_test ${OpenCV_LIBS})
-target_link_libraries(pen_tracking_accuracy_test ${OpenCV_LIBS})
-target_link_libraries(ble_test simpleble::simpleble ${OpenCV_LIBS})
-target_link_libraries(pen_visualization_test simpleble::simpleble ${OpenCV_LIBS})
-target_link_libraries(pen_drawing_test simpleble::simpleble ${OpenCV_LIBS} ${Pangolin_LIBRARIES})
+target_link_libraries(pen_tracking PRIVATE ${OPENCV_NEEDED_LIBS})
+target_link_libraries(pen_tracking_performance_test PRIVATE ${OPENCV_NEEDED_LIBS})
+target_link_libraries(pen_tracking_accuracy_test PRIVATE ${OPENCV_NEEDED_LIBS})
+target_link_libraries(ble_test PRIVATE simpleble::simpleble ${OPENCV_NEEDED_LIBS})
+target_link_libraries(pen_visualization_test PRIVATE simpleble::simpleble ${OPENCV_NEEDED_LIBS})
+target_link_libraries(pen_drawing_test PRIVATE simpleble::simpleble ${OPENCV_NEEDED_LIBS} ${Pangolin_LIBRARIES})
 
 target_include_directories(pen_tracking PRIVATE include ../pen_calib/include)
 target_include_directories(pen_tracking_performance_test PRIVATE include ../pen_calib/include)

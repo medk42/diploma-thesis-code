@@ -2,6 +2,7 @@
 #define AERGO_PEN_CALIBRATION_H
 
 #include <set>
+#include <optional>
 
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>

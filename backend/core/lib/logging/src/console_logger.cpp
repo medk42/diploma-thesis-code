@@ -4,6 +4,7 @@
 #include <iostream>
 #include <chrono>
 #include <ctime>
+#include <iomanip>
 
 using namespace aergo::core::logging;
 using namespace aergo::module::logging;

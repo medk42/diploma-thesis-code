@@ -35,18 +35,18 @@ Core::~Core()
 
 
 
-void Core::initialize(const char* modules_dir, const char* data_dir)
+bool Core::initialize(const char* modules_dir, const char* data_dir)
 {
     std::unique_lock<std::shared_mutex> lock(core_mutex_);
 
     if (initialized_)
     {
-        return;
+        return true; // already initialized, ignore subsequent calls
     }
     initialized_ = true;
 
     loadModules(modules_dir, data_dir);
-    autoCreateModules();
+    return autoCreateModules();
 }
 
 
@@ -119,7 +119,7 @@ void Core::loadModules(const char* modules_dir, const char* data_dir)
 
 
 
-void Core::autoCreateModules()
+bool Core::autoCreateModules()
 {
     aergo::module::InputChannelMapInfo empty_channel_info
     {
@@ -164,6 +164,7 @@ void Core::autoCreateModules()
                 {
                     std::string failure_message = std::string("Failed to auto-create module: ") + loaded_modules_[i].getModuleUniqueName();
                     log(aergo::module::logging::LogType::WARNING, failure_message.c_str());
+                    return false;
                 }
             }
             else
@@ -173,6 +174,8 @@ void Core::autoCreateModules()
             }
         }
     }
+
+    return true;
 }
 
 
@@ -1210,12 +1213,13 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
 
 aergo::module::IAllocator* Core::createDynamicAllocator() noexcept
 {
-    std::unique_lock<std::shared_mutex> lock(core_mutex_);
-
     auto allocator = std::make_unique<memory_allocation::DynamicAllocator>(logger_);
     auto allocator_wrapper = std::make_unique<memory_allocation::AllocatorWrapper>(std::move(allocator));
     aergo::module::IAllocator* raw_ptr = allocator_wrapper.get();
-    allocators_.push_back(std::move(allocator_wrapper));
+    {
+        std::unique_lock<std::mutex> lock(allocator_mutex_);
+        allocators_.push_back(std::move(allocator_wrapper));
+    }
     return raw_ptr;
 }
 
@@ -1223,12 +1227,13 @@ aergo::module::IAllocator* Core::createDynamicAllocator() noexcept
 
 aergo::module::IAllocator* Core::createBufferAllocator(uint64_t slot_size_bytes, uint32_t number_of_slots) noexcept
 {
-    std::unique_lock<std::shared_mutex> lock(core_mutex_);
-
     auto allocator = std::make_unique<memory_allocation::StaticAllocator>(slot_size_bytes, number_of_slots, logger_);
     auto allocator_wrapper = std::make_unique<memory_allocation::AllocatorWrapper>(std::move(allocator));
     aergo::module::IAllocator* raw_ptr = allocator_wrapper.get();
-    allocators_.push_back(std::move(allocator_wrapper));
+    {
+        std::unique_lock<std::mutex> lock(allocator_mutex_);
+        allocators_.push_back(std::move(allocator_wrapper));
+    }
     return raw_ptr;
 }
 
@@ -1236,7 +1241,7 @@ aergo::module::IAllocator* Core::createBufferAllocator(uint64_t slot_size_bytes,
 
 void Core::deleteAllocator(aergo::module::IAllocator* allocator) noexcept
 {
-    std::unique_lock<std::shared_mutex> lock(core_mutex_);
+    std::unique_lock<std::mutex> lock(allocator_mutex_);
 
     auto it = std::find_if(allocators_.begin(), allocators_.end(), [allocator](auto& ptr) { return allocator == ptr.get(); });
 
@@ -1254,75 +1259,101 @@ void Core::deleteAllocator(aergo::module::IAllocator* allocator) noexcept
 
 aergo::module::RunningModuleInfo Core::getRunningModulesInfo(uint64_t running_module_id) noexcept
 {
-    auto module_info = getCreatedModulesInfo(running_module_id);
-    if (module_info == nullptr)
+    std::shared_lock<std::shared_mutex> lock(core_mutex_);
+
+    if (running_module_id >= running_modules_.size() || running_modules_[running_module_id].get() == nullptr)
     {
         return { .exists_ = false };
     }
 
-    aergo::module::RunningModuleInfo info {
+    auto module_data = running_modules_[running_module_id].get();
+
+    return aergo::module::RunningModuleInfo {
         .exists_ = true,
-        .module_info_ = (*module_info->module_loader_data_)->readModuleInfo()
+        .module_info_ = (*module_data->module_loader_data_)->readModuleInfo()
     };
+}
+
+
+
+aergo::module::message::SharedDataBlob Core::getRunningModulesChannelMap(uint64_t running_module_id) noexcept
+{
+    std::shared_lock<std::shared_mutex> lock(core_mutex_);
+
+    aergo::core::structures::ModuleData* module_data;
+    if (running_module_id < running_modules_.size())
+    {
+        module_data = running_modules_[running_module_id].get();
+    }
+    else
+    {
+        return aergo::module::message::SharedDataBlob(); // return invalid blob
+    }
+
+    if (module_data == nullptr)
+    {
+        return aergo::module::message::SharedDataBlob(); // return invalid blob
+    }
+
+
+    const aergo::module::ModuleInfo* module_info = (*module_data->module_loader_data_)->readModuleInfo();
 
     uint64_t required_memory = 0;
 
     required_memory += sizeof(uint32_t); // uint32_t for subscribe_consumer_count_
-    for (uint32_t i = 0; i < info.module_info_->subscribe_consumer_count_; ++i)
+    for (uint32_t i = 0; i < module_info->subscribe_consumer_count_; ++i)
     {
         required_memory += sizeof(uint32_t); // uint32_t for vector size
-        required_memory += module_info->mapping_subscribe_[i].size() * sizeof(aergo::module::ChannelIdentifier); // vector content for single subscriber
+        required_memory += module_data->mapping_subscribe_[i].size() * sizeof(aergo::module::ChannelIdentifier); // vector content for single subscriber
     }
 
     required_memory += sizeof(uint32_t); // uint32_t for request_consumer_count_
-    for (uint32_t i = 0; i < info.module_info_->request_consumer_count_; ++i)
+    for (uint32_t i = 0; i < module_info->request_consumer_count_; ++i)
     {
         required_memory += sizeof(uint32_t); // uint32_t for vector size
-        required_memory += module_info->mapping_request_[i].size() * sizeof(aergo::module::ChannelIdentifier); // vector content for single request consumer
+        required_memory += module_data->mapping_request_[i].size() * sizeof(aergo::module::ChannelIdentifier); // vector content for single request consumer
     }
 
     aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(required_memory);
     if (!blob.valid())
     {
-        return info; // return without mappings
+        return aergo::module::message::SharedDataBlob(); // return invalid blob
     }
 
     uint8_t* data_ptr = blob.data();
     uint32_t* data_as_uint32 = reinterpret_cast<uint32_t*>(data_ptr);
 
-    *data_as_uint32 = info.module_info_->subscribe_consumer_count_; // log number of subscribe channels
+    *data_as_uint32 = module_info->subscribe_consumer_count_; // log number of subscribe channels
     ++data_as_uint32;
-    for (uint32_t i = 0; i < info.module_info_->subscribe_consumer_count_; ++i)
+    for (uint32_t i = 0; i < module_info->subscribe_consumer_count_; ++i)
     {
-        *data_as_uint32 = (uint32_t)module_info->mapping_subscribe_[i].size(); // log number of subscribers for this channel
+        *data_as_uint32 = (uint32_t)module_data->mapping_subscribe_[i].size(); // log number of subscribers for this channel
         ++data_as_uint32;
         aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint32);
-        for (size_t j = 0; j < module_info->mapping_subscribe_[i].size(); ++j)
+        for (size_t j = 0; j < module_data->mapping_subscribe_[i].size(); ++j)
         {
-            *data_as_channel_identifier = module_info->mapping_subscribe_[i][j];
+            *data_as_channel_identifier = module_data->mapping_subscribe_[i][j];
             ++data_as_channel_identifier;
         }
         data_as_uint32 = reinterpret_cast<uint32_t*>(data_as_channel_identifier);
     }
 
-    *data_as_uint32 = info.module_info_->request_consumer_count_; // log number of request channels
+    *data_as_uint32 = module_info->request_consumer_count_; // log number of request channels
     ++data_as_uint32;
-    for (uint32_t i = 0; i < info.module_info_->request_consumer_count_; ++i)
+    for (uint32_t i = 0; i < module_info->request_consumer_count_; ++i)
     {
-        *data_as_uint32 = (uint32_t)module_info->mapping_request_[i].size(); // log number of request consumers for this channel
+        *data_as_uint32 = (uint32_t)module_data->mapping_request_[i].size(); // log number of request consumers for this channel
         ++data_as_uint32;
         aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint32);
-        for (size_t j = 0; j < module_info->mapping_request_[i].size(); ++j)
+        for (size_t j = 0; j < module_data->mapping_request_[i].size(); ++j)
         {
-            *data_as_channel_identifier = module_info->mapping_request_[i][j];
+            *data_as_channel_identifier = module_data->mapping_request_[i][j];
             ++data_as_channel_identifier;
         }
         data_as_uint32 = reinterpret_cast<uint32_t*>(data_as_channel_identifier);
     }
 
-    info.channel_map_ = blob;
-
-    return info;
+    return blob;
 }
 
 

@@ -1,5 +1,7 @@
 #include "module_helpers/activation_wrapper/parameter_description.h"
 
+#include <limits>
+
 #define PARAM_DESC_VERSION 1
 
 #define CHECKED_READ(read_call) if (!(read_call)) throw std::runtime_error("Invalid parameter description.");

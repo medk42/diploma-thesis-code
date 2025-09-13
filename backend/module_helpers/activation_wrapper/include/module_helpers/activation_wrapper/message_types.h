@@ -1,6 +1,7 @@
 #pragma once
 
 #include "parameter_description.h"
+#include "module_common/module_interface_.h"
 
 
 // READ_ACTIVATION_PARAMETERS -> SUCCESS, FAIL (failed to allocate memory)
@@ -82,6 +83,20 @@ namespace aergo::module::helpers::activation_wrapper::message_types
         size_t list_size_;            // for READ_VALUE, when we are reading a list
     };
 
-    constexpr const char* req_type_identifier = "helpers__activation_wrapper__req/v1:struct{enum,enum,size_t,size_t,uint64_t}";
-    constexpr const char* resp_type_identifier = "helpers__activation_wrapper__resp/v1:struct{enum,enum,struct{enum,uint32_t,double,uint32_t},bool,size_t}";
+    constexpr aergo::module::communication_channel::Consumer activation_request_consumer = {
+        .count_ = aergo::module::communication_channel::Consumer::Count::AUTO_ALL,
+        .channel_type_identifier_ = "helpers__activation_wrapper__req/v1:struct{enum,enum,size_t,size_t,uint64_t}",
+        .display_name_ = "Activation Wrapper Request",
+        .display_description_ = "Request channel for activation wrapper messages to control module activation and parameters.",
+        .prioritized_ = true,
+        .message_queue_capacity_ = 16
+    };
+
+    constexpr aergo::module::communication_channel::Producer activation_response_producer = {
+        .channel_type_identifier_ = "helpers__activation_wrapper__resp/v1:struct{enum,enum,struct{enum,uint32_t,double,uint32_t},bool,size_t}",
+        .display_name_ = "Activation Wrapper Response",
+        .display_description_ = "Response channel for activation wrapper messages to control module activation and parameters. Indicates that module implements activation wrapper and can be activated/deactivated.",
+        .prioritized_ = true,
+        .message_queue_capacity_ = 16
+    };
 }

@@ -19,7 +19,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 {
     ConsoleLogger logger;
     Core core(&logger);
-    REQUIRE_NOTHROW(core.initialize("../../../../../../../backend/binaries/tests/test_core_1", "."));
+    REQUIRE_NOTHROW(core.initialize("test_core_1", "."));
 
     uint64_t last_state_id = core.getModulesMappingStateId();
 
@@ -2003,24 +2003,25 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
                 for (uint64_t module_id = 0; module_id < core.getCreatedModulesCount(); ++module_id)
                 {
                     aergo::module::RunningModuleInfo info = core.getRunningModulesInfo(module_id);
+                    aergo::module::message::SharedDataBlob channel_map = core.getRunningModulesChannelMap(module_id);
                     aergo::core::structures::ModuleData* module_data = core.getCreatedModulesInfo(module_id); // Just to ensure it doesn't throw
                     if (module_data == nullptr)
                     {
                         REQUIRE(info.exists_ == false);
                         REQUIRE(info.module_info_ == nullptr);
-                        REQUIRE(info.channel_map_.valid() == false);
+                        REQUIRE(channel_map.valid() == false);
                     }
                     else
                     {
                         REQUIRE(info.exists_ == true);
                         REQUIRE(info.module_info_ != nullptr);
-                        REQUIRE(info.channel_map_.valid() == true);
+                        REQUIRE(channel_map.valid() == true);
 
                         // Validate blob structure:
                         // {uint32_t subscribe_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[subscribe_consumer_count],
                         //  uint32_t request_consumer_count, {uint32_t channel_identifier_count, ChannelIdentifier[channel_identifier_count]}[request_consumer_count]}
 
-                        const uint8_t* data_ptr = info.channel_map_.data();
+                        const uint8_t* data_ptr = channel_map.data();
                         size_t offset = 0;
 
                         // Check subscribe consumers
@@ -2069,7 +2070,7 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
                         }
 
                         // Final offset should match blob size
-                        REQUIRE(offset == info.channel_map_.size());
+                        REQUIRE(offset == channel_map.size());
                     }
                 }
             }

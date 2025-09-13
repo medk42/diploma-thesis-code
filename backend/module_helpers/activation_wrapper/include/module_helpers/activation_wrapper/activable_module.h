@@ -10,12 +10,14 @@ namespace aergo::module::helpers::activation_wrapper
     {
     public:
         /// @brief Activate the module with specified parameters. During long operation check cancel_flag periodically and return if set to true.
-        /// @return true if activation finished successfully, false if cancelled (or failed)
-        virtual bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, std::atomic<bool>& cancel_flag) = 0;
+        /// If the activation is cancelled, set cancelled to true and the module should stay deactivated.
+        /// @return true if activation finished successfully, false if failed
+        virtual bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) = 0;
 
-        /// @brief Deactivate the module. During long operation check cancel_flag periodically and return if set to true.
-        /// @return true if deactivation finished successfully, false if cancelled (or failed)
-        virtual bool deactivate(std::atomic<bool>& cancel_flag) = 0;
+        /// @brief Deactivate the module. During long operation check cancel_flag periodically and return if set to true. 
+        /// If the deactivation is cancelled, set cancelled to true and the module should stay activated.
+        /// @return true if deactivation finished successfully, false failed
+        virtual bool deactivate(const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) = 0;
 
         /// @brief Send request from activation wrapper to the module. Used to request CUSTOM parameter values.
         /// @param request_consumer_id ID of the request consumer channel to send the request to

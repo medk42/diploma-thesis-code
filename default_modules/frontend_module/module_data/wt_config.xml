@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<server>
+  <application-settings location="*">
+
+    <session-management>
+      <!-- dedicate 1 process for testing; use 'shared-process' or 'dedicated-process' per your deployment -->
+      <shared-process>
+        <num-processes>1</num-processes>
+      </shared-process>
+
+      <!-- session timeout in seconds -->
+      <timeout>10</timeout>
+
+      <!-- let Wt use cookies if available -->
+      <tracking>Auto</tracking>
+
+      <!-- server-push long-poll timeout -->
+      <server-push-timeout>50</server-push-timeout>
+    </session-management>
+
+    <!-- Debug / logging -->
+    <debug>false</debug>
+    <!-- <log-file>wt-app.log</log-file> -->
+
+    <!-- Allow websockets (wthttpd must support websockets too) -->
+    <web-sockets>true</web-sockets>
+
+    <!-- Max request size in KB -->
+    <max-request-size>51200</max-request-size>
+
+    <!-- App properties: resource URL base, favicon, etc -->
+    <!-- <properties>
+      <property name="resourcesURL">/static/resources/</property>
+      <property name="extBaseURL">/static/ext/</property>
+      <property name="favicon">/static/favicon.ico</property>
+    </properties> -->
+  </application-settings>
+</server>

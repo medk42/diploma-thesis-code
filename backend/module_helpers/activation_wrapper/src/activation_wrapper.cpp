@@ -4,6 +4,7 @@
 
 
 #include <unordered_map>
+#include <cstring>
 
 
 
@@ -11,10 +12,10 @@ using namespace aergo::module::helpers::activation_wrapper;
 using namespace aergo::module;
 
 
-ActivationWrapper::ActivationWrapper(aergo::module::IModule* module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_)
-: valid_(false), module_ref_(module), parameters_(parameters_), activated_(false), message_wait_{false, 0, 0}
+ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_)
+: valid_(false), module_ref_(std::move(module)), parameters_(parameters_), activated_(false), message_wait_{false, 0, 0}
 {
-    if (module_ref_ == nullptr || parameters_ == nullptr)
+    if (module_ref_.get() == nullptr || parameters_ == nullptr)
     {
         return;
     }
@@ -48,7 +49,7 @@ ActivationWrapper::ActivationWrapper(aergo::module::IModule* module, aergo::modu
         
         std::string channel_type_identifier = module_info.response_producers_[response_producer_id].channel_type_identifier_;
 
-        if (channel_type_identifier == aergo::module::helpers::activation_wrapper::message_types::resp_type_identifier)
+        if (channel_type_identifier == aergo::module::helpers::activation_wrapper::message_types::activation_response_producer.channel_type_identifier_)
         {
             expected_response_producer_id_ = response_producer_id;
             found = true;
@@ -423,7 +424,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
                 return {response, {}};
             }
 
-            activation_task_ = std::make_unique<AsyncTask>([this](std::atomic<bool>& cancel_flag) { return activable_module_ref_->activate(parameter_values_, cancel_flag); });
+            activation_task_ = std::make_unique<AsyncTask<bool>>([this](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) { return activable_module_ref_->activate(parameter_values_, cancel_flag, cancelled); });
             activation_task_->start();
             response.result_ = message_types::Result::RUNNING;
             response.progress_ = activable_module_ref_->getActivationProgress();
@@ -437,7 +438,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
                 return {response, {}};
             }
 
-            activation_task_ = std::make_unique<AsyncTask>([this](std::atomic<bool>& cancel_flag) { return activable_module_ref_->deactivate(cancel_flag); });
+            activation_task_ = std::make_unique<AsyncTask<bool>>([this](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) { return activable_module_ref_->deactivate(cancel_flag, cancelled); });
             activation_task_->start();
             response.result_ = message_types::Result::RUNNING;
             response.progress_ = activable_module_ref_->getActivationProgress();
@@ -483,7 +484,7 @@ std::tuple<message_types::Response, message::SharedDataBlob> ActivationWrapper::
             }
             else if (message_wait_.expected_.load(std::memory_order_relaxed))
             {
-                message_wait_.expected_.store(false, std::memory_order::memory_order_release);
+                message_wait_.expected_.store(false, std::memory_order_release);
                 response.result_ = message_types::Result::SUCCESS;
             }
             else
@@ -644,7 +645,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
     {
         message_wait_.param_id_ = request.param_id_;
         message_wait_.list_id_ = list_id;
-        message_wait_.expected_.store(true, std::memory_order::memory_order_release);
+        message_wait_.expected_.store(true, std::memory_order_release);
 
         if (param.custom_channel_type_ == params::CustomChannelType::REQUEST)
         {
@@ -787,7 +788,7 @@ void ActivationWrapper::handleActivationTask()
         auto state = activation_task_->getState();
         if (state == AsyncTaskState::COMPLETED || state == AsyncTaskState::CANCELLED)
         {
-            if (state == AsyncTaskState::COMPLETED)
+            if (state == AsyncTaskState::COMPLETED && activation_task_->getResult()) // COMPLETED = task finished running; getResult() = task returned true, successfully performed activation/deactivation
             {
                 bool activated = activated_.load(std::memory_order_relaxed);
                 activated_.store(!activated, std::memory_order_release); // currently activated_ is false when activating, true when deactivating
@@ -803,16 +804,27 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
 {
     
     auto& chosen_value = parameter_values_[message_wait_.param_id_][message_wait_.list_id_];
-    chosen_value.resize(0);
-    
-    chosen_value.insert(chosen_value.end(),
-            reinterpret_cast<const uint8_t*>(&message.data_len_),
-            reinterpret_cast<const uint8_t*>(&message.data_len_) + sizeof(uint64_t));
-    chosen_value.insert(chosen_value.end(), message.data_, message.data_ + message.data_len_);
-    
-    chosen_value.insert(chosen_value.end(),
-            reinterpret_cast<const uint8_t*>(&message.blob_count_),
-            reinterpret_cast<const uint8_t*>(&message.blob_count_) + sizeof(uint64_t));
+
+    std::vector<uint8_t> out;
+
+    // helper to append POD
+    auto append_pod = [&](const auto& v) {
+        const uint8_t* p = reinterpret_cast<const uint8_t*>(&v);
+        out.insert(out.end(), p, p + sizeof(v));
+    };
+
+    uint64_t message_data_len = (message.data_ == nullptr) ? 0 : message.data_len_;
+
+    // data_len_
+    append_pod(message_data_len);
+
+    // inline data
+    if (message_data_len > 0) {
+        out.insert(out.end(), message.data_, message.data_ + message_data_len);
+    }
+
+    // blob_count_
+    append_pod(message.blob_count_);
 
     for (uint64_t blob_id = 0; blob_id < message.blob_count_; ++blob_id)
     {
@@ -821,21 +833,27 @@ void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
             uint64_t blob_size = message.blobs_[blob_id].size();
             uint8_t* blob_data = message.blobs_[blob_id].data();
 
-            chosen_value.insert(chosen_value.end(),
-                reinterpret_cast<const uint8_t*>(&blob_size),
-                reinterpret_cast<const uint8_t*>(&blob_size) + sizeof(uint64_t));
-            chosen_value.insert(chosen_value.end(), blob_data, blob_data + blob_size);
+            if (blob_data == nullptr)
+            {
+                blob_size = 0;
+            }
+
+            append_pod(blob_size);
+            if (blob_size > 0)
+            {
+                out.insert(out.end(), blob_data, blob_data + blob_size);
+            }
         }
         else
         {
             uint64_t blob_size = 0;
-            chosen_value.insert(chosen_value.end(),
-                reinterpret_cast<const uint8_t*>(&blob_size),
-                reinterpret_cast<const uint8_t*>(&blob_size) + sizeof(uint64_t));
+            append_pod(blob_size);
         }
     }
 
-    message_wait_.expected_.store(false, std::memory_order::memory_order_release);
+    chosen_value = std::move(out);
+
+    message_wait_.expected_.store(false, std::memory_order_release);
 }
 
 

@@ -1,7 +1,7 @@
 set(MODULE_NAME camera_calibration_module)
 
 # Find OpenCV
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV 4 REQUIRED core)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # gather sources (updates when files change)
@@ -14,7 +14,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 add_library(${MODULE_NAME} MODULE ${PROJECT_SOURCES})
 
 # Link with libraries needed by this module
-target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___activation_wrapper ${OpenCV_LIBS})
+target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___activation_wrapper opencv_core)
 
 # Add include directories
 target_include_directories(${MODULE_NAME} PRIVATE
@@ -33,7 +33,6 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
     POSITION_INDEPENDENT_CODE ON
 )
-# target_link_options("${MODULE_NAME}" PRIVATE /NOIMPLIB)
 
 
 cmake_policy(SET CMP0177 NEW)

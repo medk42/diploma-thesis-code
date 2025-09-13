@@ -20,7 +20,7 @@ void* CameraModule::query_capability(const std::type_info& id) noexcept
 
 
 
-bool CameraModule::activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, std::atomic<bool>& cancel_flag)
+bool CameraModule::activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled)
 {
     std::lock_guard<std::mutex> lock(activation_mutex_);
 
@@ -113,7 +113,7 @@ bool CameraModule::activate(std::vector<std::vector<std::vector<uint8_t>>>& para
 
 
 
-bool CameraModule::deactivate(std::atomic<bool>& cancel_flag)
+bool CameraModule::deactivate(const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled)
 {
     std::lock_guard<std::mutex> lock(activation_mutex_);
 

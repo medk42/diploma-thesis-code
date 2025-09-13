@@ -40,9 +40,9 @@ namespace aergo::default_modules::camera_module
         /// @brief Stopping thread is handled in deactivate.
         virtual bool threadStop(uint32_t timeout_ms) noexcept override { return true; }
 
-        virtual bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, std::atomic<bool>& cancel_flag) override;
+        virtual bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override;
 
-        virtual bool deactivate(std::atomic<bool>& cancel_flag) override;
+        virtual bool deactivate(const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override;
 
         /// @brief No requests needed for activation.
         virtual void sendRequestFromActivation(uint32_t request_consumer_id) override {}
