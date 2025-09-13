@@ -687,6 +687,7 @@ void FrontendApp::processPendingActivationResponses()
         {
             if (response.response_.request_type_ == aergo::module::helpers::activation_wrapper::message_types::ReqType::READ_ACTIVATION_PARAMETERS)
             {
+                base_module_->log(aergo::module::logging::LogType::INFO, "Received activation parameters from module " + std::to_string(response.running_module_index_) + ", success: " + std::to_string(response.success_) + ", data size: " + std::to_string(response.data_blob_.size()));
                 // TODO read activation data from data_blob_ and set it in the UI
             }
             // TODO handle other response types

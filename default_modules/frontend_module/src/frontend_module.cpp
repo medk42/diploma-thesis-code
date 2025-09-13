@@ -143,6 +143,7 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
                 resp.data_blob_.resize(message.blobs_[0].size());
                 std::memcpy(resp.data_blob_.data(), message.blobs_[0].data(), message.blobs_[0].size());
             }
+            frontend_state_.pending_activation_responses_.push_back(std::move(resp));
         }
     }
 }
