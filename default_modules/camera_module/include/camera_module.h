@@ -34,11 +34,11 @@ namespace aergo::default_modules::camera_module
         /// @brief Drop all incoming messages, camera module only produces.
         virtual IngressDecision onIngress(ProcessingType kind, uint32_t local_channel_id, aergo::module::ChannelIdentifier src, const aergo::module::message::MessageHeader& msg, QueueStatus queue_status) noexcept override { return IngressDecision::DROP; }
 
-        /// @brief Starting thread is handled in activate. 
-        virtual bool threadStart(uint32_t timeout_ms) noexcept override { return true; }
+        /// @brief Start the capture thread.
+        virtual bool threadStart(uint32_t timeout_ms) noexcept override;
 
-        /// @brief Stopping thread is handled in deactivate.
-        virtual bool threadStop(uint32_t timeout_ms) noexcept override { return true; }
+        /// @brief Stop the capture thread.
+        virtual bool threadStop(uint32_t timeout_ms) noexcept override;
 
         virtual bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override;
 
@@ -63,7 +63,8 @@ namespace aergo::default_modules::camera_module
         std::thread capture_thread_;
         std::atomic<bool> stop_thread_{false};
 
-        bool activated_{false};
+        std::atomic<bool> activated_{false};
+        bool thread_running_{false};
         std::mutex activation_mutex_;
     };
 }

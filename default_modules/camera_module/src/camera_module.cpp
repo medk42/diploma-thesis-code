@@ -100,12 +100,7 @@ bool CameraModule::activate(std::vector<std::vector<std::vector<uint8_t>>>& para
 
     log(aergo::module::logging::LogType::INFO, "Camera module initialized successfully");
 
-
-
-    log(aergo::module::logging::LogType::INFO, "Starting camera capture thread");
-
-    stop_thread_ = false;
-    capture_thread_ = std::thread(std::bind(&CameraModule::captureLoop, this));
+    
     activated_ = true;
 
     return true;
@@ -123,8 +118,39 @@ bool CameraModule::deactivate(const std::atomic<bool>& cancel_flag, std::atomic<
         return true; // already stopped
     }
 
-    log(aergo::module::logging::LogType::INFO, "Stopping camera capture thread");
+    activated_ = false;
 
+    return true;
+}
+
+
+
+bool CameraModule::threadStart(uint32_t timeout_ms) noexcept
+{
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+
+    log(aergo::module::logging::LogType::INFO, "Starting camera capture thread");
+
+    stop_thread_ = false;
+    capture_thread_ = std::thread(std::bind(&CameraModule::captureLoop, this));
+    thread_running_ = true;
+
+    return true;
+}
+
+
+
+bool CameraModule::threadStop(uint32_t timeout_ms) noexcept
+{
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+
+    if (!thread_running_)
+    {
+        log(aergo::module::logging::LogType::WARNING, "Camera capture thread is not running");
+        return true; // already stopped
+    }
+
+    log(aergo::module::logging::LogType::INFO, "Stopping camera capture thread");
     if (stop_thread_)
     {
         log(aergo::module::logging::LogType::WARNING, "Camera capture thread is already stopped");
@@ -136,6 +162,7 @@ bool CameraModule::deactivate(const std::atomic<bool>& cancel_flag, std::atomic<
     {
         capture_thread_.join();
     }
+    thread_running_ = false;
 
     return true;
 }
@@ -153,6 +180,12 @@ void CameraModule::captureLoop()
 {    
     while (!stop_thread_)
     {
+        if (!activated_.load(std::memory_order_relaxed))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+
         message::SharedDataBlob frame_blob = frame_allocator_->allocate(frame_header_.width_ * frame_header_.height_ * 3);
         if (!frame_blob.valid())
         {
