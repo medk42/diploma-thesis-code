@@ -145,9 +145,16 @@ void FrontendApp::loadUiFromState()
         if (frontend_state_->known_running_modules_[i])
         {
             const aergo::module::ModuleInfo* module_info = frontend_state_->known_running_modules_info_[i];
+            const auto& activation_data = frontend_state_->known_running_modules_activation_data_[i];
+
             if (!module_info->auto_create_)
             {
-                activation_ui_->addModule(i, module_info->display_name_, module_info->display_description_, false, false, {});
+                activation_ui_->addModule(i, module_info->display_name_, module_info->display_description_, activation_data.is_activable_, activation_data.is_activable_, {});
+            }
+            if (activation_data.is_activable_)
+            {
+                activation_ui_->setParameters(i, activation_data.activation_parameters_.getParameters());
+                activation_ui_->setParameterValues(i, activation_data.parameter_values_);
             }
         }
     }
@@ -833,6 +840,7 @@ void FrontendApp::processPendingActivationResponses()
                         true,
                         frontend_state_->current_custom_parameter_.list_id_
                     );
+                    frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].parameter_values_[frontend_state_->current_custom_parameter_.parameter_id_][frontend_state_->current_custom_parameter_.list_id_] = true;
                 }
                 frontend_state_->running_task_ = RunningTask::NONE;
             }
@@ -857,6 +865,7 @@ void FrontendApp::processPendingActivationResponses()
                         true,
                         frontend_state_->current_custom_parameter_.list_id_
                     );
+                    frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].parameter_values_[frontend_state_->current_custom_parameter_.parameter_id_][frontend_state_->current_custom_parameter_.list_id_] = true;
 
                     dismissDialog();
                     frontend_state_->running_task_ = RunningTask::NONE;
@@ -867,6 +876,25 @@ void FrontendApp::processPendingActivationResponses()
                 if (response.response_.result_ == message_types::Result::SUCCESS)
                 {
                     dismissDialog();
+
+                    if (frontend_state_->running_task_ == RunningTask::ACTIVATING && !response.response_.activated_
+                    ||  frontend_state_->running_task_ == RunningTask::DEACTIVATING && response.response_.activated_)
+                    {
+                        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>( // overlay, dismissible
+                            frontend_state_->running_task_ == RunningTask::ACTIVATING ? "Activating Module" : "Deactivating Module",
+                            frontend_state_->running_task_ == RunningTask::ACTIVATING ? "The module activation has failed. Double check the parameters and try again." : "The module deactivation has failed. Please try again.",
+                            std::vector<ui::helper::ButtonDescription> { 
+                                ui::helper::ButtonDescription {
+                                    .text_ = "OK",
+                                    .style_ = ui::helper::ButtonStyle::Secondary,
+                                    .enabled_ = true
+                                }
+                            }
+                        ));
+                        reusable_dialog_->onButtonClicked().connect(this, &FrontendApp::dismissDialog);
+                        reusable_dialog_->onBackgroundClicked().connect(this, &FrontendApp::dismissDialog);
+                    }
+
                     frontend_state_->running_task_ = RunningTask::NONE;
                 }
                 else if (response.response_.result_ == message_types::Result::RUNNING)
@@ -1328,6 +1356,11 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
 
     ChannelIdentifier channel_id {param.running_module_id_, activation_data.activation_channel_id_};
     base_module_->sendRequest(ACTIVATION_REQUEST_ID, channel_id, header);
+
+    if (type != params::ParameterType::CUSTOM || (type == params::ParameterType::CUSTOM && value_blob.data()[0] == 0))
+    {
+        frontend_state_->known_running_modules_activation_data_[param.running_module_id_].parameter_values_[param.parameter_id_][param.list_id_] = value;
+    }
 
     if (type == params::ParameterType::CUSTOM) 
     {
