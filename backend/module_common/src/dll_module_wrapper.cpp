@@ -518,8 +518,13 @@ int64_t DllModuleWrapper::nowMs()
 aergo::module::message::SharedDataBlob DllModuleWrapper::save(aergo::module::IAllocator* allocator) noexcept
 {
     aergo::module::ISerializableModule::SaveData save_data(std::move(module_->save()));
-    std::vector<uint8_t> serialized_data;
 
+    if (!save_data.success_)
+    {
+        return aergo::module::message::SharedDataBlob(); // invalid blob
+    }
+
+    std::vector<uint8_t> serialized_data;
     if (!save_toolkit::serialize(save_data, serialized_data))
     {
         return aergo::module::message::SharedDataBlob(); // invalid blob

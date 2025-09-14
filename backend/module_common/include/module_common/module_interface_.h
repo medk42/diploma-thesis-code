@@ -378,7 +378,8 @@ namespace aergo::module
 
         struct SaveData 
         {
-            bool supports_saving_; // if false, module does not support saving/loading
+            bool success_ = true; // true if saving was successful, false otherwise
+            bool supports_saving_ = false; // if false, module does not support saving/loading
             uint32_t schema_version_;
             std::string json_header_;
             std::vector<SavedBlob> blobs_;
@@ -398,6 +399,9 @@ namespace aergo::module
         virtual SaveData save() noexcept = 0;
 
         /// @brief Load the module state. If saving is not supported always return true.
+        /// Will be called immediately after module is created and its threads are started (threadStart() method).
+        /// For auto_create modules, load() may be called multiple times during the lifetime of the module, because
+        /// auto_create modules are not removed on core state load.
         virtual bool load(SaveData data) noexcept = 0;
     };
 

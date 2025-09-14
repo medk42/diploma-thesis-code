@@ -996,7 +996,13 @@ ISerializableModule::SaveData ActivationWrapper::save() noexcept
 {
     aergo::module::ISerializableModule::SaveData inner_save_data(std::move(module_ref_->save()));
     
+    if (!inner_save_data.success_)
+    {
+        return { .success_ = false }; // inner module failed to save
+    }
+
     aergo::module::ISerializableModule::SaveData save_data;
+    save_data.success_ = true;
     save_data.supports_saving_ = true;
     save_data.schema_version_ = SCHEMA_VERSION; // version 1 = ActivationWrapper save data
 
@@ -1005,7 +1011,18 @@ ISerializableModule::SaveData ActivationWrapper::save() noexcept
     if (inner_save_data.supports_saving_)
     {
         module_data["inner_module"]["schema_version"] = inner_save_data.schema_version_;
-        module_data["inner_module"]["json_header"] = json::parse(inner_save_data.json_header_);
+        
+        
+        try 
+        {
+            module_data["inner_module"]["json_header"] = json::parse(inner_save_data.json_header_);
+        }
+        catch (...)
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Failed to parse inner module JSON save data.");
+            return { .success_ = false };            
+        }
+
         module_data["inner_module"]["blobs_count"] = inner_save_data.blobs_.size();
     }
 
@@ -1064,7 +1081,16 @@ bool ActivationWrapper::load(ISerializableModule::SaveData data) noexcept
         return false; // unsupported schema version or does not support saving
     }
 
-    json json_data = json::parse(data.json_header_);
+    json json_data;
+    
+    try
+    {
+        json_data = json::parse(data.json_header_);
+    }
+    catch (...)
+    {
+        return false; // invalid JSON
+    }
     
     if (json_data.contains("parameter_values") == false || !json_data["parameter_values"].is_array()
     || json_data["parameter_values"].size() != parameters_->getParameters().size() || json_data.contains("inner_module") == false || !json_data["inner_module"].is_object())

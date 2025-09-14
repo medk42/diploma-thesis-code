@@ -1445,6 +1445,8 @@ aergo::module::message::SharedDataBlob Core::getExistingResponseChannelsByName(c
 
 aergo::module::message::SharedDataBlob Core::save() noexcept
 {
+    std::shared_lock<std::shared_mutex> lock(core_mutex_);
+
     json state_data;
     state_data["format_version"] = FORMAT_VERSION;
     state_data["api_version"] = CORE_API_VERSION;
@@ -1572,13 +1574,21 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
         
         if (module_state_data.supports_saving_)
         {
-            if (module_state_data.json_header_.empty())
+            try
             {
-                module_state["state_json"] = json::parse("{}");
+                if (module_state_data.json_header_.empty())
+                {
+                    module_state["state_json"] = json::parse("{}");
+                }
+                else
+                {
+                    module_state["state_json"] = json::parse(module_state_data.json_header_);
+                }
             }
-            else
+            catch (json::parse_error& e)
             {
-                module_state["state_json"] = json::parse(module_state_data.json_header_);
+                log(aergo::module::logging::LogType::ERROR, "Module state JSON parsing failed, aborting core state save!");
+                return aergo::module::message::SharedDataBlob(); // return invalid blob
             }
             
             module_state["schema_version"] = module_state_data.schema_version_;
@@ -1617,5 +1627,394 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
 
 bool Core::load(const uint8_t* data, uint64_t size) noexcept
 {
-    return false;
+    std::lock_guard<std::mutex> add_remove_lock(add_remove_mutex_);
+    std::unique_lock<std::shared_mutex> lock(core_mutex_);
+
+    // First, stop and remove all existing modules (if not auto-created)
+    for (size_t running_module_id = 0; running_module_id < running_modules_.size(); ++running_module_id)
+    {
+        auto& running_module = running_modules_[running_module_id];
+        if (running_module.get() == nullptr)
+        {
+            continue;
+        }
+
+        auto module_info = (*running_module->module_loader_data_)->readModuleInfo();
+        if (!module_info->auto_create_)
+        {
+            removeModule(running_module_id, true);
+        }
+    }
+
+    std::string state_data_str;
+    std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>> modules_binary_data;
+    if (!aergo::module::save_toolkit::deserializeSaveState(data, size, state_data_str, modules_binary_data))
+    {
+        log(aergo::module::logging::LogType::ERROR, "State deserialization failed, aborting core state load!");
+        return false;
+    }
+
+    json state_data;
+    try
+    {
+        state_data = json::parse(state_data_str);
+    }
+    catch (json::parse_error& e)
+    {
+        log(aergo::module::logging::LogType::ERROR, "State JSON parsing failed, aborting core state load!");
+        return false;
+    }
+
+    if (!state_data.contains("format_version") || !state_data["format_version"].is_number_unsigned()
+     || !state_data.contains("api_version") || !state_data["api_version"].is_number_unsigned()
+     || !state_data.contains("core") || !state_data["core"].is_object()
+     || !state_data["core"].contains("core_version") || !state_data["core"]["core_version"].is_string()
+     || !state_data["core"].contains("expected_modules") || !state_data["core"]["expected_modules"].is_array()
+     || !state_data["core"].contains("auto_created_modules") || !state_data["core"]["auto_created_modules"].is_array()
+     || !state_data["core"].contains("manual_created_modules") || !state_data["core"]["manual_created_modules"].is_array()
+     || !state_data.contains("module_states") || !state_data["module_states"].is_object())
+    {
+        log(aergo::module::logging::LogType::ERROR, "State JSON structure invalid, aborting core state load!");
+        return false;
+    }
+
+    if (state_data["format_version"].get<uint32_t>() != FORMAT_VERSION)
+    {
+        log(aergo::module::logging::LogType::ERROR, "State format version mismatch, aborting core state load!");
+        return false;
+    }
+
+    if (state_data["api_version"].get<uint32_t>() != CORE_API_VERSION)
+    {
+        log(aergo::module::logging::LogType::ERROR, "State API version mismatch, aborting core state load!");
+        return false;
+    }
+
+    if (state_data["core"]["core_version"].get<std::string>() != CORE_VERSION)
+    {
+        std::string log_msg = "State core version (" + state_data["core"]["core_version"].get<std::string>() + ") mismatch with current core version (" + CORE_VERSION + "), may cause issues.";
+        log(aergo::module::logging::LogType::WARNING, log_msg.c_str());
+    }
+
+    std::map<std::string, uint64_t> loaded_name_to_id; // maps loaded module unique name to loaded module id (used for creating modules in manual creation)
+    for (const auto& expected_module : state_data["core"]["expected_modules"])
+    {
+        if (!expected_module.is_string())
+        {
+            log(aergo::module::logging::LogType::ERROR, "State JSON structure invalid (expected_modules), aborting core state load!");
+            return false;
+        }
+
+        std::string expected_module_name = expected_module.get<std::string>();
+
+        bool found = false;
+        for (size_t loaded_module_id = 0; loaded_module_id < loaded_modules_.size(); ++loaded_module_id)
+        {
+            if (loaded_modules_[loaded_module_id].getModuleUniqueName() == expected_module_name)
+            {
+                found = true;
+                loaded_name_to_id[expected_module_name] = loaded_module_id;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            std::string log_msg = "Expected module " + expected_module_name + " not loaded, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+    }
+
+    std::map<std::string, size_t> instance_name_to_running_id; // maps instance name to running module id (used for mapping channels in manual creation)
+
+    // Load data for auto-created modules (these were not removed, so they do not have to be re-created)
+    for (const auto& auto_created_module : state_data["core"]["auto_created_modules"])
+    {
+        if (!auto_created_module.is_object()
+         || !auto_created_module.contains("loaded_name") || !auto_created_module["loaded_name"].is_string()
+         || !auto_created_module.contains("instance_name") || !auto_created_module["instance_name"].is_string()
+         || !auto_created_module.contains("subscribe_channels") || !auto_created_module["subscribe_channels"].is_array()
+         || !auto_created_module.contains("request_channels") || !auto_created_module["request_channels"].is_array())
+        {
+            log(aergo::module::logging::LogType::ERROR, "State JSON structure invalid (auto_created_modules), aborting core state load!");
+            return false;
+        }
+
+        std::string instance_name = auto_created_module["instance_name"].get<std::string>();
+        std::string loaded_name = auto_created_module["loaded_name"].get<std::string>();
+
+        if (!state_data["module_states"].contains(instance_name) || !state_data["module_states"][instance_name].is_object() 
+        || !state_data["module_states"][instance_name].contains("supports_saving") || !state_data["module_states"][instance_name]["supports_saving"].is_boolean())
+        {
+            std::string log_msg = "State for auto-created module " + instance_name + " not found or invalid, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+
+        const auto& module_state = state_data["module_states"][instance_name];
+
+        aergo::core::structures::ModuleData* module_data = nullptr;
+        for (size_t running_module_id = 0; running_module_id < running_modules_.size(); ++running_module_id)
+        {
+            auto& running_module = running_modules_[running_module_id];
+            if (running_module.get() == nullptr)
+            {
+                continue;
+            }
+
+            auto module_name = running_module->module_loader_data_->getModuleUniqueName();
+            if (module_name == loaded_name)
+            {
+                instance_name_to_running_id[instance_name] = running_module_id;
+                module_data = running_module.get();
+                break;
+            }
+        }
+
+        if (module_data == nullptr)
+        {
+            log(aergo::module::logging::LogType::ERROR, "No loaded module found for auto-created module, aborting core state load!");
+            return false;
+        }
+
+        aergo::module::ISerializableModule::SaveData module_state_data {
+            .success_ = true,
+            .supports_saving_ = module_state["supports_saving"].get<bool>()
+        };
+
+        if (module_state_data.supports_saving_)
+        {
+            if (!module_state.contains("schema_version") || !module_state["schema_version"].is_number_unsigned()
+             || !module_state.contains("state_json") || !module_state["state_json"].is_object())
+            {
+                std::string log_msg = "State for auto-created module " + instance_name + " invalid, aborting core state load!";
+                log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+                return false;
+            }
+
+            module_state_data.schema_version_ = module_state["schema_version"].get<uint32_t>();
+            module_state_data.json_header_ = module_state["state_json"].dump();
+
+            auto it = std::find_if(modules_binary_data.begin(), modules_binary_data.end(), [&instance_name](const auto& tuple) {
+                return std::get<0>(tuple) == instance_name;
+            });
+
+            if (it != modules_binary_data.end())
+            {
+                module_state_data.blobs_ = std::move(std::get<1>(*it));
+            }
+        }
+
+        std::vector<uint8_t> serialized_state;
+        if (!aergo::module::dll::save_toolkit::serialize(module_state_data, serialized_state))
+        {
+            std::string log_msg = "State for auto-created module " + instance_name + " serialization failed, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+
+        if (!module_data->module_->load(serialized_state.data(), serialized_state.size()))
+        {
+            std::string log_msg = "State for auto-created module " + instance_name + " load failed, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+    }
+
+
+    // Load data for manually created modules (these have to be re-created)
+    for (const auto& manual_created_module : state_data["core"]["manual_created_modules"])
+    {
+        if (!manual_created_module.is_object()
+         || !manual_created_module.contains("loaded_name") || !manual_created_module["loaded_name"].is_string()
+         || !manual_created_module.contains("instance_name") || !manual_created_module["instance_name"].is_string()
+         || !manual_created_module.contains("subscribe_channels") || !manual_created_module["subscribe_channels"].is_array()
+         || !manual_created_module.contains("request_channels") || !manual_created_module["request_channels"].is_array())
+        {
+            log(aergo::module::logging::LogType::ERROR, "State JSON structure invalid (manual_created_modules), aborting core state load!");
+            return false;
+        }
+
+        std::string instance_name = manual_created_module["instance_name"].get<std::string>();
+        std::string loaded_name = manual_created_module["loaded_name"].get<std::string>();
+
+        const auto& it = loaded_name_to_id.find(loaded_name);
+        if (it != loaded_name_to_id.end())
+        {
+            std::string log_msg = "Module " + loaded_name + " can not be created, because the corresponding loaded module does not exist";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+
+        size_t loaded_module_id = it->second;
+
+        
+        auto load_mappings = [manual_created_module, instance_name_to_running_id, instance_name, this](const auto& json_array, std::vector<std::vector<aergo::module::ChannelIdentifier>>& out_mappings) -> bool
+        {
+            for (const auto& subscribe_channel : json_array)
+            {
+                if (!subscribe_channel.is_object()
+                || !subscribe_channel.contains("channel_type_identifier") || !subscribe_channel["channel_type_identifier"].is_string()
+                || !subscribe_channel.contains("auto_all") || !subscribe_channel["auto_all"].is_boolean()
+                || !subscribe_channel.contains("mappings") || !subscribe_channel["mappings"].is_array())
+                {
+                    log(aergo::module::logging::LogType::ERROR, "State JSON structure invalid (manual_created_modules/consume_channels), aborting core state load!");
+                    return false;
+                }
+
+                std::string channel_type_identifier = subscribe_channel["channel_type_identifier"].get<std::string>();
+                bool auto_all = subscribe_channel["auto_all"].get<bool>();
+                std::vector<aergo::module::ChannelIdentifier> mappings;
+                if (!auto_all)
+                {
+                    for (const auto& mapping : subscribe_channel["mappings"])
+                    {
+                        if (!mapping.is_object()
+                        || !mapping.contains("producer_module") || !mapping["producer_module"].is_string()
+                        || !mapping.contains("producer_channel_id") || !mapping["producer_channel_id"].is_number_unsigned())
+                        {
+                            log(aergo::module::logging::LogType::ERROR, "State JSON structure invalid (manual_created_modules/consume_channels/mappings), aborting core state load!");
+                            return false;
+                        }
+
+                        std::string producer_module_name = mapping["producer_module"].get<std::string>();
+                        uint32_t producer_channel_id = mapping["producer_channel_id"].get<uint32_t>();
+
+                        auto it2 = instance_name_to_running_id.find(producer_module_name);
+                        if (it2 == instance_name_to_running_id.end())
+                        {
+                            std::string log_msg = "Mapping for subscribe channel in module " + instance_name + " invalid, aborting core state load!";
+                            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+                            return false;
+                        }
+
+                        size_t producer_module_id = it2->second;
+
+                        mappings.push_back(aergo::module::ChannelIdentifier {
+                            .producer_module_id_ = producer_module_id,
+                            .producer_channel_id_ = producer_channel_id
+                        });
+                    }
+                }
+
+                out_mappings.push_back(std::move(mappings));
+            }
+
+            return true;
+        };
+
+        std::vector<std::vector<aergo::module::ChannelIdentifier>> subscribe_mappings;
+        if (!load_mappings(manual_created_module["subscribe_channels"], subscribe_mappings))
+        {
+            return false;
+        }
+        
+        std::vector<std::vector<aergo::module::ChannelIdentifier>> request_mappings;
+        if (!load_mappings(manual_created_module["request_channels"], request_mappings))
+        {
+            return false;
+        }
+
+        std::vector<aergo::module::InputChannelMapInfo::IndividualChannelInfo> subscribe_channel_info;
+        for (auto& subscribe_channel : subscribe_mappings)
+        {
+            subscribe_channel_info.push_back(aergo::module::InputChannelMapInfo::IndividualChannelInfo {
+                .channel_identifier_ = subscribe_channel.data(),
+                .channel_identifier_count_ = (uint32_t)subscribe_channel.size()
+            });
+        }
+        
+        std::vector<aergo::module::InputChannelMapInfo::IndividualChannelInfo> request_channel_info;
+        for (auto& request_channel : request_mappings)
+        {
+            request_channel_info.push_back(aergo::module::InputChannelMapInfo::IndividualChannelInfo {
+                .channel_identifier_ = request_channel.data(),
+                .channel_identifier_count_ = (uint32_t)request_channel.size()
+            });
+        }
+
+        aergo::module::InputChannelMapInfo input_channel_map_info {
+            .subscribe_consumer_info_ = subscribe_channel_info.data(),
+            .subscribe_consumer_info_count_ = (uint32_t)subscribe_channel_info.size(),
+            .request_consumer_info_ = request_channel_info.data(),
+            .request_consumer_info_count_ = (uint32_t)request_channel_info.size()
+        };
+
+
+        if (!addModule(loaded_module_id, input_channel_map_info))
+        {
+            std::string log_msg = "Module " + instance_name + " could not be created, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+
+        // register to loaded_name_to_id
+        size_t new_running_module_id = running_modules_.size() - 1;
+        instance_name_to_running_id[instance_name] = new_running_module_id;
+
+        // load state
+        if (!state_data["module_states"].contains(instance_name) || !state_data["module_states"][instance_name].is_object() 
+        || !state_data["module_states"][instance_name].contains("supports_saving") || !state_data["module_states"][instance_name]["supports_saving"].is_boolean())
+        {
+            std::string log_msg = "State for manually created module " + instance_name + " not found or invalid, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+
+        const auto& module_state = state_data["module_states"][instance_name];
+
+        aergo::module::ISerializableModule::SaveData module_state_data {
+            .success_ = true,
+            .supports_saving_ = module_state["supports_saving"].get<bool>()
+        };
+
+        if (module_state_data.supports_saving_)
+        {
+            if (!module_state.contains("schema_version") || !module_state["schema_version"].is_number_unsigned()
+             || !module_state.contains("state_json") || !module_state["state_json"].is_object())
+            {
+                std::string log_msg = "State for manually created module " + instance_name + " invalid, aborting core state load!";
+                log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+                return false;
+            }
+
+            module_state_data.schema_version_ = module_state["schema_version"].get<uint32_t>();
+            module_state_data.json_header_ = module_state["state_json"].dump();
+
+            auto it = std::find_if(modules_binary_data.begin(), modules_binary_data.end(), [&instance_name](const auto& tuple) {
+                return std::get<0>(tuple) == instance_name;
+            });
+
+            if (it != modules_binary_data.end())
+            {
+                module_state_data.blobs_ = std::move(std::get<1>(*it));
+            }
+        }
+
+        std::vector<uint8_t> serialized_state;
+        if (!aergo::module::dll::save_toolkit::serialize(module_state_data, serialized_state))
+        {
+            std::string log_msg = "State for manually created module " + instance_name + " serialization failed, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+
+        aergo::core::structures::ModuleData* module_data = running_modules_[new_running_module_id].get();
+        if (module_data == nullptr)
+        {
+            log(aergo::module::logging::LogType::ERROR, "No module data found for manually created module, aborting core state load!");
+            return false;
+        }
+
+        if (!module_data->module_->load(serialized_state.data(), serialized_state.size()))
+        {
+            std::string log_msg = "State for manually created module " + instance_name + " load failed, aborting core state load!";
+            log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
+            return false;
+        }
+    }
+
+
+    return true;
 }
