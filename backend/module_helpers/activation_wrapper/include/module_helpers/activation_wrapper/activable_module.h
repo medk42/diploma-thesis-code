@@ -25,5 +25,8 @@ namespace aergo::module::helpers::activation_wrapper
 
         /// @brief Get current de/activation status of the module.
         virtual message_types::ProgressData getActivationProgress() = 0;
+
+        /// @brief Check if the module is currently activated, used to determine if module is active after load. 
+        virtual bool isActivated() = 0;
     };
 }

@@ -520,7 +520,7 @@ aergo::module::message::SharedDataBlob DllModuleWrapper::save(aergo::module::IAl
     aergo::module::ISerializableModule::SaveData save_data(std::move(module_->save()));
     std::vector<uint8_t> serialized_data;
 
-    if (!SaveToolkit::serialize(save_data, serialized_data))
+    if (!save_toolkit::serialize(save_data, serialized_data))
     {
         return aergo::module::message::SharedDataBlob(); // invalid blob
     }
@@ -541,7 +541,7 @@ bool DllModuleWrapper::load(uint8_t* data, uint64_t data_size) noexcept
 {
     aergo::module::ISerializableModule::SaveData save_data;
     
-    SaveToolkit::deserialize(data, data_size, save_data);
+    save_toolkit::deserialize(data, data_size, save_data);
 
     return module_->load(std::move(save_data));
 }

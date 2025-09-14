@@ -17,6 +17,8 @@ namespace aergo::module::helpers::activation_wrapper
     /// Holds back all messages/requests/responses until the module is activated.
     class ActivationWrapper : public virtual aergo::module::IModule
     {
+        constexpr static uint32_t SCHEMA_VERSION = 1; // schema version for saved data
+
     public:
         ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_);
         
@@ -28,16 +30,8 @@ namespace aergo::module::helpers::activation_wrapper
         virtual aergo::module::IModule::IngressDecision onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept override;
         virtual bool threadStart(uint32_t timeout_ms) noexcept override;
         virtual bool threadStop(uint32_t timeout_ms) noexcept override;
-
-        virtual ISerializableModule::SaveData save() noexcept override
-        {
-            return ISerializableModule::SaveData { .supports_saving_ = false };
-        }
-
-        virtual bool load(ISerializableModule::SaveData data) noexcept override
-        {
-            return true;
-        }
+        virtual ISerializableModule::SaveData save() noexcept override;
+        virtual bool load(ISerializableModule::SaveData data) noexcept override;
 
     private:
         /// @brief Initialize parameters to specified default values (or system defaults if not specified).

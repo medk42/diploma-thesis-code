@@ -3,7 +3,7 @@
 using namespace aergo::module::dll;
 
 
-bool SaveToolkit::serialize(const aergo::module::ISerializableModule::SaveData& save_data, std::vector<uint8_t>& out_serialized_data)
+bool save_toolkit::serialize(const aergo::module::ISerializableModule::SaveData& save_data, std::vector<uint8_t>& out_serialized_data)
 {
     auto push_data = [&](const void* data, size_t size)
     {
@@ -43,7 +43,7 @@ bool SaveToolkit::serialize(const aergo::module::ISerializableModule::SaveData& 
 
 
 
-bool SaveToolkit::deserialize(const uint8_t* data, uint64_t data_size, aergo::module::ISerializableModule::SaveData& out_data)
+bool save_toolkit::deserialize(const uint8_t* data, uint64_t data_size, aergo::module::ISerializableModule::SaveData& out_data)
 {
     auto read_data = [&](void* dest, size_t size) -> bool
     {
@@ -126,6 +126,6 @@ bool SaveToolkit::deserialize(const uint8_t* data, uint64_t data_size, aergo::mo
 
         out_data.blobs_.push_back(std::move(blob));
     }
-    
+
     return true;
 }

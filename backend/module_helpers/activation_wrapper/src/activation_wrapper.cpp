@@ -2,6 +2,8 @@
 #include "module_helpers/activation_wrapper/message_types.h"
 
 
+#include <nlohmann/json.hpp>
+
 
 #include <unordered_map>
 #include <cstring>
@@ -10,6 +12,7 @@
 
 using namespace aergo::module::helpers::activation_wrapper;
 using namespace aergo::module;
+using json = nlohmann::json;
 
 
 ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_)
@@ -987,3 +990,177 @@ bool ActivationWrapper::areParametersValid()
     return true;
 }
             
+
+
+ISerializableModule::SaveData ActivationWrapper::save() noexcept
+{
+    aergo::module::ISerializableModule::SaveData inner_save_data(std::move(module_ref_->save()));
+    
+    aergo::module::ISerializableModule::SaveData save_data;
+    save_data.supports_saving_ = true;
+    save_data.schema_version_ = SCHEMA_VERSION; // version 1 = ActivationWrapper save data
+
+    json module_data;
+    module_data["inner_module"]["supports_saving"] = inner_save_data.supports_saving_;
+    if (inner_save_data.supports_saving_)
+    {
+        module_data["inner_module"]["schema_version"] = inner_save_data.schema_version_;
+        module_data["inner_module"]["json_header"] = json::parse(inner_save_data.json_header_);
+        module_data["inner_module"]["blobs_count"] = inner_save_data.blobs_.size();
+    }
+
+    for (auto& blob : inner_save_data.blobs_)
+    {
+        save_data.blobs_.push_back(ISerializableModule::SavedBlob {
+            .name_ = "inner_" + blob.name_,
+            .data_ = std::move(blob.data_),
+        });
+    }
+
+    module_data["parameter_values"] = json::array();
+
+    const auto& parameters = parameters_->getParameters();
+    for (size_t i = 0; i < parameter_values_.size(); ++i)
+    {
+        json param_data;
+        const auto& param_type = parameters[i];
+        const auto& param_value = parameter_values_[i];
+        
+        param_data["type"] = static_cast<int>(param_type.type_);
+        param_data["values"] = json::array();
+        for (size_t j = 0; j < param_value.size(); ++j)
+        {
+            const auto& single_param_value = param_value[j];
+            if (param_type.type_ != params::ParameterType::CUSTOM)
+            {
+                param_data["values"].push_back(std::vector<uint8_t>(single_param_value));
+            }
+            else
+            {
+                std::string custom_file_name = "custom_" + std::to_string(i) + "_" + std::to_string(j) + ".bin";
+                param_data["values"].push_back(custom_file_name);
+                save_data.blobs_.push_back(ISerializableModule::SavedBlob {
+                    .name_ = custom_file_name,
+                    .data_ = single_param_value,
+                });
+            }
+        }
+        
+        
+        module_data["parameter_values"].push_back(param_data);
+    }
+
+    save_data.json_header_ = module_data.dump();
+
+    return std::move(save_data);
+}
+
+
+
+bool ActivationWrapper::load(ISerializableModule::SaveData data) noexcept
+{
+    if (data.schema_version_ != SCHEMA_VERSION || !data.supports_saving_)
+    {
+        return false; // unsupported schema version or does not support saving
+    }
+
+    json json_data = json::parse(data.json_header_);
+    
+    if (json_data.contains("parameter_values") == false || !json_data["parameter_values"].is_array()
+    || json_data["parameter_values"].size() != parameters_->getParameters().size() || json_data.contains("inner_module") == false || !json_data["inner_module"].is_object())
+    {
+        return false; // missing or invalid parameter values
+    }
+
+    auto& parameter_values_data = json_data["parameter_values"];
+    parameter_values_.clear();
+    parameter_values_.resize(parameter_values_data.size());
+    for (size_t i = 0; i < parameter_values_data.size(); ++i)
+    {
+        auto& param_data = parameter_values_data[i];
+
+        if (param_data.contains("type") == false || !param_data["type"].is_number_integer()
+        || param_data.contains("values") == false || !param_data["values"].is_array())
+        {
+            return false; // missing or invalid parameter data
+        }
+
+        int type_int = param_data["type"].get<int>();
+        if (type_int < 0 || type_int > static_cast<int>(params::ParameterType::CUSTOM))
+        {
+            return false; // invalid parameter type
+        }
+        params::ParameterType type = static_cast<params::ParameterType>(type_int);
+
+        auto& values_data = param_data["values"];
+
+        parameter_values_[i].clear();
+        parameter_values_[i].resize(values_data.size());
+
+        for (size_t j = 0; j < values_data.size(); ++j)
+        {
+            auto& single_value_data = values_data[j];
+            if (!single_value_data.is_array())
+            {
+                return false; // invalid non-CUSTOM value
+            }
+
+            if (type != params::ParameterType::CUSTOM)
+            {
+                
+                parameter_values_[i][j] = single_value_data.get<std::vector<uint8_t>>();
+            }
+            else
+            {
+                std::string custom_file_name = single_value_data.get<std::string>();
+                
+                auto it = std::find_if(data.blobs_.begin(), data.blobs_.end(), [&custom_file_name](const ISerializableModule::SavedBlob& blob) { return blob.name_ == custom_file_name; });
+                if (it == data.blobs_.end())
+                {
+                    return false; // missing CUSTOM blob
+                }
+                parameter_values_[i][j] = std::move(it->data_);
+            }
+        }
+    }
+
+    ISerializableModule::SaveData inner_data;
+
+    auto& inner_json = json_data["inner_module"];
+    if (inner_json.contains("supports_saving") == false || !inner_json["supports_saving"].is_boolean())
+    {
+        return false; // missing or invalid inner module saving support
+    }
+
+    inner_data.supports_saving_ = inner_json["supports_saving"].get<bool>();
+
+    if (inner_data.supports_saving_)
+    {
+        if (inner_json.contains("schema_version") == false || !inner_json["schema_version"].is_number_integer()
+        || inner_json.contains("json_header") == false || !inner_json["json_header"].is_object()
+        || inner_json.contains("blobs_count") == false || !inner_json["blobs_count"].is_number_integer())
+        {
+            return false; // missing or invalid inner module save data
+        }
+
+        inner_data.schema_version_ = inner_json["schema_version"].get<uint32_t>();
+        inner_data.json_header_ = inner_json["json_header"].dump();
+        size_t blobs_count = inner_json["blobs_count"].get<size_t>();
+
+        for (const auto& blob : data.blobs_)
+        {
+            if (blob.name_.rfind("inner_", 0) == 0) // starts with "inner_"
+            {
+                inner_data.blobs_.push_back(ISerializableModule::SavedBlob {
+                    .name_ = blob.name_.substr(6), // remove "inner_" prefix
+                    .data_ = std::move(blob.data_),
+                });
+            }
+        }
+    }
+
+    bool result = module_ref_->load(std::move(inner_data));
+    activated_ = activable_module_ref_->isActivated();
+
+    return result;
+}

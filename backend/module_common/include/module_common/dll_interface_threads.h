@@ -42,7 +42,7 @@ namespace aergo::module::dll
         virtual bool load(uint8_t* data, uint64_t data_size) noexcept = 0;
     };
 
-    namespace SaveToolkit
+    namespace save_toolkit
     {
         /// @brief Serialize SaveData into a byte vector.
         bool serialize(const aergo::module::ISerializableModule::SaveData& data, std::vector<uint8_t>& out_serialized_data);

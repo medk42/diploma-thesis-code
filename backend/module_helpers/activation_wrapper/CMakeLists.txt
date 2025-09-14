@@ -1,5 +1,8 @@
 set(LIB_NAME helpers___activation_wrapper)
 
+# add JSON library
+find_package(nlohmann_json CONFIG REQUIRED)
+
 add_library(${LIB_NAME}
     src/activation_wrapper.cpp
     src/parameter_description.cpp
@@ -9,7 +12,7 @@ target_include_directories(${LIB_NAME} PUBLIC
     include
 )
 
-target_link_libraries(${LIB_NAME} PRIVATE module_common)
+target_link_libraries(${LIB_NAME} PRIVATE module_common nlohmann_json::nlohmann_json)
 
 # MSVC: force dynamic CRT
 if (MSVC)

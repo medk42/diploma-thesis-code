@@ -4,6 +4,7 @@
 #include <typeinfo>
 #include <vector>
 #include <string>
+#include <tuple>
 
 namespace aergo::module
 {
@@ -449,4 +450,10 @@ namespace aergo::module
             return static_cast<T*>(query_capability(typeid(T)));
         }
     };
+
+    namespace save_toolkit
+    {
+        bool serializeSaveState(const std::string& json_header, const std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>>& extra_blobs, std::vector<uint8_t>& out_data) noexcept;
+        bool deserializeSaveState(const uint8_t* data, uint64_t size, std::string& out_json_header, std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>>& out_blobs) noexcept;
+    }
 }

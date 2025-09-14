@@ -1558,7 +1558,7 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
             return aergo::module::message::SharedDataBlob(); // return invalid blob
         }
         aergo::module::ISerializableModule::SaveData module_state_data;
-        if (!aergo::module::dll::SaveToolkit::deserialize(module_state_blob.data(), module_state_blob.size(), module_state_data))
+        if (!aergo::module::dll::save_toolkit::deserialize(module_state_blob.data(), module_state_blob.size(), module_state_data))
         {
             log(aergo::module::logging::LogType::ERROR, "Module state deserialization failed, aborting core state save!");
             return aergo::module::message::SharedDataBlob(); // return invalid blob
@@ -1572,9 +1572,21 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
         
         if (module_state_data.supports_saving_)
         {
-            module_state["state_json"] = module_state_data.json_header_;
+            if (module_state_data.json_header_.empty())
+            {
+                module_state["state_json"] = json::parse("{}");
+            }
+            else
+            {
+                module_state["state_json"] = json::parse(module_state_data.json_header_);
+            }
+            
             module_state["schema_version"] = module_state_data.schema_version_;
-            modules_binary_data.push_back({instance_name, std::move(module_state_data.blobs_)});
+
+            if (module_state_data.blobs_.size() > 0)
+            {
+                modules_binary_data.push_back({instance_name, std::move(module_state_data.blobs_)});
+            }
         }
         
         state_data["module_states"][instance_name] = module_state;
@@ -1583,7 +1595,22 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
     std::string log_msg = "State data: " + state_data.dump(4);
     log(aergo::module::logging::LogType::INFO, log_msg.c_str());
 
-    return aergo::module::message::SharedDataBlob(); // return invalid blob
+    std::vector<uint8_t> serialized_data;
+    std::string state_data_str = state_data.dump();
+    aergo::module::save_toolkit::serializeSaveState(state_data_str, modules_binary_data, serialized_data);
+
+    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(serialized_data.size());
+    if (!blob.valid() || blob.size() != serialized_data.size())
+    {
+        return aergo::module::message::SharedDataBlob(); // return invalid blob
+    }
+    
+    std::memcpy(blob.data(), serialized_data.data(), serialized_data.size());
+
+    std::string final_log_msg = "Final serialized state size: " + std::to_string(serialized_data.size()) + " bytes.";
+    log(aergo::module::logging::LogType::INFO, final_log_msg.c_str());
+
+    return blob;
 }
 
 
