@@ -11,6 +11,8 @@ namespace aergo::core
     class Core : public aergo::module::ICore
     {
         using AllocatorPtr = std::unique_ptr<aergo::module::IAllocator, std::function<void(aergo::module::IAllocator*)>>;
+        constexpr static const char* CORE_VERSION = "0.1.0";
+        constexpr static uint32_t FORMAT_VERSION = 1;
 
     public:
         /// @brief Outcome codes for module removal attempts.
@@ -97,6 +99,9 @@ namespace aergo::core
         virtual aergo::module::message::SharedDataBlob collectDependencies(uint64_t id) noexcept override final; // wrapper, does not lock
         virtual aergo::module::message::SharedDataBlob getExistingPublishChannelsByName(const char* channel_type_identifier) noexcept override final; // wrapper, does not lock
         virtual aergo::module::message::SharedDataBlob getExistingResponseChannelsByName(const char* channel_type_identifier) noexcept override final; // wrapper, does not lock
+
+        virtual aergo::module::message::SharedDataBlob save() noexcept override final;
+        virtual bool load(const uint8_t* data, uint64_t size) noexcept override final;
 
 
     private:

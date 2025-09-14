@@ -49,6 +49,16 @@ namespace aergo::default_modules::camera_module
 
         /// @brief Activation is immediate. No progress to report. 
         virtual aergo::module::helpers::activation_wrapper::message_types::ProgressData getActivationProgress() override { return { .progress_type_ = aergo::module::helpers::activation_wrapper::message_types::ProgressType::NONE }; }
+
+        virtual ISerializableModule::SaveData save() noexcept override
+        {
+            return ISerializableModule::SaveData { .supports_saving_ = false };
+        }
+
+        virtual bool load(ISerializableModule::SaveData data) noexcept override
+        {
+            return true;
+        }
     
     private:
         void log(aergo::module::logging::LogType type, const std::string& message) { aergo::module::BaseModule::log(type, message.c_str()); }

@@ -51,6 +51,16 @@ namespace aergo::default_modules::frontend_module
         /// @brief Stop worker threads for web server.
         virtual bool threadStop(uint32_t timeout_ms) noexcept override;
 
+        virtual ISerializableModule::SaveData save() noexcept override
+        {
+            return ISerializableModule::SaveData { .supports_saving_ = false };
+        }
+
+        virtual bool load(ISerializableModule::SaveData data) noexcept override
+        {
+            return true;
+        }
+
     private:
         // Read and parse data_dir/config.txt into server_parameters_.
         // Returns true on success (all required keys present, numeric

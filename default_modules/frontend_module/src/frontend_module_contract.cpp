@@ -20,6 +20,7 @@ static constexpr communication_channel::Consumer web_visualization_module_reques
 };
 
 static constexpr ModuleInfo module_info = {
+    .module_type_identifier_ = "web_frontend_module",
     .display_name_ = "Web Visualization Module",
     .display_description_ = "Provides web-based module creation, activation and visualization interface. Contains 3D visualization of modules and their data and program tree for creation of robot programs.",
     .publish_producers_ = nullptr,

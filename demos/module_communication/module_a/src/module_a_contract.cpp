@@ -35,6 +35,7 @@ static constexpr communication_channel::Producer module_a_response_producers[] =
 };
 
 static constexpr ModuleInfo module_a_info = {
+    .module_type_identifier_ = "module_a",
     .display_name_ = "Module A",
     .display_description_ = "Example module for publishing small messages and large fixed messages and providing large dynamic messages on request.",
     .publish_producers_ = module_a_publish_producers,

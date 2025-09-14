@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <typeinfo>
 #include <vector>
+#include <string>
 
 namespace aergo::module
 {
@@ -51,6 +52,9 @@ namespace aergo::module
 
     struct ModuleInfo
     {
+        // uniquely identifies module type (for inter-module communication), e.g. "camera_module"
+        const char* module_type_identifier_;
+
         // human-friendly displayed module name, e.g. "Camera"
         const char* display_name_;
 
@@ -266,7 +270,7 @@ namespace aergo::module
         /// For example if we create A,B,C,D,E -> 5; if we now remove C, D -> 5; if we add F -> 6.
         virtual uint64_t getRunningModulesCount() noexcept = 0;
 
-        /// @brief ID of the module mapping state. ID changes when modules get created or destroyed.
+        /// @brief ID of the module mapping state. ID increases by one when modules get created or destroyed.
         /// Can be used to detect changes in module mapping and update UI.
         virtual uint64_t getModulesMappingStateId() noexcept = 0;
 
@@ -300,6 +304,30 @@ namespace aergo::module
         /// @return Returns a list of modules and channels inside the modules or empty vector if specified identifier is not tied to any channels yet.
         /// The return structure is {uint64_t size, ChannelIdentifier[size]}. Check returned blob for validity by calling the valid() function.
         virtual message::SharedDataBlob getExistingResponseChannelsByName(const char* channel_type_identifier) noexcept = 0;
+
+        /// @brief Save state of the core, the module mapping, created modules and their internal state.
+        virtual message::SharedDataBlob save() noexcept = 0;
+
+        /// @brief Attempt to load state of the core, the module mapping, created modules and their internal state.
+        /// Loading first removes all created modules (aside from auto_create modules) and then attempts to load the saved state.
+        /// State is loaded by first checking if all loaded modules required by the saved state are still loaded. If not, loading fails.
+        /// Then all modules are created in the order they were saved (original IDs are not saved, new IDs are assigned). Each module is
+        /// loaded by creating it (calling its constructor), then starting its threads (threadStart method) and then calling its load() method
+        /// with the data it saved on save(). If any of these steps fail, loading fails and all created modules are removed (aside from auto_create modules).
+        /// Therefore, it is required to call this method only from an auto_create module (for example visualization) or from the outside (owner of the core object).
+        /// After loading, it is guaranteed that:
+        /// - all modules that were loaded while saving are also loaded after loading
+        ///     - however, there may be new modules loaded too
+        ///     - order of loaded modules may change (do not rely on loaded module IDs between save/load)
+        /// - all modules that were created while saving are also created after loading
+        ///     - however, there may be new modules created too (only auto_create modules, since they are created at start and not removed on load)
+        ///     - order of created modules may change (do not rely on running module IDs between save/load)
+        ///     - if module A depended on module B while saving, it is guaranteed that after loading module A will again depend on module B (however, B may have a different ID now)
+        /// - internal state of modules after saving / loading is restored by calling save() / load() - it is up to the module to implement this correctly
+        /// - mapping state ID can be different after loading
+        /// - allocators are not saved / loaded, it is up to the module to create allocators again if needed
+        /// - modules are loaded by calling the constructor, start threads and load
+        virtual bool load(const uint8_t* data, uint64_t size) noexcept = 0;
     };
 
     /// @brief Reference to the core.
@@ -338,8 +366,42 @@ namespace aergo::module
         virtual void processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept = 0;
     };
 
-    class IModule : public virtual IModuleBase
+    class ISerializableModule
     {
+    public:
+        struct SavedBlob
+        {
+            std::string name_;
+            std::vector<uint8_t> data_;
+        };
+
+        struct SaveData 
+        {
+            bool supports_saving_; // if false, module does not support saving/loading
+            uint32_t schema_version_;
+            std::string json_header_;
+            std::vector<SavedBlob> blobs_;
+        };
+
+        inline virtual ~ISerializableModule() = default;
+
+        /// @brief Save the module state. State is saved into a JSON header and a list of named binary blobs.
+        /// Any large data should be saved into blobs, small POD data can be saved into the JSON header.
+        /// The name in SavedBlob must be unique for each blob and is used to store the blob on the filesystem,
+        /// therefore it should not contain special characters or path separators (for both Windows and Linux).
+        /// The name_ however can contain a file extension (e.g. ".bin", ".dat", ".png" etc) if needed.
+        /// Use schema_version_ to indicate version of the saved data, it can be used in load() to handle
+        /// loading of different versions of saved data (or to refuse loading of unsupported versions).
+        /// Use supports_saving_ to indicate if the module supports saving/loading at all.].
+        /// @return shared data blob containing saved state or invalid blob if saving is not supported or failed.
+        virtual SaveData save() noexcept = 0;
+
+        /// @brief Load the module state. If saving is not supported always return true.
+        virtual bool load(SaveData data) noexcept = 0;
+    };
+
+    class IModule : public virtual IModuleBase, public virtual ISerializableModule
+    {  
     public:
         enum class ProcessingType { MESSAGE, REQUEST, RESPONSE };
 

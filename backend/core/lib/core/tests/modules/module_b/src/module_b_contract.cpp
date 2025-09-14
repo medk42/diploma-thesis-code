@@ -39,6 +39,7 @@ static constexpr communication_channel::Consumer module_subscribe_consumers[] = 
 };
 
 static constexpr ModuleInfo module_info = {
+    .module_type_identifier_ = "module_b",
     .display_name_ = "Module B",
     .display_description_ = "",
     .publish_producers_ = module_publish_producers,

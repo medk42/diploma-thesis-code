@@ -30,7 +30,7 @@ namespace aergo::core::structures
     private:
         std::unique_ptr<aergo::core::ModuleLoader> module_loader_;
         std::string module_data_path_;
-        std::string module_file_name_;
+        std::string module_type_identifier_;
     };
 
     class ModuleLogger : public aergo::module::logging::ILogger

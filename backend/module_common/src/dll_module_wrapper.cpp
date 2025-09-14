@@ -512,3 +512,36 @@ int64_t DllModuleWrapper::nowMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
+
+
+
+aergo::module::message::SharedDataBlob DllModuleWrapper::save(aergo::module::IAllocator* allocator) noexcept
+{
+    aergo::module::ISerializableModule::SaveData save_data(std::move(module_->save()));
+    std::vector<uint8_t> serialized_data;
+
+    if (!SaveToolkit::serialize(save_data, serialized_data))
+    {
+        return aergo::module::message::SharedDataBlob(); // invalid blob
+    }
+
+    auto blob = allocator->allocate(serialized_data.size());
+    if (!blob.valid() || blob.size() != serialized_data.size())
+    {
+        return aergo::module::message::SharedDataBlob(); // invalid blob
+    }
+
+    std::memcpy(blob.data(), serialized_data.data(), serialized_data.size());
+    return blob;
+}
+
+
+
+bool DllModuleWrapper::load(uint8_t* data, uint64_t data_size) noexcept
+{
+    aergo::module::ISerializableModule::SaveData save_data;
+    
+    SaveToolkit::deserialize(data, data_size, save_data);
+
+    return module_->load(std::move(save_data));
+}

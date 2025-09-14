@@ -3,6 +3,7 @@ add_subdirectory(tests)
 # Add the library
 add_library(module_common STATIC
     src/dll_module_wrapper.cpp
+    src/dll_interface_threads.cpp
     src/module_interface.cpp
     src/base_module.cpp
 )

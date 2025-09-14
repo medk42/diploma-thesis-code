@@ -32,6 +32,7 @@ static constexpr communication_channel::Consumer pen_tracking_module_message_con
 };
 
 static constexpr ModuleInfo module_info = {
+    .module_type_identifier_ = "pen_tracking_module",
     .display_name_ = "Pen Tracking Module",
     .display_description_ = "Module receives calibrated camera data from a connected camera, tracks the pen position in 3D space based on visible markers via OpenCV and publishes the 3D pose of the pen tip. While deactivated, input images are used for calibrating the pen.",
     .publish_producers_ = pen_tracking_module_publish_producers,

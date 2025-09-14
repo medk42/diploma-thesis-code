@@ -153,6 +153,8 @@ int main(int argc, char** argv)
     }
 
     printLoadedModules(logger, core);
+
+    core.save();
     
 
     ///  TODO REMOVE START

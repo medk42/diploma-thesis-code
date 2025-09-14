@@ -25,6 +25,7 @@ static constexpr communication_channel::Producer module_a_publish_producers[] = 
 };
 
 static constexpr ModuleInfo module_info = {
+    .module_type_identifier_ = "module_a",
     .display_name_ = "Module A",
     .display_description_ = "",
     .publish_producers_ = module_a_publish_producers,

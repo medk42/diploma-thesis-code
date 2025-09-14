@@ -6,7 +6,10 @@ using namespace aergo::core;
 
 
 ModuleLoaderData::ModuleLoaderData(std::unique_ptr<ModuleLoader>&& module_loader, std::string module_data_path, std::string module_file_name)
-: module_loader_(std::move(module_loader)), module_data_path_(std::move(module_data_path)), module_file_name_(std::move(module_file_name)) {}
+: module_loader_(std::move(module_loader)), module_data_path_(std::move(module_data_path)) 
+{
+    module_type_identifier_ = module_loader_->readModuleInfo()->module_type_identifier_;
+}
 
 
 
@@ -26,7 +29,7 @@ const ModuleLoader* ModuleLoaderData::operator->() const
 
 const std::string& ModuleLoaderData::getModuleUniqueName() const
 {
-    return module_file_name_;
+    return module_type_identifier_;
 }
 
 

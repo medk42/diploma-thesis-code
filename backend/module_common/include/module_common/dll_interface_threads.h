@@ -34,5 +34,20 @@ namespace aergo::module::dll
         /// @brief Stop and join the background thread.
         /// @return true if the thread was running, stopped within "timeout_ms" milliseconds and joined. false otherwise. 
         virtual bool threadStop(uint32_t timeout_ms) noexcept = 0;
+
+        /// @brief Save the module state. Call IModule::save() and return the SaveData data serialized into a SharedDataBlob.
+        virtual aergo::module::message::SharedDataBlob save(aergo::module::IAllocator* allocator) noexcept = 0;
+
+        /// @brief Load the module state. Call IModule::load() with SaveData data deserialized from the SharedDataBlob.
+        virtual bool load(uint8_t* data, uint64_t data_size) noexcept = 0;
     };
+
+    namespace SaveToolkit
+    {
+        /// @brief Serialize SaveData into a byte vector.
+        bool serialize(const aergo::module::ISerializableModule::SaveData& data, std::vector<uint8_t>& out_serialized_data);
+
+        /// @brief Deserialize SaveData from a byte vector.
+        bool deserialize(const uint8_t* data, uint64_t size, aergo::module::ISerializableModule::SaveData& out_data);
+    }
 }

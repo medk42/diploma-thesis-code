@@ -28,6 +28,7 @@ static constexpr communication_channel::Producer camera_module_response_producer
 };
 
 static constexpr ModuleInfo module_info = {
+    .module_type_identifier_ = "camera_module",
     .display_name_ = "Camera Input Module",
     .display_description_ = "Module captures raw camera data from a connected camera using OpenCV and publishes it as BGR image frames.",
     .publish_producers_ = camera_module_publish_producers,

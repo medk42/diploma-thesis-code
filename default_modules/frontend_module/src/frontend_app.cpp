@@ -203,6 +203,8 @@ void FrontendApp::setupCallbacks()
 
     activation_ui_->onActivate().connect([this](uint64_t running_module_index) { requestActivate(running_module_index, true);});
     activation_ui_->onDeactivate().connect([this](uint64_t running_module_index) { requestActivate(running_module_index, false); });
+
+    activation_ui_->onSave().connect([this]() { base_module_->getCoreControl()->save(); } ); // TODO for testing
 }
 
 

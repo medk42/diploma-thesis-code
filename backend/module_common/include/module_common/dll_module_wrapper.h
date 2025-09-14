@@ -51,6 +51,12 @@ namespace aergo::module::dll
 
         aergo::module::IModule* getModule();
 
+        /// @brief Save the module state. Call IModule::save() and return the SaveData data serialized into a SharedDataBlob.
+        aergo::module::message::SharedDataBlob save(aergo::module::IAllocator* allocator) noexcept override;
+
+        /// @brief Load the module state. Call IModule::load() with SaveData data deserialized from the SharedDataBlob.
+        bool load(uint8_t* data, uint64_t data_size) noexcept override;
+
     private:
         struct ProcessingData
         {

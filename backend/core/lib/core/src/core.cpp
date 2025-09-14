@@ -4,10 +4,13 @@
 #include "utils/memory_allocation/static_allocator.h"
 #include "utils/memory_allocation/allocator_wrapper.h"
 
+#include <nlohmann/json.hpp>
+
 #include <cstring>
 #include <algorithm>
 
 using namespace aergo::core;
+using json = nlohmann::json;
 
 
 
@@ -1439,3 +1442,153 @@ aergo::module::message::SharedDataBlob Core::getExistingResponseChannelsByName(c
 }
 
 
+
+aergo::module::message::SharedDataBlob Core::save() noexcept
+{
+    json state_data;
+    state_data["format_version"] = FORMAT_VERSION;
+    state_data["api_version"] = CORE_API_VERSION;
+    state_data["core"]["core_version"] = CORE_VERSION;
+    
+    state_data["core"]["auto_created_modules"] = json::array();
+    state_data["core"]["manual_created_modules"] = json::array();
+    state_data["module_states"] = json::object();
+
+    for (const auto& loaded_module : loaded_modules_)
+    {
+        state_data["core"]["expected_modules"].push_back(loaded_module.getModuleUniqueName());
+    }
+
+    std::map<std::string, size_t> running_module_counts;
+    std::map<size_t, std::string> module_id_to_name;
+
+    for (size_t running_module_id = 0; running_module_id < running_modules_.size(); ++running_module_id)
+    {
+        auto& running_modules = running_modules_[running_module_id];
+        if (running_modules.get() == nullptr)
+        {
+            continue;
+        }
+
+        auto module_info = (*running_modules->module_loader_data_)->readModuleInfo();
+
+        std::string module_name = running_modules->module_loader_data_->getModuleUniqueName();
+        auto it = running_module_counts.find(module_name);
+        if (it == running_module_counts.end())
+        {
+            running_module_counts[module_name] = 0;
+            it = running_module_counts.find(module_name);
+        }
+        else
+        {
+            ++(it->second);
+        }
+
+        std::string instance_name = module_name + "#" + std::to_string(it->second);
+        module_id_to_name[running_module_id] = instance_name;
+
+        json module_json;
+        module_json["loaded_name"] = module_name;
+        module_json["instance_name"] = instance_name;
+        module_json["subscribe_channels"] = json::array();
+        module_json["request_channels"] = json::array();
+        
+        for (size_t i = 0; i < running_modules->mapping_subscribe_.size(); ++i)
+        {
+            json channel_json;
+            channel_json["channel_type_identifier"] = module_info->subscribe_consumers_[i].channel_type_identifier_;
+            channel_json["auto_all"] = (module_info->subscribe_consumers_[i].count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL);
+            channel_json["mappings"] = json::array();
+            if (!channel_json["auto_all"])
+            {
+                for (const auto& channel_identifier : running_modules->mapping_subscribe_[i])
+                {
+                    json mapping_json;
+                    mapping_json["producer_module"] = module_id_to_name[channel_identifier.producer_module_id_];
+                    mapping_json["producer_channel_id"] = channel_identifier.producer_channel_id_;
+                    channel_json["mappings"].push_back(mapping_json);
+                }
+            }
+            module_json["subscribe_channels"].push_back(channel_json);
+        }
+
+        for (size_t i = 0; i < running_modules->mapping_request_.size(); ++i)
+        {
+            json channel_json;
+            channel_json["channel_type_identifier"] = module_info->request_consumers_[i].channel_type_identifier_;
+            channel_json["auto_all"] = (module_info->request_consumers_[i].count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL);
+            channel_json["mappings"] = json::array();
+            if (!channel_json["auto_all"])
+            {
+                for (const auto& channel_identifier : running_modules->mapping_request_[i])
+                {
+                    json mapping_json;
+                    mapping_json["producer_module"] = module_id_to_name[channel_identifier.producer_module_id_];
+                    mapping_json["producer_channel_id"] = channel_identifier.producer_channel_id_;
+                    channel_json["mappings"].push_back(mapping_json);
+                }
+            }
+            module_json["request_channels"].push_back(channel_json);
+        }
+
+        if (module_info->auto_create_)
+        {
+            state_data["core"]["auto_created_modules"].push_back(module_json);
+        }
+        else
+        {
+            state_data["core"]["manual_created_modules"].push_back(module_json);
+        }
+    }
+
+    std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>> modules_binary_data;
+
+    for (size_t running_module_id = 0; running_module_id < running_modules_.size(); ++running_module_id)
+    {
+        auto& running_module = running_modules_[running_module_id];
+        if (running_module.get() == nullptr)
+        {
+            continue;
+        }
+
+        auto module_state_blob = running_module->module_->save(core_dynamic_allocator_.get());
+        if (!module_state_blob.valid())
+        {
+            log(aergo::module::logging::LogType::ERROR, "Module state save failed, aborting core state save!");
+            return aergo::module::message::SharedDataBlob(); // return invalid blob
+        }
+        aergo::module::ISerializableModule::SaveData module_state_data;
+        if (!aergo::module::dll::SaveToolkit::deserialize(module_state_blob.data(), module_state_blob.size(), module_state_data))
+        {
+            log(aergo::module::logging::LogType::ERROR, "Module state deserialization failed, aborting core state save!");
+            return aergo::module::message::SharedDataBlob(); // return invalid blob
+        }
+
+        json module_state;
+
+        std::string instance_name = module_id_to_name[running_module_id];
+
+        module_state["supports_saving"] = module_state_data.supports_saving_;
+        
+        if (module_state_data.supports_saving_)
+        {
+            module_state["state_json"] = module_state_data.json_header_;
+            module_state["schema_version"] = module_state_data.schema_version_;
+            modules_binary_data.push_back({instance_name, std::move(module_state_data.blobs_)});
+        }
+        
+        state_data["module_states"][instance_name] = module_state;
+    }
+
+    std::string log_msg = "State data: " + state_data.dump(4);
+    log(aergo::module::logging::LogType::INFO, log_msg.c_str());
+
+    return aergo::module::message::SharedDataBlob(); // return invalid blob
+}
+
+
+
+bool Core::load(const uint8_t* data, uint64_t size) noexcept
+{
+    return false;
+}

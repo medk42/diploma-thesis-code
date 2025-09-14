@@ -117,5 +117,15 @@ namespace aergo::tests::core_1
         {
             return true;
         }
+
+        virtual ISerializableModule::SaveData save() noexcept override
+        {
+            return ISerializableModule::SaveData { .supports_saving_ = false };
+        }
+
+        virtual bool load(ISerializableModule::SaveData data) noexcept override
+        {
+            return true;
+        }
     };
 }

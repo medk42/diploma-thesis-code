@@ -32,6 +32,7 @@ static constexpr communication_channel::Consumer camera_calibration_module_messa
 };
 
 static constexpr ModuleInfo module_info = {
+    .module_type_identifier_ = "camera_calibration_module",
     .display_name_ = "Camera Calibration Module",
     .display_description_ = "Module receives raw camera data from a connected camera, adds calibration data and publishes it. Images will be captured during activation for calibration purposes. After activation, module will add calibration data to each input image and push it on output.",
     .publish_producers_ = camera_calibration_module_publish_producers,

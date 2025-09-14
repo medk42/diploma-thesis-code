@@ -29,6 +29,16 @@ namespace aergo::module::helpers::activation_wrapper
         virtual bool threadStart(uint32_t timeout_ms) noexcept override;
         virtual bool threadStop(uint32_t timeout_ms) noexcept override;
 
+        virtual ISerializableModule::SaveData save() noexcept override
+        {
+            return ISerializableModule::SaveData { .supports_saving_ = false };
+        }
+
+        virtual bool load(ISerializableModule::SaveData data) noexcept override
+        {
+            return true;
+        }
+
     private:
         /// @brief Initialize parameters to specified default values (or system defaults if not specified).
         /// Every parameter aside from CUSTOM and lists is initialized.

@@ -1,5 +1,8 @@
 add_subdirectory(tests)
 
+# add JSON library
+find_package(nlohmann_json CONFIG REQUIRED)
+
 add_library(core_project
     src/core.cpp
     src/core_structures.cpp
@@ -9,7 +12,7 @@ target_include_directories(core_project PUBLIC
     include
 )
 
-target_link_libraries(core_project PUBLIC module_common utils___logging utils___memory_allocation utils___core_module_interface)
+target_link_libraries(core_project PUBLIC module_common utils___logging utils___memory_allocation utils___core_module_interface nlohmann_json::nlohmann_json)
 
 # MSVC: force dynamic CRT
 if (MSVC)

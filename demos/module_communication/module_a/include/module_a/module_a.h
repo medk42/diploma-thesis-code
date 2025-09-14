@@ -23,6 +23,16 @@ namespace aergo::demo_modules_1::module_a
         bool threadStart(uint32_t timeout_ms) noexcept override;
         bool threadStop(uint32_t timeout_ms) noexcept override;
 
+        virtual ISerializableModule::SaveData save() noexcept override
+        {
+            return ISerializableModule::SaveData { .supports_saving_ = false };
+        }
+
+        virtual bool load(ISerializableModule::SaveData data) noexcept override
+        {
+            return true;
+        }
+
     private:
         void cycleImpl();
 
