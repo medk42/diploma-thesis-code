@@ -103,6 +103,8 @@ namespace aergo::default_modules::frontend_module::webapp
 
         aergo::module::helpers::activation_wrapper::message_types::ProgressData current_progress_; // current progress data, updated when processing activation/deactivation responses
 
+        std::vector<uint8_t> last_saved_state_;
+
         struct {
             /// @brief Map of required channel type to existing channels. Keys are subscribe channel types that are required by one or more modules to be created.
             /// Values are lists of existing channels that can be used to satisfy the requirement.

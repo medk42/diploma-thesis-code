@@ -627,6 +627,13 @@ Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
     std::lock_guard<std::mutex> add_remove_lock(add_remove_mutex_);
     std::unique_lock<std::shared_mutex> lock(core_mutex_);
 
+    return removeModuleImpl(id, recursive, lock);
+}
+
+
+
+Core::RemoveResult Core::removeModuleImpl(uint64_t id, bool recursive, std::unique_lock<std::shared_mutex>& external_lock)
+{
     if (id >= running_modules_.size() || running_modules_[id].get() == nullptr)
     {
         return Core::RemoveResult::DOES_NOT_EXIST;
@@ -649,11 +656,11 @@ Core::RemoveResult Core::removeModule(uint64_t id, bool recursive)
         if (running_modules_[module_id] != nullptr)
         {
             // TODO may be a race condition here
-            lock.unlock(); // we need to unlock here, because module may be stuck on core_mutex_ lock
+            external_lock.unlock(); // we need to unlock here, because module may be stuck on core_mutex_ lock
             bool res = running_modules_[module_id]->module_->threadStop(defaults::module_thread_timeout_ms_);
             stop_success = stop_success && res;    // stop_success: T->{T,F}; F->F (never F->T)
             running_modules_[module_id]->module_ = nullptr; // only if stop successful? 
-            lock.lock();
+            external_lock.lock();
         }
 
         removeMappingProducers(module_id, ConsumerType::SUBSCRIBE);
@@ -952,6 +959,13 @@ bool Core::addModule(uint64_t loaded_module_id, aergo::module::InputChannelMapIn
     std::lock_guard<std::mutex> add_remove_lock(add_remove_mutex_);
     std::unique_lock<std::shared_mutex> lock(core_mutex_);
 
+    return addModuleImpl(loaded_module_id, channel_map_info);
+}
+
+
+
+bool Core::addModuleImpl(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info) noexcept
+{
     if (loaded_module_id >= loaded_modules_.size())
     {
         return false;
@@ -1630,6 +1644,7 @@ bool Core::load(const uint8_t* data, uint64_t size) noexcept
     std::lock_guard<std::mutex> add_remove_lock(add_remove_mutex_);
     std::unique_lock<std::shared_mutex> lock(core_mutex_);
 
+    size_t last_auto_created_module_index = 0;
     // First, stop and remove all existing modules (if not auto-created)
     for (size_t running_module_id = 0; running_module_id < running_modules_.size(); ++running_module_id)
     {
@@ -1642,9 +1657,15 @@ bool Core::load(const uint8_t* data, uint64_t size) noexcept
         auto module_info = (*running_module->module_loader_data_)->readModuleInfo();
         if (!module_info->auto_create_)
         {
-            removeModule(running_module_id, true);
+            removeModuleImpl(running_module_id, true, lock);
+        }
+        else
+        {
+            last_auto_created_module_index = running_module_id;
         }
     }
+
+    running_modules_.resize(last_auto_created_module_index + 1); // remove all non-auto-created modules
 
     std::string state_data_str;
     std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>> modules_binary_data;
@@ -1840,7 +1861,7 @@ bool Core::load(const uint8_t* data, uint64_t size) noexcept
         std::string loaded_name = manual_created_module["loaded_name"].get<std::string>();
 
         const auto& it = loaded_name_to_id.find(loaded_name);
-        if (it != loaded_name_to_id.end())
+        if (it == loaded_name_to_id.end())
         {
             std::string log_msg = "Module " + loaded_name + " can not be created, because the corresponding loaded module does not exist";
             log(aergo::module::logging::LogType::ERROR, log_msg.c_str());
@@ -1942,7 +1963,7 @@ bool Core::load(const uint8_t* data, uint64_t size) noexcept
         };
 
 
-        if (!addModule(loaded_module_id, input_channel_map_info))
+        if (!addModuleImpl(loaded_module_id, input_channel_map_info))
         {
             std::string log_msg = "Module " + instance_name + " could not be created, aborting core state load!";
             log(aergo::module::logging::LogType::ERROR, log_msg.c_str());

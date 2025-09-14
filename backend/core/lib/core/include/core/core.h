@@ -139,6 +139,9 @@ namespace aergo::core
         /// @param channel_type_identifier_function return channel name and if it needs to be removed from "existing_channels"
         void removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std::function<std::pair<const char*, bool>(uint32_t)> channel_type_identifier_function, std::map<std::string, std::vector<aergo::module::ChannelIdentifier>>& existing_channels);
 
+        RemoveResult removeModuleImpl(uint64_t id, bool recursive, std::unique_lock<std::shared_mutex>& external_lock); // same as removeModule but without locks
+        bool addModuleImpl(uint64_t loaded_module_id, aergo::module::InputChannelMapInfo channel_map_info) noexcept; // same as addModule but without locks
+
         inline uint64_t nowNs() noexcept
         {
             using namespace std::chrono;
