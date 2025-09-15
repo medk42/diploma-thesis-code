@@ -70,11 +70,11 @@ namespace aergo::tests::core_1
             last_channel_id_ = response_producer_id;
             last_source_channel_ = source_channel;
 
-            return std::move(aergo::module::ResponseData {
+            return aergo::module::ResponseData {
                 .success_ = true,
                 .data_ = std::vector<uint8_t>(message.data_, message.data_ + message.data_len_),
                 .blobs_ = std::vector<aergo::module::message::SharedDataBlob>()
-            });
+            };
         }
 
         void processResponse(uint32_t request_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override

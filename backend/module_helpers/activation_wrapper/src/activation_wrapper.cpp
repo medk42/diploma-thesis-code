@@ -130,15 +130,15 @@ aergo::module::ResponseData ActivationWrapper::processRequest(uint32_t response_
         
         auto [response, extra_data] = processActivationRequest(*request, message.blobs_); // process request, locked inside
 
-        return std::move(aergo::module::ResponseData{ 
+        aergo::module::ResponseData{ 
             .success_ = true, 
             .data_ = std::vector<uint8_t>((uint8_t*)(&response), (uint8_t*)(&response) + sizeof(response)), 
             .blobs_ = extra_data.valid() ? std::vector<message::SharedDataBlob>{extra_data} : std::vector<message::SharedDataBlob>{} 
-        });
+        };
     }
     else if (activated_.load(std::memory_order_relaxed))
     {
-        return std::move(module_ref_->processRequest(response_producer_id, source_channel, message));
+        module_ref_->processRequest(response_producer_id, source_channel, message);
     }
 
     return { .success_ = false };
@@ -1069,7 +1069,7 @@ ISerializableModule::SaveData ActivationWrapper::save() noexcept
 
     save_data.json_header_ = module_data.dump();
 
-    return std::move(save_data);
+    return save_data;
 }
 
 

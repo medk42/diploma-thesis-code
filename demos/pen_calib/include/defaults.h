@@ -25,15 +25,13 @@ namespace aergo::defaults::pen
     
     inline std::vector<cv::Point3f> getMarkerPoints3d()
     {
-        std::vector<cv::Point3f> marker_points = 
+        return std::vector<cv::Point3f>
         {
             cv::Point3f(-MARKER_SIZE / 2,  MARKER_SIZE / 2, 0),
             cv::Point3f( MARKER_SIZE / 2,  MARKER_SIZE / 2, 0),
             cv::Point3f( MARKER_SIZE / 2, -MARKER_SIZE / 2, 0),
             cv::Point3f(-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0)
         };
-
-        return std::move(marker_points);
     }
 
     inline cv::aruco::ArucoDetector getArucoDetector()
@@ -41,12 +39,10 @@ namespace aergo::defaults::pen
         cv::aruco::DetectorParameters detector_parameters;
         detector_parameters.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
 
-        cv::aruco::ArucoDetector aruco_detector(
+        return cv::aruco::ArucoDetector(
             defaults::pen::DICTIONARY, 
             detector_parameters
         );
-
-        return std::move(aruco_detector);
     }
 };
 

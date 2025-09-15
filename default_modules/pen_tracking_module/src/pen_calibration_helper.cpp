@@ -4,12 +4,10 @@ using namespace aergo::pen_calibration::helper;
 
 cv::Point3d cv_extensions::asPoint(const cv::Mat& mat)
 {
-    return std::move(
-        cv::Point3d(
-            mat.at<double>(0),
-            mat.at<double>(1),
-            mat.at<double>(2)
-        )
+    return cv::Point3d(
+        mat.at<double>(0),
+        mat.at<double>(1),
+        mat.at<double>(2)
     );
 }
 
@@ -22,7 +20,7 @@ cv::Mat cv_extensions::asMat(const cv::Point3d& point)
     mat.at<double>(1) = point.y;
     mat.at<double>(2) = point.z;
 
-    return std::move(mat);
+    return mat;
 }
 
 

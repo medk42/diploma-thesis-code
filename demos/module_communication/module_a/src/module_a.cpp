@@ -81,11 +81,11 @@ aergo::module::ResponseData ModuleA::processRequest(uint32_t response_producer_i
             raw_data[i] = counter;
         }
 
-        return std::move(aergo::module::ResponseData{
+        aergo::module::ResponseData {
             .success_ = true,
             .data_ = std::vector<uint8_t>((uint8_t*)(&response), (uint8_t*)(&response) + sizeof(response)),
             .blobs_ = std::vector<message::SharedDataBlob>{ data_blob }
-        });
+        };
     }
     else
     {
