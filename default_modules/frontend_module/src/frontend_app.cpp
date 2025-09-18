@@ -261,6 +261,27 @@ void FrontendApp::setupCallbacks()
 
         refreshRunningModules();
     } ); // TODO for testing
+
+    activation_ui_->onClose().connect([this]() {
+        if (!connected_) return;
+        
+        // for now, just test that the file dialog works
+        dismissFileDialog();
+
+        file_dialog_ = root()->addWidget(std::make_unique<ui::helper::FileDialog>(
+            "Load Custom Value", 
+            std::vector<std::string> { "custom_value_1.bin", "custom_value_2.bin", "custom_value_3.bin" }, 
+            "custom_value_1", 
+            "Load"
+        ));
+
+        file_dialog_->onCancelClicked().connect([this]() { dismissFileDialog(); });
+        file_dialog_->onAcceptClicked().connect([this](std::string selected_file) { 
+            dismissFileDialog(); 
+
+            base_module_->log(logging::LogType::INFO, "Selected file to load: " + selected_file);
+        });
+    });
 }
 
 
@@ -354,6 +375,19 @@ void FrontendApp::dismissDialog()
     {
         root()->removeChild(reusable_dialog_);
         reusable_dialog_ = nullptr;
+    }
+
+    dismissFileDialog();
+}
+
+
+
+void FrontendApp::dismissFileDialog()
+{
+    if (file_dialog_ != nullptr)
+    {
+        root()->removeChild(file_dialog_);
+        file_dialog_ = nullptr;
     }
 }
 

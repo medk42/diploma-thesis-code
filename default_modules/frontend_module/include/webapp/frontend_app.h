@@ -7,6 +7,7 @@
 #include "ui/add_module_ui.h"
 #include "ui/activation_ui.h"
 #include "ui/helper/reusable_dialog.h"
+#include "ui/helper/file_dialog.h"
 
 #include <Wt/WApplication.h>
 #include <Wt/WStackedWidget.h>
@@ -48,6 +49,7 @@ namespace aergo::default_modules::frontend_module::webapp
         void processPendingActivationResponses(); // process pending activation/deactivation responses, must be called with the frontend_state_ mutex locked
 
         void dismissDialog();
+        void dismissFileDialog();
         void timerUpdate();
 
         void requestReadCurrentParameters(uint64_t running_module_index); // does not lock, does not check running_module_index validity, requests current parameters from the module if it is activable
@@ -70,6 +72,7 @@ namespace aergo::default_modules::frontend_module::webapp
         ui::AddModuleUi* add_module_ui_ = nullptr;
         ui::ActivationUi* activation_ui_ = nullptr;
         ui::helper::ReusableDialog* reusable_dialog_ = nullptr;
+        ui::helper::FileDialog* file_dialog_ = nullptr;
         Wt::WTimer* update_timer_ = nullptr;
     };
 
