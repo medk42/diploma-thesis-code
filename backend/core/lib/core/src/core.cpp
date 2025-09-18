@@ -1579,6 +1579,11 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
             log(aergo::module::logging::LogType::ERROR, "Module state deserialization failed, aborting core state save!");
             return aergo::module::message::SharedDataBlob(); // return invalid blob
         }
+        if (!module_state_data.success_)
+        {
+            log(aergo::module::logging::LogType::ERROR, "Module state indicates failure, aborting core state save!");
+            return aergo::module::message::SharedDataBlob(); // return invalid blob
+        }
 
         json module_state;
 
