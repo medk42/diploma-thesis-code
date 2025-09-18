@@ -51,7 +51,9 @@ namespace aergo::default_modules::frontend_module::webapp
         DESTROY_MODULE,
         LOAD_CUSTOM_VALUE,
         ACTIVATING,
-        DEACTIVATING
+        DEACTIVATING,
+        LOADING_STATE,
+        SAVING_STATE
     };
 
     struct ActivationResponse
@@ -88,7 +90,9 @@ namespace aergo::default_modules::frontend_module::webapp
         std::unique_ptr<CreateStateData> creation_data_; // if set, data for creating a module for the currently running core_->addModule call
         
         std::unique_ptr<aergo::module::helpers::activation_wrapper::AsyncTask<bool>> async_task_;
+        std::unique_ptr<aergo::module::helpers::activation_wrapper::AsyncTask<aergo::module::message::SharedDataBlob>> async_task_blob_;
         RunningTask running_task_ = RunningTask::NONE;
+        std::string save_file_path_; // path to file where state is saved, used when saving state asynchronously
 
         std::vector<bool> known_running_modules_; // size should correspond to core_->getRunningModulesCount(), true if module exists, false if it was destroyed
         std::vector<const aergo::module::ModuleInfo*> known_running_modules_info_; // size should correspond to core_->getRunningModulesCount(), info of running module
@@ -102,8 +106,6 @@ namespace aergo::default_modules::frontend_module::webapp
         std::string current_custom_value_name_; // the name of the custom value we are currently loading
 
         aergo::module::helpers::activation_wrapper::message_types::ProgressData current_progress_; // current progress data, updated when processing activation/deactivation responses
-
-        std::vector<uint8_t> last_saved_state_;
 
         struct {
             /// @brief Map of required channel type to existing channels. Keys are subscribe channel types that are required by one or more modules to be created.

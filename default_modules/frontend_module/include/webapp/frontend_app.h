@@ -17,6 +17,7 @@
 #include <atomic>
 #include <memory>
 #include <chrono>
+#include <filesystem>
 
 namespace aergo::default_modules::frontend_module::webapp
 {
@@ -57,6 +58,19 @@ namespace aergo::default_modules::frontend_module::webapp
         void requestAddRemoveListEntry(ui::ActivationUi::ModuleSingleParameter param, bool add); // lock, send request adding or removing a list entry from the module
         void requestParameterChange(ui::ActivationUi::ModuleSingleParameter param, const ui::helper::value_t& value); // lock, send request changing a parameter value in the module
         void requestActivate(uint64_t running_module_index, bool activate); // lock, send request to activate or deactivate the module
+
+        void loadPressedHandler(); // called when load button is pressed in the activation UI
+        void savePressedHandler(); // called when save button is pressed in the activation UI
+        bool getSaveDirectory(std::filesystem::path& out_directory); // get directory where state is saved, returns false on failure
+        std::vector<std::string> getExistingFilesInDirectory(const std::filesystem::path& directory); // get list of existing files in the directory, returns empty list on failure
+        void loadStateFromFile(const std::filesystem::path& file); // load state from file
+        void saveStateToFile(const std::filesystem::path& file, bool overwrite_confirmed); // save state to file
+        bool readZip(const std::string& file, std::string& project_json_out, std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>>& module_states_out); // read zip file, returns false on failure
+        bool writeZip(const std::string& file, const std::string& project_json, const std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>>& module_states); // write zip file, returns false on failure
+        void createLoadingStateDialog();
+        void createSavingStateDialog();
+        void handleLoadingState();
+        void handleSavingState();
 
         std::atomic_bool connected_;
 

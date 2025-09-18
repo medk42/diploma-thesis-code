@@ -6,7 +6,9 @@
 #include <map>
 
 
-// TODO update to the correct activation request ID
+#include <libzippp/libzippp.h>
+
+
 #define ACTIVATION_REQUEST_ID 0
 
 
@@ -138,6 +140,12 @@ void FrontendApp::loadUiFromState()
             createActivationDialog();
             updateActivationDialogProgress();
             break;
+        case RunningTask::LOADING_STATE:
+            createLoadingStateDialog();
+            break;
+        case RunningTask::SAVING_STATE:
+            createSavingStateDialog();
+            break;
     }
 
     for (uint64_t i = 0; i < frontend_state_->known_running_modules_.size(); ++i)
@@ -204,63 +212,9 @@ void FrontendApp::setupCallbacks()
     activation_ui_->onActivate().connect([this](uint64_t running_module_index) { requestActivate(running_module_index, true);});
     activation_ui_->onDeactivate().connect([this](uint64_t running_module_index) { requestActivate(running_module_index, false); });
 
-    activation_ui_->onSave().connect([this]() { 
-        message::SharedDataBlob save_data = base_module_->getCoreControl()->save(); 
-        if (save_data.valid())
-        {
-            std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
-            frontend_state_->last_saved_state_ = std::vector<uint8_t>(save_data.data(), save_data.data() + save_data.size());
-            base_module_->log(aergo::module::logging::LogType::INFO, "Core save successful, size: " + std::to_string(save_data.size()) + " bytes");
-        }
-        else
-        {
-            base_module_->log(aergo::module::logging::LogType::ERROR, "Core save failed");
-        }
-    } ); // TODO for testing
+    activation_ui_->onSave().connect([this]() { savePressedHandler(); } );
 
-    activation_ui_->onLoad().connect([this]() { 
-        std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
-
-        // check if we have saved state
-        if (frontend_state_->last_saved_state_.empty())
-        {
-            base_module_->log(aergo::module::logging::LogType::ERROR, "No saved state to load");
-            return;
-        }
-        
-        // clear the activation UI
-        for (size_t module_id = 0; module_id < frontend_state_->known_running_modules_.size(); ++module_id)
-        {
-            if (frontend_state_->known_running_modules_[module_id])
-            {
-                activation_ui_->removeModule(module_id);
-            }
-        }
-        
-        // request load (removed all modules)
-        if (base_module_->getCoreControl()->load(frontend_state_->last_saved_state_.data(), frontend_state_->last_saved_state_.size()))
-        {
-            base_module_->log(aergo::module::logging::LogType::INFO, "Core load successful, size: " + std::to_string(frontend_state_->last_saved_state_.size()) + " bytes");
-        }
-        else
-        {
-            base_module_->log(aergo::module::logging::LogType::ERROR, "Core load failed: core rejected data");
-        }
-
-        // clear state and reload from core
-        frontend_state_->creation_data_.reset();
-        frontend_state_->running_task_ = RunningTask::NONE;
-        frontend_state_->async_task_.reset();
-        frontend_state_->known_running_modules_.clear();
-        frontend_state_->known_running_modules_info_.clear();
-        frontend_state_->known_running_modules_activation_data_.clear();
-        frontend_state_->running_modules_publish_channel_lookup_.clear();
-        frontend_state_->running_modules_response_channel_lookup_.clear();
-        frontend_state_->pending_activation_responses_.clear();
-        frontend_state_->last_modules_mapping_state_id_ = 0;
-
-        refreshRunningModules();
-    } ); // TODO for testing
+    activation_ui_->onLoad().connect([this]() { loadPressedHandler(); } );
 
     activation_ui_->onClose().connect([this]() {
         if (!connected_) return;
@@ -524,6 +478,14 @@ void FrontendApp::timerUpdate()
         );
 
         processPendingActivationResponses();
+    }
+    else if (frontend_state_->running_task_ == RunningTask::LOADING_STATE)
+    {
+        handleLoadingState();
+    }
+    else if (frontend_state_->running_task_ == RunningTask::SAVING_STATE)
+    {
+        handleSavingState();   
     }
 }
 
@@ -1609,6 +1571,8 @@ void FrontendApp::createActivationDialog()
     });
 }
 
+
+
 void FrontendApp::updateActivationDialogProgress()
 {
     if (!reusable_dialog_) return;
@@ -1631,4 +1595,649 @@ void FrontendApp::updateActivationDialogProgress()
     }
 
     reusable_dialog_->setContent(progress_text);
+}
+
+
+
+void FrontendApp::loadPressedHandler()
+{
+    if (!connected_) return;
+
+    if (reusable_dialog_ != nullptr)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Cannot load state while a dialog is open");
+        return;
+    }
+
+    std::string base_path = base_module_->getDataPath();
+    std::filesystem::path save_dir;
+    if (!getSaveDirectory(save_dir))
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to get save directory");
+        return;
+    }
+
+    std::vector<std::string> filtered_files;
+    std::string selected_file;
+    for (const auto& file : getExistingFilesInDirectory(save_dir)) {
+        if (file.ends_with(".aergo")) {
+            filtered_files.push_back(file.substr(0, file.find_last_of('.')));
+        }
+    }
+    if (!filtered_files.empty())
+    {
+        selected_file = filtered_files[filtered_files.size() - 1];
+    }
+
+    dismissFileDialog();
+    file_dialog_ = root()->addWidget(std::make_unique<ui::helper::FileDialog>(
+        "Load State",
+        std::move(filtered_files),
+        selected_file,
+        "Load"
+    ));
+
+    file_dialog_->onCancelClicked().connect([this]() { dismissFileDialog(); });
+    file_dialog_->onAcceptClicked().connect([this, save_dir](std::string selected_file) { 
+        loadStateFromFile(save_dir / (selected_file + ".aergo")); 
+    });
+
+    // std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+
+    // // check if we have saved state
+    // if (frontend_state_->last_saved_state_.empty())
+    // {
+    //     base_module_->log(aergo::module::logging::LogType::ERROR, "No saved state to load");
+    //     return;
+    // }
+
+    // // clear the activation UI
+    // for (size_t module_id = 0; module_id < frontend_state_->known_running_modules_.size(); ++module_id)
+    // {
+    //     if (frontend_state_->known_running_modules_[module_id])
+    //     {
+    //         activation_ui_->removeModule(module_id);
+    //     }
+    // }
+
+    // // request load (removed all modules)
+    // if (base_module_->getCoreControl()->load(frontend_state_->last_saved_state_.data(), frontend_state_->last_saved_state_.size()))
+    // {
+    //     base_module_->log(aergo::module::logging::LogType::INFO, "Core load successful, size: " + std::to_string(frontend_state_->last_saved_state_.size()) + " bytes");
+    // }
+    // else
+    // {
+    //     base_module_->log(aergo::module::logging::LogType::ERROR, "Core load failed: core rejected data");
+    // }
+
+    // // clear state and reload from core
+    // frontend_state_->creation_data_.reset();
+    // frontend_state_->running_task_ = RunningTask::NONE;
+    // frontend_state_->async_task_.reset();
+    // frontend_state_->known_running_modules_.clear();
+    // frontend_state_->known_running_modules_info_.clear();
+    // frontend_state_->known_running_modules_activation_data_.clear();
+    // frontend_state_->running_modules_publish_channel_lookup_.clear();
+    // frontend_state_->running_modules_response_channel_lookup_.clear();
+    // frontend_state_->pending_activation_responses_.clear();
+    // frontend_state_->last_modules_mapping_state_id_ = 0;
+
+    // 
+}
+
+
+
+void FrontendApp::savePressedHandler()
+{
+    if (!connected_) return;
+
+    if (reusable_dialog_ != nullptr)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Cannot save state while a dialog is open");
+        return;
+    }
+
+    std::string base_path = base_module_->getDataPath();
+    std::filesystem::path save_dir;
+    if (!getSaveDirectory(save_dir))
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to get save directory");
+        return;
+    }
+
+    std::vector<std::string> filtered_files;
+    for (const auto& file : getExistingFilesInDirectory(save_dir)) {
+        if (file.ends_with(".aergo")) {
+            filtered_files.push_back(file.substr(0, file.find_last_of('.')));
+        }
+    }
+
+    std::string selected_file;
+    for (int i = 0; i < 1000; ++i)
+    {
+        std::string filename = "save_" + std::to_string(i);
+        if (std::find(filtered_files.begin(), filtered_files.end(), filename) == filtered_files.end())
+        {
+            selected_file = filename;
+            break;
+        }
+    }
+
+    dismissFileDialog();
+    file_dialog_ = root()->addWidget(std::make_unique<ui::helper::FileDialog>(
+        "Save State",
+        std::move(filtered_files),
+        selected_file,
+        "Save"
+    ));
+
+    file_dialog_->onCancelClicked().connect([this]() { dismissFileDialog(); });
+    file_dialog_->onAcceptClicked().connect([this, save_dir](std::string selected_file) { 
+        saveStateToFile(save_dir / (selected_file + ".aergo"), false); 
+    });
+
+    // message::SharedDataBlob save_data = base_module_->getCoreControl()->save(); 
+    // if (save_data.valid())
+    // {
+    //     std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+    //     frontend_state_->last_saved_state_ = std::vector<uint8_t>(save_data.data(), save_data.data() + save_data.size());
+    //     base_module_->log(aergo::module::logging::LogType::INFO, "Core save successful, size: " + std::to_string(save_data.size()) + " bytes");
+    // }
+    // else
+    // {
+    //     base_module_->log(aergo::module::logging::LogType::ERROR, "Core save failed");
+    // }
+}
+
+
+
+bool FrontendApp::getSaveDirectory(std::filesystem::path& out_directory)
+{
+    std::string base_path = base_module_->getDataPath();
+    std::filesystem::path base_dir(base_path);
+    std::filesystem::path save_dir = base_dir / "saves";
+
+    if (!std::filesystem::exists(save_dir))
+    {
+        base_module_->log(aergo::module::logging::LogType::WARNING, "Saves directory does not exist, creating: " + save_dir.string());
+        if (!std::filesystem::create_directories(save_dir))
+        {
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to create saves directory: " + save_dir.string());
+            return false;
+        }
+    }
+
+    out_directory = save_dir;
+    return true;
+}
+
+
+
+std::vector<std::string> FrontendApp::getExistingFilesInDirectory(const std::filesystem::path& directory)
+{
+    std::vector<std::string> files;
+
+    if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory))
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Directory does not exist or is not a directory: " + directory.string());
+        return files;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(directory))
+    {
+        if (entry.is_regular_file())
+        {
+            files.push_back(entry.path().filename().string());
+        }
+    }
+
+    return files;
+}
+
+
+
+void FrontendApp::loadStateFromFile(const std::filesystem::path& file)
+{
+    if (!connected_) return;
+
+    dismissDialog();
+
+    base_module_->log(aergo::module::logging::LogType::INFO, "Loading state from file: " + file.string());
+    
+    std::string project_json;
+    std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>> module_states;
+    if (!readZip(file.string(), project_json, module_states))
+    {
+        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>(
+            "Load State", 
+            "Failed to read state from file: " + file.string(), 
+            std::vector<ui::helper::ButtonDescription> { 
+                ui::helper::ButtonDescription {
+                    .text_ = "OK",
+                    .style_ = ui::helper::ButtonStyle::Primary,
+                    .enabled_ = true
+                }
+            }
+        ));
+
+        reusable_dialog_->onButtonClicked().connect([this](size_t button_index) { dismissDialog(); });
+        reusable_dialog_->onBackgroundClicked().connect([this]() { dismissDialog(); });
+
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to read state from file: " + file.string());
+        return;
+    }
+
+    std::vector<uint8_t> serialized_state;
+    if (!aergo::module::save_toolkit::serializeSaveState(project_json, module_states, serialized_state))
+    {
+        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>(
+            "Load State", 
+            "Failed to serialize loaded data",
+            std::vector<ui::helper::ButtonDescription> { 
+                ui::helper::ButtonDescription {
+                    .text_ = "OK",
+                    .style_ = ui::helper::ButtonStyle::Primary,
+                    .enabled_ = true
+                }
+            }
+        ));
+
+        reusable_dialog_->onButtonClicked().connect([this](size_t button_index) { dismissDialog(); });
+        reusable_dialog_->onBackgroundClicked().connect([this]() { dismissDialog(); });
+        
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to serialize state from file: " + file.string());
+        return;
+    }
+    
+
+
+
+    std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+
+    if (frontend_state_->running_task_ != RunningTask::NONE || frontend_state_->async_task_ != nullptr)
+    {
+        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>(
+            "Load State", 
+            "Cannot load state while another task is running",
+            std::vector<ui::helper::ButtonDescription> { 
+                ui::helper::ButtonDescription {
+                    .text_ = "OK",
+                    .style_ = ui::helper::ButtonStyle::Primary,
+                    .enabled_ = true
+                }
+            }
+        ));
+
+        reusable_dialog_->onButtonClicked().connect([this](size_t button_index) { dismissDialog(); });
+        reusable_dialog_->onBackgroundClicked().connect([this]() { dismissDialog(); });
+
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Cannot load state while another task is running");
+        return;
+    }
+
+    auto core_ptr = base_module_->getCoreControl();
+    frontend_state_->async_task_ = std::make_unique<aergo::module::helpers::activation_wrapper::AsyncTask<bool>>(
+        [core_ptr, serialized_state](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> bool
+        {
+            return core_ptr->load(serialized_state.data(), serialized_state.size()); // this task can not be cancelled
+        }
+    );
+    frontend_state_->async_task_->start();
+
+    base_module_->log(aergo::module::logging::LogType::INFO, "Core load started, size: " + std::to_string(serialized_state.size()) + " bytes");
+
+    createLoadingStateDialog();
+
+    frontend_state_->running_task_ = RunningTask::LOADING_STATE;
+}
+
+
+
+void FrontendApp::saveStateToFile(const std::filesystem::path& file, bool overwrite_confirmed)
+{
+    if (!connected_) return;
+
+    dismissDialog();
+
+    if (!overwrite_confirmed && std::filesystem::exists(file))
+    {
+        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>(
+            "Confirm Overwrite", 
+            "The file \"" + file.filename().string() + "\" already exists. Do you want to overwrite it?", 
+            std::vector<ui::helper::ButtonDescription> { 
+                ui::helper::ButtonDescription {
+                    .text_ = "Cancel",
+                    .style_ = ui::helper::ButtonStyle::Secondary,
+                    .enabled_ = true
+                },
+                ui::helper::ButtonDescription {
+                    .text_ = "Overwrite",
+                    .style_ = ui::helper::ButtonStyle::Danger,
+                    .enabled_ = true
+                }
+            }
+        ));
+
+        reusable_dialog_->onButtonClicked().connect([this, file](size_t button_index) {
+            if (button_index == 0) // Cancel
+            {
+                dismissDialog();
+            }
+            else if (button_index == 1) // Overwrite
+            {
+                dismissDialog();
+                saveStateToFile(file, true);
+            }
+        });
+
+        return;
+    }
+    
+    std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+
+    if (frontend_state_->running_task_ != RunningTask::NONE || frontend_state_->async_task_blob_ != nullptr)
+    {
+        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>(
+            "Save State", 
+            "Cannot save state while another task is running",
+            std::vector<ui::helper::ButtonDescription> { 
+                ui::helper::ButtonDescription {
+                    .text_ = "OK",
+                    .style_ = ui::helper::ButtonStyle::Primary,
+                    .enabled_ = true
+                }
+            }
+        ));
+
+        reusable_dialog_->onButtonClicked().connect([this](size_t button_index) { dismissDialog(); });
+        reusable_dialog_->onBackgroundClicked().connect([this]() { dismissDialog(); });
+
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Cannot save state while another task is running");
+        return;
+    }
+
+    auto core_ptr = base_module_->getCoreControl();
+    frontend_state_->async_task_blob_ = std::make_unique<aergo::module::helpers::activation_wrapper::AsyncTask<message::SharedDataBlob>>(
+        [core_ptr](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> message::SharedDataBlob
+        {
+            return core_ptr->save(); // this task can not be cancelled
+        }
+    );
+    frontend_state_->async_task_blob_->start();
+    frontend_state_->save_file_path_ = file.string();
+
+    base_module_->log(aergo::module::logging::LogType::INFO, "Core save started");
+
+    createSavingStateDialog();
+
+    frontend_state_->running_task_ = RunningTask::SAVING_STATE;
+}
+
+
+
+bool FrontendApp::readZip(const std::string& file, std::string& project_json_out, std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>>& module_states_out)
+{
+    libzippp::ZipArchive z(file);
+
+    try
+    {
+        if (!z.open(libzippp::ZipArchive::ReadOnly)) return false;
+
+        // Read project.json
+        {
+            libzippp::ZipEntry hdr = z.getEntry("project.json");
+            if (hdr.isNull()) { z.close(); return false; }
+            project_json_out = hdr.readAsText();
+        }
+
+        std::map<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>> all_entries;
+
+        // List and read everything else
+        for (const auto& e : z.getEntries()) {
+            auto name = e.getName();
+            if (name == "project.json") continue;
+            if (e.isDirectory()) continue;
+
+            void* raw = e.readAsBinary();
+            if (raw == nullptr) continue;
+
+            std::vector<uint8_t> buf((uint8_t*)raw, (uint8_t*)raw + e.getSize());
+            delete[] (uint8_t*)raw;
+
+            std::filesystem::path p(name);
+            auto module_name = p.parent_path().string();
+            auto data_name = p.filename().string();
+            
+            all_entries[module_name].push_back(aergo::module::ISerializableModule::SavedBlob {data_name, std::move(buf)});
+        }
+
+        for (auto& [mod_name, blobs] : all_entries) {
+            module_states_out.push_back(std::make_tuple(mod_name, std::move(blobs)));
+        }
+
+        z.close();
+    }
+    catch(const std::exception& e)
+    {
+        z.close();
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Exception in readZip: " + std::string(e.what()));
+        return false;
+    }
+    
+    return true;
+}
+
+
+
+bool FrontendApp::writeZip(const std::string& file, const std::string& project_json, const std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>>& module_states)
+{
+    libzippp::ZipArchive z(file);
+
+    try
+    {
+        if (!z.open(libzippp::ZipArchive::New)) return false;
+
+        if (!z.addData("project.json", project_json.c_str(), project_json.size()))
+        {
+            z.close();
+            return false;
+        }
+
+        // Write module states
+        for (const auto& [mod_name, blobs] : module_states) {
+            for (const auto& blob : blobs) {
+                std::string entry_name = mod_name + "/" + blob.name_;
+                if (!z.addData(entry_name, blob.data_.data(), blob.data_.size()))
+                {
+                    z.close();
+                    return false;
+                }
+            }
+        }
+
+        z.close();
+    }
+    catch(const std::exception& e)
+    {
+        z.close();
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Exception in writeZip: " + std::string(e.what()));
+        return false;
+    }
+    
+    return true;
+}
+
+
+
+void FrontendApp::createLoadingStateDialog()
+{
+    dismissDialog();
+    reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>( // overlay, non-dismissible
+        "Loading State", 
+        "Loading state. Please wait...", 
+        std::vector<ui::helper::ButtonDescription> {  }
+    )); 
+}
+
+
+
+void FrontendApp::createSavingStateDialog()
+{
+    dismissDialog();
+    reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>( // overlay, non-dismissible
+        "Saving State", 
+        "Saving state. Please wait...", 
+        std::vector<ui::helper::ButtonDescription> {  }
+    )); 
+}
+
+
+
+void FrontendApp::handleLoadingState()
+{
+    if (frontend_state_->async_task_ == nullptr)
+    {
+        frontend_state_->running_task_ = RunningTask::NONE;
+        dismissDialog();
+        base_module_->log(aergo::module::logging::LogType::ERROR, "No async task in LOADING_STATE state");
+        return;
+    }
+
+    if (frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::NOT_STARTED
+        || frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::RUNNING)
+    {
+        return; // still running
+    }
+
+
+    // task finished
+    bool success = false;
+    if (frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::COMPLETED)
+    {
+        success = frontend_state_->async_task_->getResult().value_or(false);
+    }
+
+    frontend_state_->running_task_ = RunningTask::NONE;
+    frontend_state_->async_task_.reset();
+    dismissDialog();
+
+    if (!success)
+    {
+        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>( // overlay, dismissible
+            "Loading State", 
+            "The state loading has failed.", 
+            std::vector<ui::helper::ButtonDescription> { 
+                ui::helper::ButtonDescription {
+                    .text_ = "OK",
+                    .style_ = ui::helper::ButtonStyle::Secondary,
+                    .enabled_ = true
+                }
+            }
+        ));
+        reusable_dialog_->onButtonClicked().connect(this, &FrontendApp::dismissDialog);
+        reusable_dialog_->onBackgroundClicked().connect(this, &FrontendApp::dismissDialog);
+    }
+
+
+    base_module_->log(aergo::module::logging::LogType::INFO, "Core load finished, refreshing modules from core");
+
+    // refresh after loading
+
+    for (size_t module_id = 0; module_id < frontend_state_->known_running_modules_.size(); ++module_id)
+    {
+        if (frontend_state_->known_running_modules_[module_id])
+        {
+            activation_ui_->removeModule(module_id);
+        }
+    }
+
+    frontend_state_->creation_data_.reset();
+    frontend_state_->running_task_ = RunningTask::NONE;
+    frontend_state_->async_task_.reset();
+    frontend_state_->known_running_modules_.clear();
+    frontend_state_->known_running_modules_info_.clear();
+    frontend_state_->known_running_modules_activation_data_.clear();
+    frontend_state_->running_modules_publish_channel_lookup_.clear();
+    frontend_state_->running_modules_response_channel_lookup_.clear();
+    frontend_state_->pending_activation_responses_.clear();
+    frontend_state_->last_modules_mapping_state_id_ = 0;
+
+    frontend_state_->current_screen_ = webapp::FrontendScreen::SETUP_MODULES;
+
+    refreshRunningModules();
+}
+
+
+
+void FrontendApp::handleSavingState()
+{
+    if (frontend_state_->async_task_blob_ == nullptr)
+    {
+        frontend_state_->running_task_ = RunningTask::NONE;
+        dismissDialog();
+        base_module_->log(aergo::module::logging::LogType::ERROR, "No async task in SAVING_STATE state");
+        return;
+    }
+
+    if (frontend_state_->async_task_blob_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::NOT_STARTED
+        || frontend_state_->async_task_blob_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::RUNNING)
+    {
+        return; // still running
+    }
+
+    // task finished
+    message::SharedDataBlob save_data;
+    if (frontend_state_->async_task_blob_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::COMPLETED)
+    {
+        save_data = frontend_state_->async_task_blob_->getResult().value_or(message::SharedDataBlob());
+    }
+
+    frontend_state_->running_task_ = RunningTask::NONE;
+    frontend_state_->async_task_blob_.reset();
+    dismissDialog();
+
+
+    bool success = false;
+    if (save_data.valid())
+    {
+        std::string project_json;
+        std::vector<std::tuple<std::string, std::vector<aergo::module::ISerializableModule::SavedBlob>>> module_states;
+        if (aergo::module::save_toolkit::deserializeSaveState(save_data.data(), save_data.size(), project_json, module_states))
+        {
+            if (writeZip(frontend_state_->save_file_path_, project_json, module_states))
+            {
+                success = true;
+                base_module_->log(aergo::module::logging::LogType::INFO, "Core save successful, size: " + std::to_string(save_data.size()) + " bytes, saved to: " + frontend_state_->save_file_path_);
+            }
+            else
+            {
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Core save failed - could not write file: " + frontend_state_->save_file_path_);
+            }
+        }
+        else
+        {
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Core save failed - could not deserialize save data");
+        }
+    }
+    else
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Core save failed - Core::save() returned invalid data");
+    }
+
+    if (!success)
+    {
+        reusable_dialog_ = root()->addWidget(std::make_unique<ui::helper::ReusableDialog>( // overlay, dismissible
+            "Saving State", 
+            "The state saving has failed.", 
+            std::vector<ui::helper::ButtonDescription> { 
+                ui::helper::ButtonDescription {
+                    .text_ = "OK",
+                    .style_ = ui::helper::ButtonStyle::Secondary,
+                    .enabled_ = true
+                }
+            }
+        ));
+        reusable_dialog_->onButtonClicked().connect(this, &FrontendApp::dismissDialog);
+        reusable_dialog_->onBackgroundClicked().connect(this, &FrontendApp::dismissDialog);
+    }
 }

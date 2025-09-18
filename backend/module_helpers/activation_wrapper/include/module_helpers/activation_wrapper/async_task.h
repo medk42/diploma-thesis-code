@@ -44,7 +44,7 @@ namespace aergo::module::helpers::activation_wrapper
     private:
         bool started_;
 
-        std::function<bool(const std::atomic<bool>&, std::atomic<bool>&)> func_;
+        std::function<T(const std::atomic<bool>&, std::atomic<bool>&)> func_;
         std::atomic<bool> cancel_flag_;
         std::atomic<bool> finished_;
         std::atomic<bool> cancelled_;

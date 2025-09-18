@@ -12,6 +12,7 @@
     "simpleble",
     "wt",
     "libharu",
-    "nlohmann-json"
+    "nlohmann-json",
+    "libzippp"
   ]
 }
