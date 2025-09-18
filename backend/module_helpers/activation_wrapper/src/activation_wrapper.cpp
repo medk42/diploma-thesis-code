@@ -130,7 +130,7 @@ aergo::module::ResponseData ActivationWrapper::processRequest(uint32_t response_
         
         auto [response, extra_data] = processActivationRequest(*request, message.blobs_); // process request, locked inside
 
-        aergo::module::ResponseData{ 
+        return aergo::module::ResponseData{ 
             .success_ = true, 
             .data_ = std::vector<uint8_t>((uint8_t*)(&response), (uint8_t*)(&response) + sizeof(response)), 
             .blobs_ = extra_data.valid() ? std::vector<message::SharedDataBlob>{extra_data} : std::vector<message::SharedDataBlob>{} 
@@ -138,7 +138,7 @@ aergo::module::ResponseData ActivationWrapper::processRequest(uint32_t response_
     }
     else if (activated_.load(std::memory_order_relaxed))
     {
-        module_ref_->processRequest(response_producer_id, source_channel, message);
+        return module_ref_->processRequest(response_producer_id, source_channel, message);
     }
 
     return { .success_ = false };
