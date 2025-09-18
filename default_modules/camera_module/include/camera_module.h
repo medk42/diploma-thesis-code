@@ -50,22 +50,18 @@ namespace aergo::default_modules::camera_module
         /// @brief Activation is immediate. No progress to report. 
         virtual aergo::module::helpers::activation_wrapper::message_types::ProgressData getActivationProgress() override { return { .progress_type_ = aergo::module::helpers::activation_wrapper::message_types::ProgressType::NONE }; }
 
-        virtual bool isActivated() override { return false; }
+        virtual bool isActivated() override { return activated_; }
 
-        virtual ISerializableModule::SaveData save() noexcept override
-        {
-            return ISerializableModule::SaveData { .supports_saving_ = false };
-        }
+        virtual ISerializableModule::SaveData save() noexcept override;
 
-        virtual bool load(ISerializableModule::SaveData data) noexcept override
-        {
-            return true;
-        }
+        virtual bool load(ISerializableModule::SaveData data) noexcept override;
     
     private:
         void log(aergo::module::logging::LogType type, const std::string& message) { aergo::module::BaseModule::log(type, message.c_str()); }
         int64_t nowMs() noexcept;
         void captureLoop();
+        bool openCamera(int64_t camera_id);
+        void closeCamera();
 
         std::unique_ptr<cv::VideoCapture> cap_;
 
@@ -75,6 +71,7 @@ namespace aergo::default_modules::camera_module
         std::thread capture_thread_;
         std::atomic<bool> stop_thread_{false};
 
+        int64_t used_camera_id_{0};
         std::atomic<bool> activated_{false};
         bool thread_running_{false};
         std::mutex activation_mutex_;

@@ -1,7 +1,10 @@
 #include "camera_module.h"
 
+#include <nlohmann/json.hpp>
+
 using namespace aergo::default_modules::camera_module;
 using namespace aergo::module;
+using json = nlohmann::json;
 
 
 
@@ -46,63 +49,19 @@ bool CameraModule::activate(std::vector<std::vector<std::vector<uint8_t>>>& para
         log(aergo::module::logging::LogType::ERROR, "Camera index out of range (0-10)");
         return false; // invalid camera index
     }
-    log(aergo::module::logging::LogType::INFO, "Initializing camera module " + std::to_string(camera_index));
-    
-    cap_ = std::make_unique<cv::VideoCapture>((int)camera_index);//, cv::CAP_DSHOW);
-    // cap_->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
 
-    if (!cap_->isOpened())
+
+
+    used_camera_id_ = camera_index;
+    bool success = openCamera(camera_index);
+
+    if (!success)
     {
-        log(aergo::module::logging::LogType::ERROR, "Failed to open camera");
-        return false; // failed to open camera, return with valid_ = false
+        log(aergo::module::logging::LogType::ERROR, "Failed to open camera with index " + std::to_string(camera_index));
+        return false; // failed to open camera
     }
-
-    cv::Mat probe;
-    if (!cap_->read(probe))
-    {
-        log(aergo::module::logging::LogType::ERROR, "Failed to read from camera");
-        return false; // failed to read from camera, return with valid_ = false
-    }
-
-    if (probe.empty() || probe.type() != CV_8UC3 || probe.step != probe.cols * 3)
-    {
-        log(aergo::module::logging::LogType::ERROR, "Frame from camera is not a valid 3-channel BGR image");
-        return false; // empty frame, return with valid_ = false
-    }
-
-    frame_header_ = {
-        .width_ = (uint16_t)probe.cols,
-        .height_ = (uint16_t)probe.rows
-    };
-
-    log(aergo::module::logging::LogType::INFO, "Camera frame size: " + std::to_string(frame_header_.width_) + "x" + std::to_string(frame_header_.height_));
-
-    uint64_t expected_size = frame_header_.width_ * frame_header_.height_ * 3;
-    if (expected_size != probe.total() * probe.elemSize())
-    {
-        std::string size_comparison = std::to_string(frame_header_.width_) + " * " + std::to_string(frame_header_.height_) + " * 3   !=  " + std::to_string(probe.total()) + " * " + std::to_string(probe.elemSize());
-        log(aergo::module::logging::LogType::ERROR, "Frame size from camera does not match expected size: " + size_comparison);
-        return false; // frame size does not match expected size, return with valid_ = false
-    }
-
-    if (probe.cols > 65535 || probe.rows > 65535 || probe.cols < 0 || probe.rows < 0)
-    {
-        log(aergo::module::logging::LogType::ERROR, "Frame dimensions exceed maximum supported size");
-        return false; // frame dimensions exceed maximum supported size, return with valid_ = false
-    }
-
-    frame_allocator_ = createBufferAllocator(expected_size, 30); // buffer for 30 frames
-    if (!frame_allocator_)
-    {
-        log(aergo::module::logging::LogType::ERROR, "Failed to create frame allocator");
-        return false; // failed to create allocator, return with valid_ = false
-    }
-
-    log(aergo::module::logging::LogType::INFO, "Camera module initialized successfully");
-
     
     activated_ = true;
-
     return true;
 }
 
@@ -114,9 +73,11 @@ bool CameraModule::deactivate(const std::atomic<bool>& cancel_flag, std::atomic<
 
     if (!activated_)
     {
-        log(aergo::module::logging::LogType::WARNING, "Camera capture thread is not running");
+        log(aergo::module::logging::LogType::WARNING, "Camera module is already deactivated.");
         return true; // already stopped
     }
+
+    closeCamera();
 
     activated_ = false;
 
@@ -219,4 +180,145 @@ void CameraModule::captureLoop()
 
         // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
+}
+
+
+
+bool CameraModule::openCamera(int64_t camera_index)
+{
+    log(aergo::module::logging::LogType::INFO, "Initializing camera module " + std::to_string(camera_index));
+    
+    cap_ = std::make_unique<cv::VideoCapture>((int)camera_index);//, cv::CAP_DSHOW);
+    // cap_->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+
+    if (!cap_->isOpened())
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to open camera");
+        return false; // failed to open camera, return with valid_ = false
+    }
+
+    cv::Mat probe;
+    if (!cap_->read(probe))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to read from camera");
+        return false; // failed to read from camera, return with valid_ = false
+    }
+
+    if (probe.empty() || probe.type() != CV_8UC3 || probe.step != probe.cols * 3)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Frame from camera is not a valid 3-channel BGR image");
+        return false; // empty frame, return with valid_ = false
+    }
+
+    frame_header_ = {
+        .width_ = (uint16_t)probe.cols,
+        .height_ = (uint16_t)probe.rows
+    };
+
+    log(aergo::module::logging::LogType::INFO, "Camera frame size: " + std::to_string(frame_header_.width_) + "x" + std::to_string(frame_header_.height_));
+
+    uint64_t expected_size = frame_header_.width_ * frame_header_.height_ * 3;
+    if (expected_size != probe.total() * probe.elemSize())
+    {
+        std::string size_comparison = std::to_string(frame_header_.width_) + " * " + std::to_string(frame_header_.height_) + " * 3   !=  " + std::to_string(probe.total()) + " * " + std::to_string(probe.elemSize());
+        log(aergo::module::logging::LogType::ERROR, "Frame size from camera does not match expected size: " + size_comparison);
+        return false; // frame size does not match expected size, return with valid_ = false
+    }
+
+    if (probe.cols > 65535 || probe.rows > 65535 || probe.cols < 0 || probe.rows < 0)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Frame dimensions exceed maximum supported size");
+        return false; // frame dimensions exceed maximum supported size, return with valid_ = false
+    }
+
+    frame_allocator_ = createBufferAllocator(expected_size, 30); // buffer for 30 frames
+    if (!frame_allocator_)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to create frame allocator");
+        return false; // failed to create allocator, return with valid_ = false
+    }
+
+    log(aergo::module::logging::LogType::INFO, "Camera module initialized successfully");
+
+    return true;
+}
+
+
+
+void CameraModule::closeCamera()
+{
+    cap_.reset();
+}
+
+
+
+ISerializableModule::SaveData CameraModule::save() noexcept
+{
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+
+    ISerializableModule::SaveData data;
+    data.supports_saving_ = true;
+    data.schema_version_ = 1;
+    
+    json header;
+    header["activated"] = activated_.load();
+    header["used_camera_id"] = used_camera_id_;
+
+    data.json_header_ = header.dump();
+
+    return data;
+}
+
+
+
+bool CameraModule::load(ISerializableModule::SaveData data) noexcept
+{
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+
+    if (!data.supports_saving_ || data.schema_version_ != 1)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Unsupported save data for camera module");
+        return false; // unsupported save data
+    }
+
+    try
+    {
+        auto header = json::parse(data.json_header_);
+        
+        if (!header.contains("activated")  || !header["activated"].is_boolean()
+        || !header.contains("used_camera_id") || !header["used_camera_id"].is_number_integer())
+        {
+            log(aergo::module::logging::LogType::ERROR, "Save data missing required fields");
+            return false; // missing required fields
+        }
+
+        bool was_activated = header["activated"].get<bool>();
+        int64_t camera_id = header["used_camera_id"].get<int64_t>();
+
+        if (was_activated)
+        {
+            used_camera_id_ = camera_id;
+            bool success = openCamera(camera_id);
+            if (success)
+            {
+                activated_ = true;
+            }
+            else
+            {
+                log(aergo::module::logging::LogType::ERROR, "Failed to open camera during load");
+                activated_ = false;
+            }
+        }
+        else
+        {
+            activated_ = false;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        log(aergo::module::logging::LogType::ERROR, std::string("Failed to parse save data: ") + e.what());
+        return false; // failed to parse save data
+    }
+
+    return true;
 }
