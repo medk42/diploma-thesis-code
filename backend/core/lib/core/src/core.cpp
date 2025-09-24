@@ -34,6 +34,8 @@ Core::~Core()
             module->module_->threadStop(defaults::module_thread_timeout_ms_);
         }
     }
+
+    running_modules_.clear();
 }
 
 

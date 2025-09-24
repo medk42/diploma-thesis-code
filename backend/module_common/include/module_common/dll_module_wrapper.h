@@ -117,6 +117,8 @@ namespace aergo::module::dll
 
         std::atomic<bool> stop_threads_{false};
 
+        bool module_stopping_{false}; // true if threadStop() was called and module is stopping, used to not accept new messages/requests/responses
+
 
         std::unique_ptr<aergo::module::IModule> module_;
         const aergo::module::ModuleInfo* module_info_;

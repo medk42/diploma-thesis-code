@@ -1,6 +1,7 @@
 #include "module_common/dll_module_wrapper.h"
 
 #include <chrono>
+#include <algorithm>
 
 using namespace aergo::module;
 using namespace aergo::module::dll;
@@ -127,6 +128,12 @@ bool DllModuleWrapper::threadStart(uint32_t timeout_ms) noexcept
 bool DllModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
 {
     std::unique_lock<std::mutex> lock(mutex_);
+
+    // clear queues to remove SharedDataBlob references before allocators are destroyed in destructors
+    module_stopping_ = true;
+    std::for_each(prioritized_queues_.begin(), prioritized_queues_.end(), [](auto& q) { std::queue<ProcessingData> empty; std::swap(q, empty); });
+    std::for_each(regular_queues_.begin(), regular_queues_.end(), [](auto& q) { std::queue<ProcessingData> empty; std::swap(q, empty); });
+
     if (prioritized_worker_threads_.size() == 0 && regular_worker_threads_.size() == 0)
     {
         return false; // not running
@@ -231,6 +238,16 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
     std::queue<ProcessingData>& target_queue = is_prioritized ? prioritized_queues_[idx] : regular_queues_[idx];
 
     std::unique_lock<std::mutex> lock(mutex_);
+
+    if (module_stopping_)
+    {
+        // module is stopping, drop new messages
+        if (type == aergo::module::IModule::ProcessingType::REQUEST)
+        {
+            sendFailedResponse(local_channel_id, source_channel, message.id_);
+        }
+        return;
+    }
     
     bool queue_full = (target_queue.size() >= capacity);
     aergo::module::IModule::QueueStatus queue_status = queue_full ? aergo::module::IModule::QueueStatus::QUEUE_FULL : aergo::module::IModule::QueueStatus::NORMAL;
