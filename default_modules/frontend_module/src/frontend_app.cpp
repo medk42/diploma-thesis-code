@@ -1643,48 +1643,6 @@ void FrontendApp::loadPressedHandler()
     file_dialog_->onAcceptClicked().connect([this, save_dir](std::string selected_file) { 
         loadStateFromFile(save_dir / (selected_file + ".aergo")); 
     });
-
-    // std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
-
-    // // check if we have saved state
-    // if (frontend_state_->last_saved_state_.empty())
-    // {
-    //     base_module_->log(aergo::module::logging::LogType::ERROR, "No saved state to load");
-    //     return;
-    // }
-
-    // // clear the activation UI
-    // for (size_t module_id = 0; module_id < frontend_state_->known_running_modules_.size(); ++module_id)
-    // {
-    //     if (frontend_state_->known_running_modules_[module_id])
-    //     {
-    //         activation_ui_->removeModule(module_id);
-    //     }
-    // }
-
-    // // request load (removed all modules)
-    // if (base_module_->getCoreControl()->load(frontend_state_->last_saved_state_.data(), frontend_state_->last_saved_state_.size()))
-    // {
-    //     base_module_->log(aergo::module::logging::LogType::INFO, "Core load successful, size: " + std::to_string(frontend_state_->last_saved_state_.size()) + " bytes");
-    // }
-    // else
-    // {
-    //     base_module_->log(aergo::module::logging::LogType::ERROR, "Core load failed: core rejected data");
-    // }
-
-    // // clear state and reload from core
-    // frontend_state_->creation_data_.reset();
-    // frontend_state_->running_task_ = RunningTask::NONE;
-    // frontend_state_->async_task_.reset();
-    // frontend_state_->known_running_modules_.clear();
-    // frontend_state_->known_running_modules_info_.clear();
-    // frontend_state_->known_running_modules_activation_data_.clear();
-    // frontend_state_->running_modules_publish_channel_lookup_.clear();
-    // frontend_state_->running_modules_response_channel_lookup_.clear();
-    // frontend_state_->pending_activation_responses_.clear();
-    // frontend_state_->last_modules_mapping_state_id_ = 0;
-
-    // 
 }
 
 
@@ -1737,18 +1695,6 @@ void FrontendApp::savePressedHandler()
     file_dialog_->onAcceptClicked().connect([this, save_dir](std::string selected_file) { 
         saveStateToFile(save_dir / (selected_file + ".aergo"), false); 
     });
-
-    // message::SharedDataBlob save_data = base_module_->getCoreControl()->save(); 
-    // if (save_data.valid())
-    // {
-    //     std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
-    //     frontend_state_->last_saved_state_ = std::vector<uint8_t>(save_data.data(), save_data.data() + save_data.size());
-    //     base_module_->log(aergo::module::logging::LogType::INFO, "Core save successful, size: " + std::to_string(save_data.size()) + " bytes");
-    // }
-    // else
-    // {
-    //     base_module_->log(aergo::module::logging::LogType::ERROR, "Core save failed");
-    // }
 }
 
 
