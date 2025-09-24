@@ -30,6 +30,8 @@ namespace aergo::default_modules::frontend_module::webapp
         FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, FrontendState* frontend_state, aergo::module::BaseModule* base_module);
         ~FrontendApp() override;
 
+        void updateFrame(std::vector<uint8_t>&& jpeg_data); // update camera frame
+
     private:
         void disconnect(); // called when another instance connects and takes over
         void setupState();
@@ -73,8 +75,6 @@ namespace aergo::default_modules::frontend_module::webapp
         void createSavingStateDialog();
         void handleLoadingState();
         void handleSavingState();
-
-        void updateMainVisualizationUi(); // update main visualization UI, must be called with the frontend_state_ mutex locked
 
         std::atomic_bool connected_;
 

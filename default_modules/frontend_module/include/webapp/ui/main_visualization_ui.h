@@ -15,7 +15,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui
     public:
         MainVisualizationUi();
 
-        void updateFrame(const std::vector<uint8_t>& jpeg_data) { camera_container_->updateFrame(jpeg_data); } // update camera frame
+        void updateFrame(std::vector<uint8_t>&& jpeg_data) { camera_container_->updateFrame(std::move(jpeg_data)); } // update camera frame
         
         Wt::Signal<>& onSetupClicked() { return onSetupClicked_; } // setup button clicked
 

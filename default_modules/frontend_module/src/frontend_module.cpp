@@ -162,14 +162,16 @@ void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdent
     std::vector<uint8_t> jpeg;
     std::vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 80 };
 
-    cv::Mat smaller;
-    cv::resize(img, smaller, cv::Size(), 0.5, 0.5);
-
-    cv::imencode(".jpg", smaller, jpeg, params);
+    // TODO lower resolution or frame rate if too high, replace direct send with some better solution 
+    cv::imencode(".jpg", img, jpeg, params);
+    log(aergo::module::logging::LogType::INFO, "Received camera frame " + std::to_string(img_header->width_) + "x" + std::to_string(img_header->height_) + ", encoded to JPEG size " + std::to_string(jpeg.size()) + " bytes");
 
     {
         std::lock_guard lock(frontend_state_.mutex_);
-        frontend_state_.camera_frame_data_jpeg_ = std::move(jpeg);
+        if (frontend_state_.active_app_ && frontend_state_.current_screen_ == webapp::FrontendScreen::MAIN_VISUALIZATION)
+        {
+            frontend_state_.active_app_->updateFrame(std::move(jpeg));
+        }
     }
 }
 

@@ -389,11 +389,6 @@ void FrontendApp::timerUpdate()
 
         processPendingActivationResponses();
 
-        if (frontend_state_->current_screen_ == webapp::FrontendScreen::MAIN_VISUALIZATION)
-        {
-            updateMainVisualizationUi();
-        }
-
         return;
     }
     else if (frontend_state_->running_task_ == RunningTask::CREATE_MODULE)
@@ -2251,11 +2246,10 @@ void FrontendApp::handleSavingState()
 
 
 
-void FrontendApp::updateMainVisualizationUi()
+void FrontendApp::updateFrame(std::vector<uint8_t>&& jpeg_data)
 {
-    if (!frontend_state_->camera_frame_data_jpeg_.empty())
+    if (connected_)
     {
-        main_visualization_ui_->updateFrame(frontend_state_->camera_frame_data_jpeg_);
-        frontend_state_->camera_frame_data_jpeg_.clear();
+        main_visualization_ui_->updateFrame(std::move(jpeg_data));
     }
 }
