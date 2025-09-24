@@ -713,3 +713,14 @@ body {
     box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.15) inset;
     background: #141b25;
 }
+
+
+
+.camera-image {
+    width: 400px;
+    height: auto;
+    border-radius: 12px;
+    position: absolute;
+    top: 91px;
+    left: 20px;
+}

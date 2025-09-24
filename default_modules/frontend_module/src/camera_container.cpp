@@ -89,6 +89,7 @@ CameraContainer::CameraContainer()
     // create img element
     img_ = addWidget(std::make_unique<Wt::WImage>(Wt::WLink(res_)));
     img_->setAlternateText("Camera");
+    img_->setStyleClass("camera-image");
 }
 
 
