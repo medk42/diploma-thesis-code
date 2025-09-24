@@ -2,10 +2,12 @@
 
 
 #include "webapp/frontend_app.h"
+#include "message_structure.h"
 
 
 #include <filesystem>
 #include <fstream>
+#include <opencv2/opencv.hpp>
 
 
 #define APP_NAME "aergo_frontend"
@@ -39,11 +41,27 @@ void* FrontendModule::query_capability(const std::type_info& id) noexcept
 
 IModule::IngressDecision FrontendModule::onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, QueueStatus queue_status) noexcept
 {
-    // accept only responses on request consumer channel 0 (from activation wrapper), drop all others
-    if (kind == ProcessingType::RESPONSE && local_channel_id == 0)
+    if (kind == ProcessingType::RESPONSE && local_channel_id == 0) // accept activation responses
     {
         // TODO if queue is full, we should notify the visualizer that the message was dropped
         return IngressDecision::ACCEPT; // accept all, responses will be dropped automatically if queue is full
+    }
+    if (kind == ProcessingType::MESSAGE && local_channel_id == 0) // accept camera input messages 
+    {
+        if (!frontend_state_.has_camera_input_)
+        {
+            frontend_state_.camera_module_id_ = src.producer_module_id_;
+            frontend_state_.has_camera_input_ = true;
+        }
+
+        if (frontend_state_.camera_module_id_ == src.producer_module_id_)
+        {
+            return IngressDecision::ACCEPT_REPLACE_QUEUE; // accept camera messages from the selected module, keep only the latest message
+        }
+        else
+        {
+            return IngressDecision::DROP; // drop messages from other modules
+        }
     }
     return IngressDecision::DROP;
 }
@@ -120,6 +138,38 @@ bool FrontendModule::threadStop(uint32_t timeout_ms) noexcept
     {
         log(aergo::module::logging::LogType::ERROR, "Received exception while stopping WT Server: \"" + std::string(e.what()) + "\"");
         return false;
+    }
+}
+
+
+
+void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+{
+    if (subscribe_consumer_id != 0) // camera input messages
+        return;
+
+    if (source_channel.producer_module_id_ != frontend_state_.camera_module_id_)
+        return;
+
+    if (message.data_ == nullptr || message.data_len_ != sizeof(message_types::ImageHeader))
+        return;
+
+    auto img_header = reinterpret_cast<message_types::ImageHeader*>(message.data_);
+    if (message.blobs_ == nullptr || message.blob_count_ != 1 || !message.blobs_[0].valid() || message.blobs_[0].size() != img_header->width_ * img_header->height_ * 3)
+        return;
+
+    cv::Mat img(img_header->height_, img_header->width_, CV_8UC3, message.blobs_[0].data());
+    std::vector<uint8_t> jpeg;
+    std::vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 80 };
+
+    cv::Mat smaller;
+    cv::resize(img, smaller, cv::Size(), 0.5, 0.5);
+
+    cv::imencode(".jpg", smaller, jpeg, params);
+
+    {
+        std::lock_guard lock(frontend_state_.mutex_);
+        frontend_state_.camera_frame_data_jpeg_ = std::move(jpeg);
     }
 }
 

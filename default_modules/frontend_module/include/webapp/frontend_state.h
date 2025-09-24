@@ -16,6 +16,7 @@
 #include <optional>
 #include <memory>
 #include <deque>
+#include <atomic>
 
 namespace aergo::default_modules::frontend_module::webapp
 {
@@ -24,7 +25,8 @@ namespace aergo::default_modules::frontend_module::webapp
     enum class FrontendScreen : int
     {
         ADD_MODULE = 0,
-        SETUP_MODULES = 1
+        SETUP_MODULES = 1,
+        MAIN_VISUALIZATION = 2
     };
 
     
@@ -106,6 +108,10 @@ namespace aergo::default_modules::frontend_module::webapp
         std::string current_custom_value_name_; // the name of the custom value we are currently loading
 
         aergo::module::helpers::activation_wrapper::message_types::ProgressData current_progress_; // current progress data, updated when processing activation/deactivation responses
+
+        std::atomic<bool> has_camera_input_ { false }; // true if one of the running modules has a camera input channel, false otherwise; used to lock the camera channel onto the first available camera module
+        std::atomic<uint64_t> camera_module_id_ { 0 }; // id of the module from which we are accepting camera input, 0 if none; used to lock the camera channel onto the first available camera module
+        std::vector<uint8_t> camera_frame_data_jpeg_; // latest camera frame data received from the camera module, used to display the camera image in the main visualization UI
 
         struct {
             /// @brief Map of required channel type to existing channels. Keys are subscribe channel types that are required by one or more modules to be created.

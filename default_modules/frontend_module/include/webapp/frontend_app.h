@@ -6,6 +6,8 @@
 
 #include "ui/add_module_ui.h"
 #include "ui/activation_ui.h"
+#include "ui/main_visualization_ui.h"
+
 #include "ui/helper/reusable_dialog.h"
 #include "ui/helper/file_dialog.h"
 
@@ -72,6 +74,8 @@ namespace aergo::default_modules::frontend_module::webapp
         void handleLoadingState();
         void handleSavingState();
 
+        void updateMainVisualizationUi(); // update main visualization UI, must be called with the frontend_state_ mutex locked
+
         std::atomic_bool connected_;
 
         FrontendState* frontend_state_;
@@ -83,8 +87,11 @@ namespace aergo::default_modules::frontend_module::webapp
         std::shared_ptr<int> life_guard_; // used to detect destruction
 
         Wt::WStackedWidget* main_container_ = nullptr;
+
         ui::AddModuleUi* add_module_ui_ = nullptr;
         ui::ActivationUi* activation_ui_ = nullptr;
+        ui::MainVisualizationUi* main_visualization_ui_ = nullptr;
+
         ui::helper::ReusableDialog* reusable_dialog_ = nullptr;
         ui::helper::FileDialog* file_dialog_ = nullptr;
         Wt::WTimer* update_timer_ = nullptr;

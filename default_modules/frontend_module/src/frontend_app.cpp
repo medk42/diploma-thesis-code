@@ -102,8 +102,10 @@ void FrontendApp::setupUi()
     main_container_->setStyleClass("main-container");
     std::vector<const aergo::module::ModuleInfo*> available_modules;
 
+    // order of add widgets here must match enum FrontendScreen
     add_module_ui_ = main_container_->addWidget(std::make_unique<ui::AddModuleUi>(frontend_state_->available_modules_));
     activation_ui_ = main_container_->addWidget(std::make_unique<ui::ActivationUi>());
+    main_visualization_ui_ = main_container_->addWidget(std::make_unique<ui::MainVisualizationUi>());
 
     update_timer_ = root()->addChild(std::make_unique<Wt::WTimer>());
     update_timer_->setInterval(std::chrono::milliseconds(200));
@@ -177,6 +179,7 @@ void FrontendApp::loadUiFromState()
 
 void FrontendApp::setupCallbacks()
 {
+    // setup add module UI callbacks
     add_module_ui_->onClose().connect([this]() {
         if (!connected_) return;
 
@@ -191,6 +194,8 @@ void FrontendApp::setupCallbacks()
         handleModuleCreation(available_module_id, std::move(creation_data));
     });
 
+
+    // setup activation UI callbacks
     activation_ui_->onAddNew().connect([this]() {
         if (!connected_) return;
 
@@ -217,24 +222,21 @@ void FrontendApp::setupCallbacks()
     activation_ui_->onLoad().connect([this]() { loadPressedHandler(); } );
 
     activation_ui_->onClose().connect([this]() {
+        if (!connected_) return;    
+
+        std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+        frontend_state_->current_screen_ = webapp::FrontendScreen::MAIN_VISUALIZATION;
+        main_container_->setCurrentIndex((int)frontend_state_->current_screen_);
+    });
+
+
+    // setup main visualization UI callbacks
+    main_visualization_ui_->onSetupClicked().connect([this]() {
         if (!connected_) return;
-        
-        // for now, just test that the file dialog works
-        dismissFileDialog();
 
-        file_dialog_ = root()->addWidget(std::make_unique<ui::helper::FileDialog>(
-            "Load Custom Value", 
-            std::vector<std::string> { "custom_value_1.bin", "custom_value_2.bin", "custom_value_3.bin" }, 
-            "custom_value_1", 
-            "Load"
-        ));
-
-        file_dialog_->onCancelClicked().connect([this]() { dismissFileDialog(); });
-        file_dialog_->onAcceptClicked().connect([this](std::string selected_file) { 
-            dismissFileDialog(); 
-
-            base_module_->log(logging::LogType::INFO, "Selected file to load: " + selected_file);
-        });
+        std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+        frontend_state_->current_screen_ = webapp::FrontendScreen::SETUP_MODULES;
+        main_container_->setCurrentIndex((int)frontend_state_->current_screen_);
     });
 }
 
@@ -386,6 +388,11 @@ void FrontendApp::timerUpdate()
         }
 
         processPendingActivationResponses();
+
+        if (frontend_state_->current_screen_ == webapp::FrontendScreen::MAIN_VISUALIZATION)
+        {
+            updateMainVisualizationUi();
+        }
 
         return;
     }
@@ -2239,5 +2246,16 @@ void FrontendApp::handleSavingState()
         ));
         reusable_dialog_->onButtonClicked().connect(this, &FrontendApp::dismissDialog);
         reusable_dialog_->onBackgroundClicked().connect(this, &FrontendApp::dismissDialog);
+    }
+}
+
+
+
+void FrontendApp::updateMainVisualizationUi()
+{
+    if (!frontend_state_->camera_frame_data_jpeg_.empty())
+    {
+        main_visualization_ui_->updateFrame(frontend_state_->camera_frame_data_jpeg_);
+        frontend_state_->camera_frame_data_jpeg_.clear();
     }
 }

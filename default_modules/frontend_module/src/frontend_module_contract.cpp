@@ -19,6 +19,17 @@ static constexpr communication_channel::Consumer web_visualization_module_reques
     aergo::module::helpers::activation_wrapper::message_types::activation_request_consumer
 };
 
+static constexpr communication_channel::Consumer web_visualization_module_subscribe_consumers[] = {
+    communication_channel::Consumer {
+        .count_ = communication_channel::Consumer::Count::AUTO_ALL,
+        .channel_type_identifier_ = "image_bgr/v1:struct{width:uint16,height:uint16}+blob{width*height*3}",
+        .display_name_ = "Camera Feed",
+        .display_description_ = "Subscribe to camera image feed in BGR format.",
+        .prioritized_ = false,
+        .message_queue_capacity_ = 1
+    }
+};
+
 static constexpr ModuleInfo module_info = {
     .module_type_identifier_ = "web_frontend_module",
     .display_name_ = "Web Visualization Module",
@@ -27,8 +38,8 @@ static constexpr ModuleInfo module_info = {
     .publish_producer_count_ = 0,
     .response_producers_ = nullptr,
     .response_producer_count_ = 0,
-    .subscribe_consumers_ = nullptr,
-    .subscribe_consumer_count_ = 0,
+    .subscribe_consumers_ = web_visualization_module_subscribe_consumers,
+    .subscribe_consumer_count_ = std::size(web_visualization_module_subscribe_consumers),
     .request_consumers_ = web_visualization_module_request_consumers,
     .request_consumer_count_ = std::size(web_visualization_module_request_consumers),
     .auto_create_ = true,

@@ -113,6 +113,13 @@ body {
     width: 100%;
 }
 
+.main-visualization-ui {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
 
 .module-list {
     /* kill the responsive %/min/max */

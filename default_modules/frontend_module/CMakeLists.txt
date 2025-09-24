@@ -38,6 +38,9 @@ find_package(Wt 4 REQUIRED COMPONENTS Wt HTTP)
 # Find libzippp library
 find_package(libzippp CONFIG REQUIRED)
 
+# Find OpenCV
+find_package(OpenCV 4 REQUIRED core imgcodecs)
+
 
 # gather sources (updates when files change)
 file(GLOB_RECURSE PROJECT_SOURCES
@@ -49,7 +52,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 add_library(${MODULE_NAME} MODULE ${PROJECT_SOURCES})
 
 # Link with libraries needed by this module
-target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___activation_wrapper Wt::Wt Wt::HTTP libzippp::libzippp)
+target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___activation_wrapper Wt::Wt Wt::HTTP libzippp::libzippp opencv_core opencv_imgcodecs)
 
 # Add include directories
 target_include_directories(${MODULE_NAME} PRIVATE
