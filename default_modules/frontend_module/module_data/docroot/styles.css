@@ -716,11 +716,15 @@ body {
 
 
 
+.camera-container {
+    position: relative;   
+}
+
 .camera-image {
     width: 400px;
     height: auto;
     border-radius: 12px;
     position: absolute;
-    top: 91px;
+    top: 20px;
     left: 20px;
 }
