@@ -16,6 +16,7 @@ namespace aergo::core::memory_allocation
     {
     public:
         DynamicAllocator(aergo::core::logging::ILogger* logger, IMemoryAllocator* custom_allocator = nullptr);
+        ~DynamicAllocator() override;
 
         virtual aergo::module::ISharedData* allocate(uint64_t number_of_bytes) noexcept override final;
         virtual void addOwner(aergo::module::ISharedData* data) noexcept override final;
@@ -36,6 +37,7 @@ namespace aergo::core::memory_allocation
         std::map<uint64_t, SharedDataCore> allocated_data_;
         std::set<std::size_t> allocated_memory_slots_;
         uint64_t allocation_id_;
+        bool destruction_started_{false};
 
         std::mutex mutex_;
     };

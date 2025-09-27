@@ -19,6 +19,23 @@ DynamicAllocator::DynamicAllocator(aergo::core::logging::ILogger* logger, IMemor
 
 
 
+DynamicAllocator::~DynamicAllocator()
+{
+    std::unique_lock<std::mutex> lock(mutex_);
+    
+    destruction_started_ = true;
+
+    // wait until all allocated slots are freed
+    while (!allocated_data_.empty())
+    {
+        lock.unlock();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        lock.lock();
+    }
+}
+
+
+
 aergo::module::ISharedData* DynamicAllocator::allocate(uint64_t number_of_bytes) noexcept { return allocateImpl(number_of_bytes); }
 void DynamicAllocator::addOwner(aergo::module::ISharedData* data) noexcept { addOwnerImpl(data); }
 void DynamicAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { removeOwnerImpl(data); }
@@ -27,6 +44,12 @@ void DynamicAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { 
 aergo::module::ISharedData* DynamicAllocator::allocateImpl(uint64_t number_of_bytes)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+
+    if (destruction_started_)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Attempting to allocate after destruction started.");
+        return nullptr;
+    }
     
     uint64_t new_id = allocation_id_++;
 

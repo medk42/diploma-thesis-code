@@ -33,6 +33,23 @@ StaticAllocator::StaticAllocator(uint64_t slot_size_bytes, uint32_t number_of_sl
 
 
 
+StaticAllocator::~StaticAllocator()
+{
+    std::unique_lock<std::mutex> lock(mutex_);
+    
+    destruction_started_ = true;
+
+    // wait until all allocated slots are freed
+    while (!allocated_memory_slots_.empty())
+    {
+        lock.unlock();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        lock.lock();
+    }
+}
+
+
+
 aergo::module::ISharedData* StaticAllocator::allocate(uint64_t number_of_bytes) noexcept { return allocateImpl(); }
 void StaticAllocator::addOwner(aergo::module::ISharedData* data) noexcept { addOwnerImpl(data); }
 void StaticAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { removeOwnerImpl(data); }
@@ -42,6 +59,12 @@ void StaticAllocator::removeOwner(aergo::module::ISharedData* data) noexcept { r
 aergo::module::ISharedData* StaticAllocator::allocateImpl()
 {
     std::lock_guard<std::mutex> lock(mutex_);
+
+    if (destruction_started_)
+    {
+        log(aergo::module::logging::LogType::ERROR, "Attempting to allocate after destruction started.");
+        return nullptr;
+    }
 
     if (free_memory_slot_ids_.empty())
     {

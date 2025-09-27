@@ -25,6 +25,8 @@ namespace aergo::core::memory_allocation
         StaticAllocator(const StaticAllocator& other) = delete;
         StaticAllocator(StaticAllocator&& other) noexcept = default;
 
+        ~StaticAllocator() override;
+
         StaticAllocator& operator=(const StaticAllocator& other) = delete;
         StaticAllocator& operator=(StaticAllocator&& other) noexcept = default;
 
@@ -46,6 +48,7 @@ namespace aergo::core::memory_allocation
         aergo::core::logging::ILogger* logger_;
 
         std::vector<SharedDataCore> preallocated_data_;
+        bool destruction_started_{false};
 
         std::deque<std::size_t> free_memory_slot_ids_;
         std::set<std::size_t> allocated_memory_slots_; // for checking pointer validity in addOwnerImpl / removeOwnerImpl
