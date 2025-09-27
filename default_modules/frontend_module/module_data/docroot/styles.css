@@ -717,14 +717,29 @@ body {
 
 
 .camera-container {
-    position: relative;   
+    position: absolute;
+    top: 20px;
+    left: 20px;
 }
 
 .camera-image {
     width: 400px;
     height: auto;
     border-radius: 12px;
-    position: absolute;
-    top: 20px;
-    left: 20px;
 }
+
+.scene-container {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+}
+
+.main-content-container {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    overflow: hidden;
+}
+
