@@ -105,7 +105,7 @@ void FrontendApp::setupUi()
     // order of add widgets here must match enum FrontendScreen
     add_module_ui_ = main_container_->addWidget(std::make_unique<ui::AddModuleUi>(frontend_state_->available_modules_));
     activation_ui_ = main_container_->addWidget(std::make_unique<ui::ActivationUi>());
-    main_visualization_ui_ = main_container_->addWidget(std::make_unique<ui::MainVisualizationUi>());
+    main_visualization_ui_ = main_container_->addWidget(std::make_unique<ui::MainVisualizationUi>(base_module_));
 
     update_timer_ = root()->addChild(std::make_unique<Wt::WTimer>());
     update_timer_->setInterval(std::chrono::milliseconds(200));
