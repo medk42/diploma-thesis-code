@@ -93,55 +93,56 @@ SceneSocket::~SceneSocket()
 
 
 
-enum class CommandType : uint8_t
+void pushUint32(std::vector<char>& buf, uint32_t v)
 {
-    ADD_OBJECT = 1,
-    UPDATE_OBJECT = 2,
-    REMOVE_OBJECT = 3,
-    ADD_TRAJECTORY = 4,
-    UPDATE_TRAJECTORY = 5,
-    REMOVE_TRAJECTORY = 6,
-    ENABLE_GRID = 7,
-    REGISTER_SHAPE = 8
-};
+    const char* byte_data = reinterpret_cast<const char*>(&v);
+    buf.insert(buf.end(), byte_data, byte_data + sizeof(uint32_t));
+}
+
+
+
+void pushUint8(std::vector<char>& buf, uint8_t v)
+{
+    buf.push_back(static_cast<char>(v));
+}
+
+
+
+void pushF32(std::vector<char>& buf, float v)
+{
+    static_assert(sizeof(float) == 4, "float must be 4 bytes");
+
+    const char* byte_data = reinterpret_cast<const char*>(&v);
+    buf.insert(buf.end(), byte_data, byte_data + sizeof(float));
+}
 
 
 
 /// @brief Push pose (t: x,y,z; q: x,y,z,w) as 7 floats (4 bytes each, little-endian) into buffer
 void pushPose(std::vector<char>& buf, const Pose& pose)
 {
-    auto push_data = [&buf]<typename T>(const T& data) {
-        const char* byte_data = reinterpret_cast<const char*>(&data);
-        buf.insert(buf.end(), byte_data, byte_data + sizeof(T));
-    };
-
     // [7*f32 t.x,t.y,t.z,q.x,q.y,q.z,q.w]
-    push_data(pose.t.x);
-    push_data(pose.t.y);
-    push_data(pose.t.z);
-    push_data(pose.q.x);
-    push_data(pose.q.y);
-    push_data(pose.q.z);
-    push_data(pose.q.w);
+    pushF32(buf, pose.t.x);
+    pushF32(buf, pose.t.y);
+    pushF32(buf, pose.t.z);
+    pushF32(buf, pose.q.x);
+    pushF32(buf, pose.q.y);
+    pushF32(buf, pose.q.z);
+    pushF32(buf, pose.q.w);
 }
 
 
 
 bool pushPendingRegistration(std::vector<char>& buf, const std::vector<std::tuple<ResourceId, ComplexShape>>& registrations)
 {
-    auto push_data = [&buf]<typename T>(const T& data) {
-        const char* byte_data = reinterpret_cast<const char*>(&data);
-        buf.insert(buf.end(), byte_data, byte_data + sizeof(T));
-    };
-
     uint32_t registration_count = static_cast<uint32_t>(registrations.size());
-    push_data(registration_count); // [u32 registration_count]
+    pushUint32(buf, registration_count); // [u32 registration_count]
 
     for (const auto& [res_id, shape] : registrations)
     {
-        push_data(res_id.id);      // [u32 resource_id]
+        pushUint32(buf, res_id.id);      // [u32 resource_id]
         uint32_t part_count = static_cast<uint32_t>(shape.parts.size());
-        push_data(part_count);     // [u32 part_count]
+        pushUint32(buf, part_count);     // [u32 part_count]
         for (const auto& part : shape.parts)
         {
             // Box: [u8 type=0][3*f32 sx,sy,sz][7*f32 origin][4*u8 color]
@@ -149,7 +150,7 @@ bool pushPendingRegistration(std::vector<char>& buf, const std::vector<std::tupl
             // Cylinder: [u8 type=2][3*f32 rTop,rBot,h][7*f32 origin][4*u8 color]
 
             // push type
-            push_data(static_cast<uint8_t>(part.type));
+            pushUint8(buf, static_cast<uint8_t>(part.type));
 
             // push description
             if (part.type == PrimitiveShapeType::BOX)
@@ -159,9 +160,9 @@ bool pushPendingRegistration(std::vector<char>& buf, const std::vector<std::tupl
                     return false; // invalid
                 }
                 const BoxDesc& d = std::get<BoxDesc>(part.desc);
-                push_data(d.sx);
-                push_data(d.sy);
-                push_data(d.sz);
+                pushF32(buf, d.sx);
+                pushF32(buf, d.sy);
+                pushF32(buf, d.sz);
             }
             else if (part.type == PrimitiveShapeType::SPHERE)
             {
@@ -170,7 +171,7 @@ bool pushPendingRegistration(std::vector<char>& buf, const std::vector<std::tupl
                     return false; // invalid
                 }
                 const SphereDesc& d = std::get<SphereDesc>(part.desc);
-                push_data(d.r);
+                pushF32(buf, d.r);
             }
             else if (part.type == PrimitiveShapeType::CYLINDER)
             {
@@ -179,19 +180,19 @@ bool pushPendingRegistration(std::vector<char>& buf, const std::vector<std::tupl
                     return false; // invalid
                 }
                 const CylinderDesc& d = std::get<CylinderDesc>(part.desc);
-                push_data(d.rTop);
-                push_data(d.rBot);
-                push_data(d.h);
+                pushF32(buf, d.rTop);
+                pushF32(buf, d.rBot);
+                pushF32(buf, d.h);
             }
 
             // push local origin pose
             pushPose(buf, part.origin);
 
             // push color
-            push_data(part.color.r);
-            push_data(part.color.g);
-            push_data(part.color.b);
-            push_data(part.color.a);
+            pushUint8(buf, part.color.r);
+            pushUint8(buf, part.color.g);
+            pushUint8(buf, part.color.b);
+            pushUint8(buf, part.color.a);
         }
     }
 
@@ -202,13 +203,8 @@ bool pushPendingRegistration(std::vector<char>& buf, const std::vector<std::tupl
 
 void pushObjectCommands(std::vector<char>& buf, const std::map<ObjectId, CommandBuffer::ObjectParameters>& objects)
 {
-    auto push_data = [&buf]<typename T>(const T& data) {
-        const char* byte_data = reinterpret_cast<const char*>(&data);
-        buf.insert(buf.end(), byte_data, byte_data + sizeof(T));
-    };
-
     uint32_t object_count = static_cast<uint32_t>(objects.size());
-    push_data(object_count); // [u32 object_count]
+    pushUint32(buf, object_count); // [u32 object_count]
 
     for (const auto& [obj_id, params] : objects)
     {
@@ -216,13 +212,14 @@ void pushObjectCommands(std::vector<char>& buf, const std::map<ObjectId, Command
         // Update: [u32 id][u8 action=1][7*f32 pose]
         // Remove: [u32 id][u8 action=2]
 
-        push_data(obj_id.id);
-        push_data(static_cast<uint8_t>(params.action));
+        pushUint32(buf, obj_id.id);
+        pushUint8(buf, static_cast<uint8_t>(params.action));
         if (params.action == CommandBuffer::Action::ADD)
         {
-            push_data(params.resource_id.id);
+            pushUint32(buf, params.resource_id.id);
+            pushPose(buf, params.pose);
         }
-        if (params.action != CommandBuffer::Action::REMOVE)
+        if (params.action == CommandBuffer::Action::UPDATE)
         {
             pushPose(buf, params.pose);
         }
@@ -233,13 +230,8 @@ void pushObjectCommands(std::vector<char>& buf, const std::map<ObjectId, Command
 
 void pushTrajectoryCommands(std::vector<char>& buf, const std::map<ObjectId, CommandBuffer::TrajectoryParameters>& trajectories)
 {
-    auto push_data = [&buf]<typename T>(const T& data) {
-        const char* byte_data = reinterpret_cast<const char*>(&data);
-        buf.insert(buf.end(), byte_data, byte_data + sizeof(T));
-    };
-
     uint32_t trajectory_count = static_cast<uint32_t>(trajectories.size());
-    push_data(trajectory_count); // [u32 trajectory_count]
+    pushUint32(buf, trajectory_count); // [u32 trajectory_count]
 
     for (const auto& [traj_id, params] : trajectories)
     {
@@ -247,31 +239,31 @@ void pushTrajectoryCommands(std::vector<char>& buf, const std::map<ObjectId, Com
         // Update: [u32 id][u8 action=1][u32 point_count][point_count*3*f32 points][u32 remove_from_head]
         // Remove: [u32 id][u8 action=2]
 
-        push_data(traj_id.id);                             // [u32 id]
-        push_data(static_cast<uint8_t>(params.action));    // [u8 action]
+        pushUint32(buf, traj_id.id);                             // [u32 id]
+        pushUint8(buf, static_cast<uint8_t>(params.action));    // [u8 action]
         if (params.action == CommandBuffer::Action::ADD)
         {
-            buf.push_back(params.dashed ? 1 : 0);          // [u8 dashed]
+            pushUint8(buf, params.dashed ? 1 : 0);          // [u8 dashed]
             uint32_t point_count = static_cast<uint32_t>(params.points.size());
-            push_data(point_count);                        // [u32 point_count]
+            pushUint32(buf, point_count);                        // [u32 point_count]
             for (const auto& p : params.points)
             {
-                push_data(p.x);                             // [f32 x]
-                push_data(p.y);                             // [f32 y]
-                push_data(p.z);                             // [f32 z]
+                pushF32(buf, p.x);                             // [f32 x]
+                pushF32(buf, p.y);                             // [f32 y]
+                pushF32(buf, p.z);                             // [f32 z]
             }
         }
         else if (params.action == CommandBuffer::Action::UPDATE)
         {
             uint32_t point_count = static_cast<uint32_t>(params.points.size());
-            push_data(point_count);                        // [u32 point_count]
+            pushUint32(buf, point_count);                        // [u32 point_count]
             for (const auto& p : params.points)
             {
-                push_data(p.x);                             // [f32 x]
-                push_data(p.y);                             // [f32 y]
-                push_data(p.z);                             // [f32 z]
+                pushF32(buf, p.x);                             // [f32 x]
+                pushF32(buf, p.y);                             // [f32 y]
+                pushF32(buf, p.z);                             // [f32 z]
             }
-            push_data(params.remove_from_head);            // [u32 remove_from_head]
+            pushUint32(buf, params.remove_from_head);            // [u32 remove_from_head]
         }
     }
 }
@@ -282,17 +274,12 @@ size_t SceneSocket::sendCommandBuffer(const CommandBuffer& cmd_buf)
 {
     std::vector<char> command_frame;
 
-    auto push_data = [&command_frame]<typename T>(const T& data) {
-        const char* byte_data = reinterpret_cast<const char*>(&data);
-        command_frame.insert(command_frame.end(), byte_data, byte_data + sizeof(T));
-    };
-
     uint32_t magic = 0x314E4353u; // 'SCN1' LE
-    push_data(magic);  // [u32 magic 'SCN1']
+    pushUint32(command_frame, magic);  // [u32 magic 'SCN1']
     uint32_t seq = ++seq_;
-    push_data(seq);    // [u32 seq]
-    command_frame.push_back(cmd_buf.grid_commanded_ ? 1 : 0); // [u8 grid_commanded]
-    command_frame.push_back(cmd_buf.grid_enabled_ ? 1 : 0); // [u8 grid_enabled]
+    pushUint32(command_frame, seq);    // [u32 seq]
+    pushUint8(command_frame, cmd_buf.grid_commanded_ ? 1 : 0); // [u8 grid_commanded]
+    pushUint8(command_frame, cmd_buf.grid_enabled_ ? 1 : 0);   // [u8 grid_enabled]
     
     if (!pushPendingRegistration(command_frame, cmd_buf.pending_registrations_))
     {
