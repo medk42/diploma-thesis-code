@@ -20,13 +20,14 @@
 
 namespace aergo::default_modules::frontend_module::webapp::ui::helper
 {
-    class CounterSocket : public Wt::WWebSocketResource
+    class SceneSocket : public Wt::WWebSocketResource
     {
     public:
-        CounterSocket() { setTakesUpdateLock(false); startWorkers(); }
-        ~CounterSocket() override
+        SceneSocket() { setTakesUpdateLock(false); startWorkers(); }
+        ~SceneSocket() override
         { 
             running_ = false;
+            cv_.notify_one();
             if (worker_.joinable())
                 worker_.join();
             if (send_worker_.joinable())
@@ -133,45 +134,50 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         bool sending_{false};
     };
 
-    class SceneSocket : public Wt::WWebSocketResource
-    {
-    public:
-        SceneSocket();
-        ~SceneSocket() override;
+    struct Vec3  { float x,y,z; };
+    struct Quat  { float x,y,z,w; };
+    struct Pose  { Vec3 t; Quat q; };         // translation + orientation (quat)
+    inline Quat  IdentityQ() { return {0,0,0,1}; }
+    inline Vec3  One3()      { return {1,1,1}; }
 
-        // Queue a binary frame to send to the (single) client.
-        void sendFrame(std::vector<char> &&frame);
+    enum class PrimType : uint8_t { Box=1, Sphere=2, Cylinder=3, Cone=4 };
+    // For Box: size = {sx,sy,sz}
+    // Sphere:  size = {r, -, -}
+    // Cylinder:size = {rTop, rBot, h}
+    // Cone:    size = {r, 0, h}
 
-        // Convenience builders
-        void sendAddBox(uint32_t id, float x, float y, float z, float sx, float sy, float sz);
-
-    protected:
-        std::unique_ptr<Wt::WWebSocketConnection>
-        handleConnect(const Wt::Http::Request &req) override;
-
-    private:
-        void sendNextLocked(); // assumes m_ held
-
-        std::mutex m_;
-        Wt::WWebSocketConnection *conn_{nullptr};
-        bool sending_{false};
-        std::deque<std::vector<char>> q_;
-        uint32_t seq_{0};
+    struct ShapeDesc {
+        PrimType type;
+        Vec3     size;            // see mapping above
+        uint32_t rgba = 0x6699FFff; // 0xRRGGBBAA (A default 0xFF)
     };
 
     class SceneContainer : public Wt::WContainerWidget
     {
     public:
-        // threeJsPath = local path to your bundled three.min.js (no CDN)
-        SceneContainer(int widthPx = 800, int heightPx = 450);
+        SceneContainer();
 
-        // API: add a box; returns the ID used (you can supply your own ID scheme later)
-        uint32_t addBox(float x, float y, float z, float sx, float sy, float sz);
+         // --------- External API (what other modules call) ----------
+        void enableGrid(bool on);
+
+        // Static resource registry
+        uint32_t createObjectDescription(const ShapeDesc& s);              // returns resource_id
+        // (reserve for future) uint32_t createMeshDescription(const MeshMeshDesc& m);
+
+        // Instances (object_id)
+        uint32_t addObject(uint32_t resource_id, const Pose& pose, const Vec3& scale = One3());
+        void     updateObject(uint32_t object_id, const Pose& pose, const Vec3& scale = One3());
+        void     removeObject(uint32_t object_id);
+
+        // Trajectories
+        uint32_t addTrajectory(const std::vector<Vec3>& pts, bool dashed);
+        void     updateTrajectory(uint32_t traj_id, const std::vector<Vec3>& addPts, uint32_t removeFromHead);
+        void     removeTrajectory(uint32_t traj_id);
+
+        // Force-flush this frame (otherwise a 60 Hz tick does it)
+        void     flush();
 
     private:
-        void bootstrapThree(const std::string &wsUrl);
-
-        std::unique_ptr<CounterSocket> counterSocket_;
         std::unique_ptr<SceneSocket> socket_;
         std::string containerId_;
         std::atomic<uint32_t> nextId_{1};

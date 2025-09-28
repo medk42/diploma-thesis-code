@@ -27,6 +27,6 @@ MainVisualizationUi::MainVisualizationUi()
     auto content_container = addWidget(std::make_unique<Wt::WContainerWidget>());
     content_container->setStyleClass("main-content-container");
 
-    auto scene_container = content_container->addWidget(std::make_unique<helper::SceneContainer>(800, 450));
+    auto scene_container = content_container->addWidget(std::make_unique<helper::SceneContainer>());
     camera_container_ = content_container->addWidget(std::make_unique<helper::CameraContainer>());
 }
