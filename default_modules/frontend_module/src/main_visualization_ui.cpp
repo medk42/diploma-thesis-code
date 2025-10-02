@@ -33,62 +33,74 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
     auto scene_container = content_container->addWidget(std::make_unique<helper::SceneContainer>(base_module, 16 /* ~60fps */));
     camera_container_ = content_container->addWidget(std::make_unique<helper::CameraContainer>());
 
-    auto register_id = scene_container->createObjectDescription(
+    auto register_id_complex = scene_container->createObjectDescription(
         helper::ComplexShape {
             .parts = {
                 helper::PrimitiveShape {
-                    .type = helper::PrimitiveShapeType::BOX,
-                    .desc = helper::BoxDesc{1.0f, 3.0f, 2.0f},
+                    .type = helper::PrimitiveShapeType::CYLINDER,
+                    .desc = helper::CylinderDesc{0.1f, 0.1f, 1.6f},
                     .origin = helper::Pose {
-                        .t = helper::Vec3{1.0f, 0.0f, 0.0f},
+                        .t = helper::Vec3::Zero(),
                         .q = helper::Quat::Identity()
                     },
-                    .color = { .rgba = 0xFF0000FF } // red
+                    .color = { 255, 0, 0 } // red
                 },
                 helper::PrimitiveShape {
                     .type = helper::PrimitiveShapeType::SPHERE,
-                    .desc = helper::SphereDesc{2.0f},
+                    .desc = helper::SphereDesc{0.15f},
                     .origin = helper::Pose {
-                        .t = helper::Vec3{-1.0f, 0.0f, 0.0f},
+                        .t = helper::Vec3{0.0f, 0.0f, -0.8f},
                         .q = helper::Quat::Identity()
                     },
-                    .color = { .rgba = 0x00FF00FF } // green
+                    .color = { 0, 255, 0 } // green
+                },
+                helper::PrimitiveShape {
+                    .type = helper::PrimitiveShapeType::CYLINDER,
+                    .desc = helper::CylinderDesc{0.1f, 0, 0.3f},
+                    .origin = helper::Pose {
+                        .t = {0, 0, 0.8f + 0.15f},
+                        // rotate 30deg around y
+                        .q = {0, 0.2588f, 0, 0.9659f} // sin(15deg), 0, 0, cos(15deg)
+                    },
+                    .color = { 0, 0, 255 } // blue
                 },
             }
         }
     );
 
-    scene_container->enableGrid(true);
 
     helper::ObjectId obj_id;
-    if (!scene_container->addObject(register_id, helper::Pose{
+    if (!scene_container->addObject(register_id_complex, helper::Pose{
         .t = helper::Vec3{0.0f, 0.0f, 0.0f},
         .q = helper::Quat::Identity()
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 0 to scene");
     }
-    if (!scene_container->addObject(register_id, helper::Pose{
-        .t = helper::Vec3{1.0f, 0.0f, 0.0f},
-        .q = helper::Quat::Identity()
+    if (!scene_container->addObject(register_id_complex, helper::Pose{
+        .t = helper::Vec3{0.5f, 0.0f, 0.0f},
+        // rotate -30 deg around X
+        .q = { -0.2588f, 0, 0, 0.9659f } // sin(-15deg), 0, 0, cos(-15deg)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 1 to scene");
     }
-    if (!scene_container->addObject(register_id, helper::Pose{
+    if (!scene_container->addObject(register_id_complex, helper::Pose{
         .t = helper::Vec3{0.0f, 1.0f, 0.0f},
-        .q = helper::Quat::Identity()
+        // rotate 30 deg around Z
+        .q = {0, 0, 0.2588f, 0.9659f} // sin(15deg), 0, cos(15deg)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 2 to scene");
     }
-    if (!scene_container->addObject(register_id, helper::Pose{
-        .t = helper::Vec3{-1.0f, 0.0f, 0.0f},
-        .q = helper::Quat::Identity()
+    if (!scene_container->addObject(register_id_complex, helper::Pose{
+        .t = helper::Vec3{-2.f, 0.0f, 0.0f},
+        // rotate -90deg around Y
+        .q = {0, -0.7071f, 0, 0.7071f} // sin(-45deg), 0, 0, cos(-45deg)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 3 to scene");
     }
 
-    scene_container->enableGrid(false);
+    scene_container->enableGrid(true);
 }

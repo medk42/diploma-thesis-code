@@ -369,7 +369,7 @@ SceneContainer::SceneContainer(aergo::module::BaseModule* base_module, uint8_t f
     socket_ = std::make_unique<SceneSocket>();
 
     auto *app = Wt::WApplication::instance();
-    app->doJavaScript("window.CounterWS_URL = " + Wt::WString(socket_->url()).jsStringLiteral() + ";");
+    app->doJavaScript("window.sceneSocketURL = " + Wt::WString(socket_->url()).jsStringLiteral() + ";"); // make URL available to JS before loading the script (if script is not yet loaded)
     app->require("/static/scene_frontend.js");
 
     cmd_buf_.clear();

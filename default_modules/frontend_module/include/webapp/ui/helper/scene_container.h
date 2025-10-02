@@ -42,17 +42,20 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         Quat q = Quat::Identity();
     };
 
-    union Color
+    struct Color
     {
-        struct { uint8_t r,g,b,a; };
-        uint32_t rgba = 0x6699FFff; // 0xRRGGBBAA (A default 0xFF)
+        // default: light blue
+        uint8_t r = 0x66;
+        uint8_t g = 0x99;
+        uint8_t b = 0xFF;
+        uint8_t a = 0xFF;
     };
 
     enum class PrimitiveShapeType : uint8_t { BOX=0, SPHERE=1, CYLINDER=2 };
 
     struct BoxDesc { float sx, sy, sz; };
     struct SphereDesc { float r; };
-    struct CylinderDesc { float rTop, rBot, h; };
+    struct CylinderDesc { float rBot, rTop, h; };
 
     struct PrimitiveShape
     {
