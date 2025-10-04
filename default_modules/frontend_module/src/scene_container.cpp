@@ -57,6 +57,7 @@ using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
 //            u8  action               // 0=Add, 1=Update, 2=Remove
 //        
 //            if action == Add:
+//                u8 r, g, b, a        // color
 //                u8  dashed           // 0/1
 //                u32 point_count
 //                repeat point_count times: f32 x, y, z
@@ -235,7 +236,7 @@ void pushTrajectoryCommands(std::vector<char>& buf, const std::map<ObjectId, Com
 
     for (const auto& [traj_id, params] : trajectories)
     {
-        // Add: [u32 new_id][u8 action=0][u8 dashed][u32 point_count][point_count*3*f32 points]
+        // Add: [u32 new_id][u8 action=0][4*u8 r,g,b,a][u8 dashed][u32 point_count][point_count*3*f32 points]
         // Update: [u32 id][u8 action=1][u32 point_count][point_count*3*f32 points][u32 remove_from_head]
         // Remove: [u32 id][u8 action=2]
 
@@ -243,6 +244,12 @@ void pushTrajectoryCommands(std::vector<char>& buf, const std::map<ObjectId, Com
         pushUint8(buf, static_cast<uint8_t>(params.action));    // [u8 action]
         if (params.action == CommandBuffer::Action::ADD)
         {
+            // push color
+            pushUint8(buf, params.color.r);
+            pushUint8(buf, params.color.g);
+            pushUint8(buf, params.color.b);
+            pushUint8(buf, params.color.a);
+
             pushUint8(buf, params.dashed ? 1 : 0);          // [u8 dashed]
             uint32_t point_count = static_cast<uint32_t>(params.points.size());
             pushUint32(buf, point_count);                        // [u32 point_count]
@@ -551,7 +558,7 @@ bool SceneContainer::removeObject(ObjectId object_id)
 
 
 
-bool SceneContainer::addTrajectory(const std::vector<Vec3>& pts, bool dashed, ObjectId& out_id)
+bool SceneContainer::addTrajectory(const std::vector<Vec3>& pts, Color color, bool dashed, ObjectId& out_id)
 {
     if (pts.size() < 2)
     {
@@ -564,6 +571,7 @@ bool SceneContainer::addTrajectory(const std::vector<Vec3>& pts, bool dashed, Ob
     ObjectId oid { next_object_id_++ };
     CommandBuffer::TrajectoryParameters params {
         .action = CommandBuffer::Action::ADD,
+        .color = color,
         .dashed = dashed,
         .points = pts,
         .remove_from_head = 0

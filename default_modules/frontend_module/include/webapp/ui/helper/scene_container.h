@@ -91,7 +91,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     {
         enum class Action : uint8_t { ADD=0, UPDATE=1, REMOVE=2 };
         struct ObjectParameters { Action action; ResourceId resource_id; Pose pose; };
-        struct TrajectoryParameters { Action action; bool dashed; std::vector<Vec3> points; uint32_t remove_from_head; };
+        struct TrajectoryParameters { Action action; Color color; bool dashed; std::vector<Vec3> points; uint32_t remove_from_head; };
 
         void clear()
         {
@@ -167,7 +167,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         bool removeObject(ObjectId object_id);
 
         // Trajectories
-        bool addTrajectory(const std::vector<Vec3>& pts, bool dashed, ObjectId& out_id);
+        bool addTrajectory(const std::vector<Vec3>& pts, Color color, bool dashed, ObjectId& out_id);
         bool updateTrajectory(ObjectId trajectory_id, const std::vector<Vec3>& add_pts, uint32_t remove_from_head);
         bool removeTrajectory(ObjectId trajectory_id);
 

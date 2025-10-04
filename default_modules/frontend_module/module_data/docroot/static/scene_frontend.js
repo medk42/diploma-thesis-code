@@ -167,7 +167,7 @@
             (function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); })();
 
 
-            U2T = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI/2, 0, 0)); // q_R
+            U2T = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); // q_R
             U2T_INV = U2T.clone().invert();
 
             const resources = new Map(); // id -> THREE.Group (prefab)
@@ -186,6 +186,7 @@
             function addObject(id, resourceId, pose) {
                 const prefab = resources.get(resourceId);
                 if (!prefab) { console.warn(`AddObject ${id}: resource ${resourceId} not found`); return; }
+                if (objects.has(id)) { console.warn(`AddObject ${id}: already exists`); return; }
                 // Clone; share geometries/materials by default
                 const inst = prefab.clone(true);
                 applyPose(inst, pose);
@@ -206,6 +207,54 @@
                 if (!obj) { console.warn(`RemoveObject ${id}: not found`); return; }
                 scene.remove(obj);
                 objects.delete(id);
+            }
+
+
+            function addTrajectory(id, color, dashed, pts) {
+                if (trajectories.has(id)) { console.warn(`AddTrajectory ${id}: already exists`); return; }
+                if (pts.length < 2) { console.warn(`AddTrajectory ${id}: need at least 2 points`); return; }
+
+                const geom = new THREE.BufferGeometry();
+                const flat = new Float32Array(pts.length * 3);
+                for (let i = 0; i < pts.length; ++i) { const p = pts[i]; flat[3 * i] = p.x; flat[3 * i + 1] = p.y; flat[3 * i + 2] = p.z; }
+                geom.setAttribute('position', new THREE.BufferAttribute(flat, 3));
+                geom.computeBoundingSphere();
+                const color_three = new THREE.Color(color.r / 255, color.g / 255, color.b / 255);
+                const mat = dashed
+                    ? new THREE.LineDashedMaterial({ color: color_three, linewidth: 1, dashSize: 0.2, gapSize: 0.1 })
+                    : new THREE.LineBasicMaterial({ color: color_three, linewidth: 1 });
+                const line = new THREE.Line(geom, mat);
+                if (dashed) line.computeLineDistances();
+                scene.add(line);
+                trajectories.set(id, { line, points: pts.slice(), dashed });
+            }
+
+
+            function updateTrajectory(id, newPts, removeFromHead) {
+                const rec = trajectories.get(id);
+                if (!rec) { console.warn(`UpdateTrajectory ${id}: not found`); return; }
+                if (removeFromHead > 0) {
+                    rec.points.splice(0, Math.min(removeFromHead, rec.points.length));
+                }
+                if (newPts.length) rec.points.push(...newPts);
+                // Rebuild geometry (simple and fine for moderate sizes)
+                const geom = rec.line.geometry;
+                const flat = new Float32Array(rec.points.length * 3);
+                for (let i = 0; i < rec.points.length; ++i) {
+                    const p = rec.points[i]; flat[3 * i] = p.x; flat[3 * i + 1] = p.y; flat[3 * i + 2] = p.z;
+                }
+                geom.setAttribute('position', new THREE.BufferAttribute(flat, 3));
+                geom.attributes.position.needsUpdate = true;
+                geom.computeBoundingSphere();
+                if (rec.dashed) rec.line.computeLineDistances();
+            }
+
+
+            function removeTrajectory(id) {
+                const rec = trajectories.get(id);
+                if (!rec) { console.warn(`RemoveTrajectory ${id}: not found`); return; }
+                scene.remove(rec.line);
+                trajectories.delete(id);
             }
 
 
@@ -256,13 +305,39 @@
                 }
             }
 
+            function decodeTrajectories(r) {
+                const trajCount = r.u32();
+                for (let i = 0; i < trajCount; ++i) {
+                    const id = r.u32();
+                    const action = r.u8();
+                    if (action === 0) {
+                        const color = { r: r.u8(), g: r.u8(), b: r.u8(), a: r.u8() };
+                        const dashed = !!r.u8();
+                        const n = r.u32();
+                        const pts = new Array(n);
+                        for (let k = 0; k < n; ++k) { const x = r.f32(), y = r.f32(), z = r.f32(); pts[k] = toThreePosition({ x, y, z }); }
+                        addTrajectory(id, color, dashed, pts);
+                    } else if (action === 1) {
+                        const n = r.u32();
+                        const pts = new Array(n);
+                        for (let k = 0; k < n; ++k) { const x = r.f32(), y = r.f32(), z = r.f32(); pts[k] = toThreePosition({ x, y, z }); }
+                        const removeFromHead = r.u32();
+                        updateTrajectory(id, pts, removeFromHead);
+                    } else if (action === 2) {
+                        removeTrajectory(id);
+                    } else {
+                        console.warn('Unknown trajectory action', action);
+                    }
+                }
+            }
+
             function decodeCommandBuffer(buf) {
                 const r = new Reader(buf);
                 try {
                     decodeHeader(r);
                     decodeRegistrations(r);
                     decodeObjects(r);
-                    // decodeTrajectories(r);
+                    decodeTrajectories(r);
                 } catch (e) {
                     console.error('decodeCommandBuffer failed:', e);
                 }

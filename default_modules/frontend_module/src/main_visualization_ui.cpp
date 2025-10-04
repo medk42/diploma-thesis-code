@@ -103,4 +103,12 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
     }
 
     scene_container->enableGrid(true);
+
+    std::vector<helper::Vec3> pts;
+    for (float t = 0; t < 2*3.141592; t += 0.01)
+    {
+        pts.push_back(helper::Vec3{ std::cos(t), std::sin(t), std::sin(5*t) * 0.2f } );
+    }
+    
+    scene_container->addTrajectory(pts, {0, 0, 0}, true, obj_id);
 }
