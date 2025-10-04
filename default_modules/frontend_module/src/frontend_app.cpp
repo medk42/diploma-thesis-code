@@ -44,8 +44,9 @@ FrontendApp::FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, Front
         }
 
         frontend_state_->active_app_ = this;
+
+        setupState();
     }
-    setupState();
 
     setupUi();
     
@@ -165,6 +166,7 @@ void FrontendApp::loadUiFromState()
             {
                 activation_ui_->setParameters(i, activation_data.activation_parameters_.getParameters());
                 activation_ui_->setParameterValues(i, activation_data.parameter_values_);
+                activation_ui_->setActive(i, activation_data.is_active_);
             }
         }
     }
@@ -642,6 +644,7 @@ void FrontendApp::refreshRunningModules()
 
                     frontend_state_->known_running_modules_activation_data_.push_back(ActivationData { 
                         .is_activable_ = true, 
+                        .is_active_ = false,
                         .waiting_for_parameters_ = true,
                         .waiting_for_parameter_values_ = true,
                         .activation_channel_id_ = activation_it->second
@@ -1029,6 +1032,7 @@ void FrontendApp::processPendingActivationResponses()
         }
 
         activation_ui_->setActive(response.running_module_index_, response.response_.activated_);
+        frontend_state_->known_running_modules_activation_data_[response.running_module_index_].is_active_ = response.response_.activated_;
         // TODO handle other response types
     }
 

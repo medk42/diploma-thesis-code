@@ -69,6 +69,7 @@ namespace aergo::default_modules::frontend_module::webapp
     struct ActivationData
     {
         bool is_activable_;
+        bool is_active_;
         bool waiting_for_parameters_;
         bool waiting_for_parameter_values_;
         uint32_t activation_channel_id_; // channel id of the other module used for activation/deactivation requests and responses
