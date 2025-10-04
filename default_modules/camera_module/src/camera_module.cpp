@@ -77,9 +77,14 @@ bool CameraModule::deactivate(const std::atomic<bool>& cancel_flag, std::atomic<
         return true; // already stopped
     }
 
-    closeCamera();
+    deactivation_confirmed_.store(false, std::memory_order_release);
+    activated_.store(false, std::memory_order_release);
+    while (!deactivation_confirmed_.load(std::memory_order_acquire))
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 
-    activated_ = false;
+    closeCamera();
 
     return true;
 }
@@ -143,6 +148,7 @@ void CameraModule::captureLoop()
     {
         if (!activated_.load(std::memory_order_relaxed))
         {
+            deactivation_confirmed_.store(true, std::memory_order_release);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }

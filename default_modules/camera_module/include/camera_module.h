@@ -73,6 +73,7 @@ namespace aergo::default_modules::camera_module
 
         int64_t used_camera_id_{0};
         std::atomic<bool> activated_{false};
+        std::atomic<bool> deactivation_confirmed_{false};
         bool thread_running_{false};
         std::mutex activation_mutex_;
     };
