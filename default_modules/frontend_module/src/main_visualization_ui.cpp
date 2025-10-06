@@ -59,8 +59,7 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
                     .desc = helper::vis3d::CylinderDesc{0.1f, 0, 0.3f},
                     .origin = helper::vis3d::Pose {
                         .t = {0, 0, 0.8f + 0.15f},
-                        // rotate 30deg around y
-                        .q = {0, 0.2588f, 0, 0.9659f} // sin(15deg), 0, 0, cos(15deg)
+                        .q = helper::vis3d::Quat::Identity().RotateDegY(30.f)
                     },
                     .color = { 0, 0, 255 } // blue
                 },
@@ -79,24 +78,21 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
     }
     if (!scene_container->addObject(register_id_complex, helper::vis3d::Pose{
         .t = helper::vis3d::Vec3{0.5f, 0.0f, 0.0f},
-        // rotate -30 deg around X
-        .q = { -0.2588f, 0, 0, 0.9659f } // sin(-15deg), 0, 0, cos(-15deg)
+        .q = helper::vis3d::Quat::Identity().RotateDegX(-30.f)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 1 to scene");
     }
     if (!scene_container->addObject(register_id_complex, helper::vis3d::Pose{
         .t = helper::vis3d::Vec3{0.0f, 1.0f, 0.0f},
-        // rotate 30 deg around Z
-        .q = {0, 0, 0.2588f, 0.9659f} // sin(15deg), 0, cos(15deg)
+        .q = helper::vis3d::Quat::Identity().RotateDegZ(30.f)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 2 to scene");
     }
     if (!scene_container->addObject(register_id_complex, helper::vis3d::Pose{
         .t = helper::vis3d::Vec3{-2.f, 0.0f, 0.0f},
-        // rotate -90deg around Y
-        .q = {0, -0.7071f, 0, 0.7071f} // sin(-45deg), 0, 0, cos(-45deg)
+        .q = helper::vis3d::Quat::Identity().RotateDegY(-90.f)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 3 to scene");

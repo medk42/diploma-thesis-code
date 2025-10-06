@@ -63,15 +63,15 @@ const ModuleInfo* readModuleInfo()
 
 aergo::module::dll::IDllModule* createModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id)
 {
-    auto module = std::make_unique<aergo::default_modules::camera_module::CameraModule>(data_path, core, channel_map_info, logger, module_id);
+    auto module = std::make_unique<aergo::default_modules::camera_module::CameraModule>(data_path, core, channel_map_info, logger, module_id, &module_info);
     if (!module->valid())
         return nullptr;
 
-    auto wrapped_module = std::make_unique<aergo::module::helpers::activation_wrapper::ActivationWrapper>(std::move(module), module_info, &parameters);
+    auto wrapped_module = std::make_unique<aergo::module::helpers::activation_wrapper::ActivationWrapper>(std::move(module), &parameters);
     if (!wrapped_module->valid())
         return nullptr;
 
-    return new aergo::module::dll::DllModuleWrapper(std::move(wrapped_module), &module_info, core, module_id, logger);
+    return new aergo::module::dll::DllModuleWrapper(std::move(wrapped_module), core, module_id, logger);
 }
 
 void destroyModule(aergo::module::dll::IDllModule* module)

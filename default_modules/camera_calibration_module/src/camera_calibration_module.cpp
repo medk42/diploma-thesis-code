@@ -11,8 +11,8 @@ using namespace aergo::module;
 
 
 
-CameraCalibrationModule::CameraCalibrationModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id)
-: aergo::module::BaseModule(data_path, core, channel_map_info, logger, module_id), valid_(false)
+CameraCalibrationModule::CameraCalibrationModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id, const aergo::module::ModuleInfo* module_info)
+: aergo::module::BaseModule(data_path, core, channel_map_info, logger, module_id, module_info), valid_(false)
 {
     aergo::module::InputChannelMapInfo::IndividualChannelInfo image_input_info = getSubscribeChannelInfo(0); // image data input
     if (image_input_info.channel_identifier_count_ != 1)

@@ -10,7 +10,7 @@ namespace aergo::default_modules::camera_calibration_module
     class CameraCalibrationModule : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule
     {
     public:
-        CameraCalibrationModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id);
+        CameraCalibrationModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id, const aergo::module::ModuleInfo* module_info);
         
         /// @brief Process incoming image data messages on subscribe channel 0 and send calibrated image data on publish channel 0.
         virtual void processMessage(uint32_t subscribe_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override;

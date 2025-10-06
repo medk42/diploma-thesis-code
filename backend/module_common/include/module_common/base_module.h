@@ -12,7 +12,7 @@ namespace aergo::module
     class BaseModule : public IModule
     {
     public:
-        BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id);
+        BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, const ModuleInfo* module_info);
 
         using AllocatorPtr = std::unique_ptr<IAllocator, std::function<void(IAllocator*)>>;
 
@@ -71,6 +71,32 @@ namespace aergo::module
 
         ICoreControl* getCoreControl() { return core_; }
 
+        const ModuleInfo* getModuleInfo() const noexcept override { return module_info_; }
+
+        /// @brief Find channel ID by name. Name must match exactly the name in ModuleInfo.
+        /// @param channel_type_identifier type identifier of the channel to find 
+        /// @param out_channel_id only modified if channel is found
+        /// @return true if channel found, false otherwise
+        bool getSubscribeChannelByName(const char* channel_type_identifier, uint32_t& out_channel_id) noexcept;
+
+        /// @brief Find channel ID by name. Name must match exactly the name in ModuleInfo.
+        /// @param channel_type_identifier type identifier of the channel to find 
+        /// @param out_channel_id only modified if channel is found
+        /// @return true if channel found, false otherwise
+        bool getRequestChannelByName(const char* channel_type_identifier, uint32_t& out_channel_id) noexcept;
+
+        /// @brief Find channel ID by name. Name must match exactly the name in ModuleInfo.
+        /// @param channel_type_identifier type identifier of the channel to find 
+        /// @param out_channel_id only modified if channel is found
+        /// @return true if channel found, false otherwise
+        bool getPublishChannelByName(const char* channel_type_identifier, uint32_t& out_channel_id) noexcept;
+        
+        /// @brief Find channel ID by name. Name must match exactly the name in ModuleInfo.
+        /// @param channel_type_identifier type identifier of the channel to find 
+        /// @param out_channel_id only modified if channel is found
+        /// @return true if channel found, false otherwise
+        bool getResponseChannelByName(const char* channel_type_identifier, uint32_t& out_channel_id) noexcept;
+
 
 
     private:
@@ -78,6 +104,7 @@ namespace aergo::module
         const logging::ILogger* logger_;
         std::string data_path_;
         const uint64_t module_id_; 
+        const ModuleInfo* module_info_;
         
         std::vector<std::vector<ChannelIdentifier>> subscribe_consumer_info_;    // module IDs for each subscribe channel
         std::vector<std::vector<ChannelIdentifier>> request_consumer_info_;      // module IDs for each request channel

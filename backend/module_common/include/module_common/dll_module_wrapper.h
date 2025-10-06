@@ -19,7 +19,7 @@ namespace aergo::module::dll
     {
     public:
         /// @brief module must be non-nullptr and valid (check IModule::valid()), module_info must be non-nullptr.
-        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger);
+        DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger);
 
         ~DllModuleWrapper() override = default;
 
@@ -126,6 +126,6 @@ namespace aergo::module::dll
         aergo::module::ICore* core_;
         uint64_t module_id_;
 
-        Metrics metrics_;
+        std::unique_ptr<Metrics> metrics_;
     };
 }

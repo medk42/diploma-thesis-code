@@ -6,8 +6,8 @@ using namespace aergo::module;
 
 
 
-BaseModule::BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
-: core_(core), logger_(logger), module_id_(module_id), request_id_(0)
+BaseModule::BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, const ModuleInfo* module_info)
+: core_(core), logger_(logger), module_id_(module_id), request_id_(0), module_info_(module_info)
 {
     if (data_path)
     {
@@ -167,4 +167,112 @@ InputChannelMapInfo::IndividualChannelInfo BaseModule::getRequestChannelInfo(uin
 const std::string& BaseModule::getDataPath()
 {
     return data_path_;
+}
+
+
+
+bool BaseModule::getSubscribeChannelByName(const char* name, uint32_t& out_channel_id) noexcept
+{
+    if (!module_info_ || !name)
+    {
+        return false;
+    }
+
+    for (uint32_t subscribe_consumer_id = 0; subscribe_consumer_id < module_info_->subscribe_consumer_count_; ++subscribe_consumer_id)
+    {
+        if (module_info_->subscribe_consumers_[subscribe_consumer_id].channel_type_identifier_ == nullptr)
+        {
+            continue;
+        }
+        
+        std::string channel_type_identifier = module_info_->subscribe_consumers_[subscribe_consumer_id].channel_type_identifier_;
+        if (channel_type_identifier == name)
+        {
+            out_channel_id = subscribe_consumer_id;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+
+bool BaseModule::getRequestChannelByName(const char* name, uint32_t& out_channel_id) noexcept
+{
+    if (!module_info_ || !name)
+    {
+        return false;
+    }
+
+    for (uint32_t request_consumer_id = 0; request_consumer_id < module_info_->request_consumer_count_; ++request_consumer_id)
+    {
+        if (module_info_->request_consumers_[request_consumer_id].channel_type_identifier_ == nullptr)
+        {
+            continue;
+        }
+        
+        std::string channel_type_identifier = module_info_->request_consumers_[request_consumer_id].channel_type_identifier_;
+        if (channel_type_identifier == name)
+        {
+            out_channel_id = request_consumer_id;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+
+bool BaseModule::getPublishChannelByName(const char* name, uint32_t& out_channel_id) noexcept
+{
+    if (!module_info_ || !name)
+    {
+        return false;
+    }
+
+    for (uint32_t publish_producer_id = 0; publish_producer_id < module_info_->publish_producer_count_; ++publish_producer_id)
+    {
+        if (module_info_->publish_producers_[publish_producer_id].channel_type_identifier_ == nullptr)
+        {
+            continue;
+        }
+        
+        std::string channel_type_identifier = module_info_->publish_producers_[publish_producer_id].channel_type_identifier_;
+        if (channel_type_identifier == name)
+        {
+            out_channel_id = publish_producer_id;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+
+bool BaseModule::getResponseChannelByName(const char* name, uint32_t& out_channel_id) noexcept
+{
+    if (!module_info_ || !name)
+    {
+        return false;
+    }
+
+    for (uint32_t response_producer_id = 0; response_producer_id < module_info_->response_producer_count_; ++response_producer_id)
+    {
+        if (module_info_->response_producers_[response_producer_id].channel_type_identifier_ == nullptr)
+        {
+            continue;
+        }
+        
+        std::string channel_type_identifier = module_info_->response_producers_[response_producer_id].channel_type_identifier_;
+        if (channel_type_identifier == name)
+        {
+            out_channel_id = response_producer_id;
+            return true;
+        }
+    }
+
+    return false;
 }

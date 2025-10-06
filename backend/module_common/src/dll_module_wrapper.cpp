@@ -8,13 +8,16 @@ using namespace aergo::module::dll;
 
 
 
-DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, const aergo::module::ModuleInfo* module_info, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger)
-: module_(std::move(module)), module_info_(module_info), core_(core), module_id_(module_id), logger_(logger), metrics_(module_info)
+DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger)
+: module_(std::move(module)), core_(core), module_id_(module_id), logger_(logger)
 {
     if (module_ == nullptr || !module_->valid() || module_info_ == nullptr)
     {
         throw std::invalid_argument("DllModuleWrapper: Invalid constructor parameters.");
     }
+
+    module_info_ = module_->getModuleInfo();
+    metrics_ = std::make_unique<Metrics>(module_info_);
 
     messages_channel_count_ = module_info_->subscribe_consumer_count_;
     requests_channel_count_ = module_info_->response_producer_count_;
@@ -177,7 +180,7 @@ bool DllModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
         }
         regular_worker_threads_.clear();
 
-        metrics_.printLogs(logger_);
+        metrics_->printLogs(logger_);
 
         auto time_used = nowMs() - start_time;
         if (time_used >= timeout_ms) return false;
@@ -253,7 +256,7 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
     aergo::module::IModule::QueueStatus queue_status = queue_full ? aergo::module::IModule::QueueStatus::QUEUE_FULL : aergo::module::IModule::QueueStatus::NORMAL;
     aergo::module::IModule::IngressDecision decision = module_->onIngress(type, local_channel_id, source_channel, message, queue_status);
 
-    metrics_.record(idx, target_queue.size(), decision, queue_full); 
+    metrics_->record(idx, target_queue.size(), decision, queue_full); 
 
     if (decision == aergo::module::IModule::IngressDecision::DROP || (decision == aergo::module::IModule::IngressDecision::ACCEPT && queue_full))
     {

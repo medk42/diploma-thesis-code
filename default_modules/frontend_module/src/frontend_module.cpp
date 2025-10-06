@@ -18,8 +18,8 @@ using namespace aergo::module;
 
 
 
-FrontendModule::FrontendModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
-: BaseModule(data_path, core, channel_map_info, logger, module_id), valid_(false)
+FrontendModule::FrontendModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, const ModuleInfo* module_info)
+: BaseModule(data_path, core, channel_map_info, logger, module_id, module_info), valid_(false)
 {
     if (!parseConfigFile()) {
         log(aergo::module::logging::LogType::ERROR, "Failed to parse configuration file.");

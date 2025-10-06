@@ -16,7 +16,7 @@ namespace aergo::default_modules::camera_module
     class CameraModule : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule
     {
     public:
-        CameraModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id);
+        CameraModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id, const aergo::module::ModuleInfo* module_info);
         
         /// @brief Ignore all messages, camera module only produces.
         virtual void processMessage(uint32_t subscribe_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override {}

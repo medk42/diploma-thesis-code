@@ -10,16 +10,28 @@
 using namespace aergo::default_modules::pen_tracking_module;
 using namespace aergo::module;
 using namespace aergo::pen_calibration::helper;
+using namespace aergo::module::helpers;
 
 
 
-PenTrackingModule::PenTrackingModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
-: BaseModule(data_path, core, channel_map_info, logger, module_id), valid_(false)
+PenTrackingModule::PenTrackingModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, const ModuleInfo* module_info)
+: BaseModule(data_path, core, channel_map_info, logger, module_id, module_info), valid_(false)
 {
-    InputChannelMapInfo::IndividualChannelInfo image_input_info = getSubscribeChannelInfo(0); // image data input
+    if (!getSubscribeChannelByName(image_bgr_calib_data_channel_type, subscribe_camera_channel_id_))
+    {
+        log(logging::LogType::ERROR, "Pen tracking module requires one subscribe channel for image data");
+        return;
+    }
+    InputChannelMapInfo::IndividualChannelInfo image_input_info = getSubscribeChannelInfo(subscribe_camera_channel_id_); // image data input
     if (image_input_info.channel_identifier_count_ != 1)
     {
         log(logging::LogType::ERROR, "Pen tracking module requires exactly one input channel for image data");
+        return;
+    }
+
+    if (!getPublishChannelByName(pen_3d_pose_publish_producer.channel_type_identifier_, publish_pen_channel_id_))
+    {
+        log(logging::LogType::ERROR, "Pen tracking module requires one publish channel for pen 3D pose data");
         return;
     }
 
@@ -28,6 +40,15 @@ PenTrackingModule::PenTrackingModule(const char* data_path, ICore* core, InputCh
         log(logging::LogType::ERROR, "Failed to load pen calibration data");
         return;
     }
+
+    vis3d_helper_ = std::make_unique<vis3d::VisualizationHelper>(this);
+    if (!vis3d_helper_->valid())
+    {
+        log(logging::LogType::ERROR, "Failed to initialize 3D visualization helper");
+        return;
+    }
+
+    registerPenVisualization();
 
     valid_ = true;
 }
@@ -57,7 +78,14 @@ IModule::IngressDecision PenTrackingModule::onIngress(ProcessingType kind, uint3
 
 void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    if (subscribe_consumer_id != 0)
+    if (!announced_)
+    {
+        std::lock_guard<std::mutex> lock(vis3d_mutex_);
+        vis3d_helper_->announce();
+        announced_ = true;
+    }
+
+    if (subscribe_consumer_id != subscribe_camera_channel_id_)
     {
         log(logging::LogType::WARNING, "Pen tracking module received message on invalid subscribe channel, dropping");
         return;
@@ -111,6 +139,13 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
 
     if (!result.success) // image not detected
     {
+        if (pen_object_added_)
+        {
+            std::lock_guard<std::mutex> lock(vis3d_mutex_);
+            vis3d_helper_->removeObject(pen_object_id_);
+            vis3d_helper_->sendUpdate();
+            pen_object_added_ = false;
+        }
         log(aergo::module::logging::LogType::INFO, "MODULE,PEN,INTERNAL,INFO=\"tracking fail, processing: " + std::to_string(processing_time_ms) + " ms\"\n\n\n\n\n");
         return;
     }
@@ -134,7 +169,30 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
 
     log(aergo::module::logging::LogType::INFO, "MODULE,PEN,PUBLISH,INFO=\"" + msg + "\"\n\n\n\n\n");
 
-    sendMessage(0, pen_pose_message); // publish on channel 0
+    sendMessage(publish_pen_channel_id_, pen_pose_message); // publish on pen pose channel
+
+
+    // Update 3d visualization
+    vis3d::Pose pen_pose {
+        .t = { float(tvec.at<double>(0)), float(tvec.at<double>(1)), float(tvec.at<double>(2)) },
+        .q = vis3d::Quat::QuatFromRvec(rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2))
+    };
+
+    if (pen_object_added_)
+    {
+        std::lock_guard<std::mutex> lock(vis3d_mutex_);
+        vis3d_helper_->updateObject(pen_object_id_, pen_pose);
+        vis3d_helper_->sendUpdate();
+    }
+    else
+    {
+        std::lock_guard<std::mutex> lock(vis3d_mutex_);
+        if (vis3d_helper_->addObject(pen_resource_id_, pen_pose, pen_object_id_))
+        {
+            pen_object_added_ = true;
+        }
+        vis3d_helper_->sendUpdate();
+    }
 }
 
 
@@ -213,4 +271,63 @@ bool PenTrackingModule::loadPenCalibration()
     }
 
     return true;
+}
+
+
+
+void PenTrackingModule::registerPenVisualization()
+{
+    std::lock_guard<std::mutex> lock(vis3d_mutex_);
+
+    auto mm_to_m = [](float mm) { return mm / 1000.0f; };
+
+    pen_resource_id_ = vis3d_helper_->registerResource(vis3d::ComplexShape{
+        .parts = {
+            vis3d::PrimitiveShape{
+                .type = vis3d::PrimitiveShapeType::BOX,
+                .desc = vis3d::BoxDesc{ .sx = mm_to_m(20), .sy = mm_to_m(20), .sz = mm_to_m(20) },
+                .origin = {
+                    .t = { 0.0f, 0.0f, 0.0f },
+                    .q = { 0.0f, 0.0f, 0.0f, 1.0f }
+                },
+                .color = vis3d::Color{ 50, 50, 50 }
+            },
+            vis3d::PrimitiveShape{
+                .type = vis3d::PrimitiveShapeType::BOX,
+                .desc = vis3d::BoxDesc{ .sx = mm_to_m(20), .sy = mm_to_m(20), .sz = mm_to_m(22) },
+                .origin = {
+                    .t = { 0.0f, 0.0f, -mm_to_m(20.0/2+8+22.0/2) },
+                    .q = vis3d::Quat::Identity().RotateDegZ(45)
+                },
+                .color = vis3d::Color{ 50, 50, 50 }
+            },
+            vis3d::PrimitiveShape{
+                .type = vis3d::PrimitiveShapeType::CYLINDER,
+                .desc = vis3d::CylinderDesc{ .rBot = mm_to_m(15.2 / 2), .rTop = mm_to_m(15.2 / 2), .h = mm_to_m(91) },
+                .origin = {
+                    .t = { 0.0f, 0.0f, mm_to_m(20.0/2 + 10 + 91.0/2) },
+                    .q = vis3d::Quat::Identity()
+                },
+                .color = vis3d::Color{ 50, 50, 50 }
+            },
+            vis3d::PrimitiveShape{
+                .type = vis3d::PrimitiveShapeType::CYLINDER,
+                .desc = vis3d::CylinderDesc{ .rBot = mm_to_m(20.0 / 2), .rTop = mm_to_m(15.2 / 2), .h = mm_to_m(10) },
+                .origin = {
+                    .t = { 0.0f, 0.0f, mm_to_m(20.0/2 + 10.0/2) },
+                    .q = vis3d::Quat::Identity()
+                },
+                .color = vis3d::Color{ 50, 50, 50 }
+            },
+            vis3d::PrimitiveShape{
+                .type = vis3d::PrimitiveShapeType::CYLINDER,
+                .desc = vis3d::CylinderDesc{ .rBot = mm_to_m(15.2 / 2), .rTop = mm_to_m(0), .h = mm_to_m(19.7) },
+                .origin = {
+                    .t = { 0.0f, 0.0f, mm_to_m(20.0/2 + 10 + 91 + 19.7/2) },
+                    .q = vis3d::Quat::Identity()
+                },
+                .color = vis3d::Color{ 50, 50, 50 }
+            },
+        }
+    });
 }

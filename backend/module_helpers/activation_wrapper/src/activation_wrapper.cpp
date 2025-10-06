@@ -15,7 +15,7 @@ using namespace aergo::module;
 using json = nlohmann::json;
 
 
-ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_)
+ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, params::ParameterList* parameters_)
 : valid_(false), module_ref_(std::move(module)), parameters_(parameters_), activated_(false), message_wait_{false, 0, 0}
 {
     if (module_ref_.get() == nullptr || parameters_ == nullptr)
@@ -42,15 +42,16 @@ ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> mod
         return;
     }
     
+    const ModuleInfo* module_info = base_module_ref_->getModuleInfo();
     bool found = false;
-    for (uint32_t response_producer_id = 0; response_producer_id < module_info.response_producer_count_; ++response_producer_id)
+    for (uint32_t response_producer_id = 0; response_producer_id < module_info->response_producer_count_; ++response_producer_id)
     {
-        if (module_info.response_producers_[response_producer_id].channel_type_identifier_ == nullptr)
+        if (module_info->response_producers_[response_producer_id].channel_type_identifier_ == nullptr)
         {
             continue;
         }
         
-        std::string channel_type_identifier = module_info.response_producers_[response_producer_id].channel_type_identifier_;
+        std::string channel_type_identifier = module_info->response_producers_[response_producer_id].channel_type_identifier_;
 
         if (channel_type_identifier == aergo::module::helpers::activation_wrapper::message_types::activation_response_producer.channel_type_identifier_)
         {
@@ -1189,4 +1190,11 @@ bool ActivationWrapper::load(ISerializableModule::SaveData data) noexcept
     activated_ = activable_module_ref_->isActivated();
 
     return result;
+}
+
+
+
+const ModuleInfo* ActivationWrapper::getModuleInfo() const noexcept
+{
+    return module_ref_->getModuleInfo();
 }

@@ -2,19 +2,23 @@
 
 #include "module_common/base_module.h"
 #include "module_helpers/activation_wrapper/activable_module.h"
+#include "module_helpers/visualization_3d_interface/visualization_helper.h"
 #include "pen_calibration_helper.h"
 #include "marker_tracker.h"
 
 #include <opencv2/opencv.hpp>
 
 #include <map>
+#include <mutex>
 
 namespace aergo::default_modules::pen_tracking_module
 {
+    namespace vis3d = aergo::module::helpers::visualization_3d_interface;
+
     class PenTrackingModule : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule
     {
     public:
-        PenTrackingModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id);
+        PenTrackingModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id, const aergo::module::ModuleInfo* module_info);
         
         /// @brief Process incoming calibrated image data messages on subscribe channel 0 and send pen data on publish channel 0.
         virtual void processMessage(uint32_t subscribe_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override;
@@ -62,13 +66,24 @@ namespace aergo::default_modules::pen_tracking_module
 
     private:
         bool loadPenCalibration();
+        void registerPenVisualization();
 
         bool valid_;
 
         bool last_detect_success_ { true };
 
+        uint32_t subscribe_camera_channel_id_{ 0 };
+        uint32_t publish_pen_channel_id_{ 0 };
+
         std::map<int, aergo::pen_calibration::helper::Transformation> tip_to_other_transformations_; // transformations from pen tip to markers
 
         std::unique_ptr<aergo::pen_tracking::MarkerTracker> marker_tracker_;
+
+        std::unique_ptr<vis3d::VisualizationHelper> vis3d_helper_;
+        bool announced_{ false };
+        std::mutex vis3d_mutex_;
+        vis3d::ResourceId pen_resource_id_{ 0 };
+        vis3d::ObjectId pen_object_id_{ 0 };
+        bool pen_object_added_{ false };
     };
 }

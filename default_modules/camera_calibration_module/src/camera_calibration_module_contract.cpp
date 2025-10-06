@@ -54,10 +54,10 @@ const ModuleInfo* readModuleInfo()
 
 aergo::module::dll::IDllModule* createModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, logging::ILogger* logger, uint64_t module_id)
 {
-    auto module = std::make_unique<aergo::default_modules::camera_calibration_module::CameraCalibrationModule>(data_path, core, channel_map_info, logger, module_id);
+    auto module = std::make_unique<aergo::default_modules::camera_calibration_module::CameraCalibrationModule>(data_path, core, channel_map_info, logger, module_id, &module_info);
     if (module->valid())
     {
-        return new aergo::module::dll::DllModuleWrapper(std::move(module), &module_info, core, module_id, logger);
+        return new aergo::module::dll::DllModuleWrapper(std::move(module), core, module_id, logger);
     }
     else
     {

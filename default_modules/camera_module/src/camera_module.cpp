@@ -8,8 +8,8 @@ using json = nlohmann::json;
 
 
 
-CameraModule::CameraModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id)
-: aergo::module::BaseModule(data_path, core, channel_map_info, logger, module_id)
+CameraModule::CameraModule(const char* data_path, aergo::module::ICore* core, aergo::module::InputChannelMapInfo channel_map_info, const aergo::module::logging::ILogger* logger, uint64_t module_id, const aergo::module::ModuleInfo* module_info)
+: aergo::module::BaseModule(data_path, core, channel_map_info, logger, module_id, module_info)
 {}
 
 

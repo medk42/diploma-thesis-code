@@ -20,7 +20,7 @@ namespace aergo::module::helpers::activation_wrapper
         constexpr static uint32_t SCHEMA_VERSION = 1; // schema version for saved data
 
     public:
-        ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ModuleInfo module_info, params::ParameterList* parameters_);
+        ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, params::ParameterList* parameters_);
         
         virtual void processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
         virtual aergo::module::ResponseData processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
@@ -32,6 +32,7 @@ namespace aergo::module::helpers::activation_wrapper
         virtual bool threadStop(uint32_t timeout_ms) noexcept override;
         virtual ISerializableModule::SaveData save() noexcept override;
         virtual bool load(ISerializableModule::SaveData data) noexcept override;
+        virtual const ModuleInfo* getModuleInfo() const noexcept override;
 
     private:
         /// @brief Initialize parameters to specified default values (or system defaults if not specified).

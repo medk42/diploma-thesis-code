@@ -447,6 +447,9 @@ namespace aergo::module
         /// @return true if the thread was running, stopped within "timeout_ms" milliseconds and joined. false otherwise.
         virtual bool threadStop(uint32_t timeout_ms) noexcept = 0;
 
+        /// @brief Get module information corresponding to this module. Can not return nullptr.
+        virtual const ModuleInfo* getModuleInfo() const noexcept = 0;
+
         /// @brief Query internal module for type. Module can implement for example IActivable and ISavable, query can be used to recover the correct
         /// interface from the base module.
         template<class T>

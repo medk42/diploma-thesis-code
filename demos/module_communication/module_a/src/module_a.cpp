@@ -11,8 +11,8 @@ using namespace aergo::module;
 
 
 
-ModuleA::ModuleA(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id)
-: BaseModule(data_path, core, channel_map_info, logger, module_id), next_small_message_(0), next_large_message_(0),
+ModuleA::ModuleA(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, const ModuleInfo* module_info)
+: BaseModule(data_path, core, channel_map_info, logger, module_id, module_info), next_small_message_(0), next_large_message_(0),
 small_message_counter_(0), gen_(), dist_(0, 255)
 {
     large_fixed_allocator_ = createBufferAllocator(1000, 10);

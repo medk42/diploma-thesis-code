@@ -8,14 +8,29 @@ using namespace aergo::module::helpers::visualization_3d_interface;
 
 
 
-VisualizationHelper::VisualizationHelper(aergo::module::BaseModule* base_module, uint32_t publish_channel)
-: base_module_(base_module), publish_channel_(publish_channel)
+VisualizationHelper::VisualizationHelper(aergo::module::BaseModule* base_module)
+: base_module_(base_module)
 {
     dynamic_allocator_ = base_module_->createDynamicAllocator();
     if (!dynamic_allocator_)
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "VisualizationHelper: Failed to create dynamic allocator.");
+        return;
     }
+    
+    if (!base_module_->getPublishChannelByName(visualization_3d_interface_publish_producer.channel_type_identifier_, publish_channel_))
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "VisualizationHelper: Failed to find publish channel '" + std::string(visualization_3d_interface_publish_producer.channel_type_identifier_) + "'.");
+        return;
+    }
+
+    if (!base_module_->getResponseChannelByName(visualization_3d_interface_response_producer.channel_type_identifier_, response_producer_channel_))
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "VisualizationHelper: Failed to find response producer channel '" + std::string(visualization_3d_interface_response_producer.channel_type_identifier_) + "'.");
+        return;
+    }
+
+    valid_ = true;
 }
 
 
@@ -312,4 +327,18 @@ aergo::module::ResponseData VisualizationHelper::processVisualizationRequest(aer
     response.blobs_.push_back(response_blob);
 
     return response;
+}
+
+
+
+uint32_t VisualizationHelper::getResponseProducerChannel() const
+{
+    return response_producer_channel_;
+}
+
+
+
+bool VisualizationHelper::valid()
+{
+    return valid_;
 }
