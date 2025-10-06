@@ -34,30 +34,30 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
     camera_container_ = content_container->addWidget(std::make_unique<helper::CameraContainer>());
 
     auto register_id_complex = scene_container->createObjectDescription(
-        helper::ComplexShape {
+        helper::vis3d::ComplexShape {
             .parts = {
-                helper::PrimitiveShape {
-                    .type = helper::PrimitiveShapeType::CYLINDER,
-                    .desc = helper::CylinderDesc{0.1f, 0.1f, 1.6f},
-                    .origin = helper::Pose {
-                        .t = helper::Vec3::Zero(),
-                        .q = helper::Quat::Identity()
+                helper::vis3d::PrimitiveShape {
+                    .type = helper::vis3d::PrimitiveShapeType::CYLINDER,
+                    .desc = helper::vis3d::CylinderDesc{0.1f, 0.1f, 1.6f},
+                    .origin = helper::vis3d::Pose {
+                        .t = helper::vis3d::Vec3::Zero(),
+                        .q = helper::vis3d::Quat::Identity()
                     },
                     .color = { 255, 0, 0 } // red
                 },
-                helper::PrimitiveShape {
-                    .type = helper::PrimitiveShapeType::SPHERE,
-                    .desc = helper::SphereDesc{0.15f},
-                    .origin = helper::Pose {
-                        .t = helper::Vec3{0.0f, 0.0f, -0.8f},
-                        .q = helper::Quat::Identity()
+                helper::vis3d::PrimitiveShape {
+                    .type = helper::vis3d::PrimitiveShapeType::SPHERE,
+                    .desc = helper::vis3d::SphereDesc{0.15f},
+                    .origin = helper::vis3d::Pose {
+                        .t = helper::vis3d::Vec3{0.0f, 0.0f, -0.8f},
+                        .q = helper::vis3d::Quat::Identity()
                     },
                     .color = { 0, 255, 0 } // green
                 },
-                helper::PrimitiveShape {
-                    .type = helper::PrimitiveShapeType::CYLINDER,
-                    .desc = helper::CylinderDesc{0.1f, 0, 0.3f},
-                    .origin = helper::Pose {
+                helper::vis3d::PrimitiveShape {
+                    .type = helper::vis3d::PrimitiveShapeType::CYLINDER,
+                    .desc = helper::vis3d::CylinderDesc{0.1f, 0, 0.3f},
+                    .origin = helper::vis3d::Pose {
                         .t = {0, 0, 0.8f + 0.15f},
                         // rotate 30deg around y
                         .q = {0, 0.2588f, 0, 0.9659f} // sin(15deg), 0, 0, cos(15deg)
@@ -69,32 +69,32 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
     );
 
 
-    helper::ObjectId obj_id;
-    if (!scene_container->addObject(register_id_complex, helper::Pose{
-        .t = helper::Vec3{0.0f, 0.0f, 0.0f},
-        .q = helper::Quat::Identity()
+    helper::vis3d::ObjectId obj_id;
+    if (!scene_container->addObject(register_id_complex, helper::vis3d::Pose{
+        .t = helper::vis3d::Vec3{0.0f, 0.0f, 0.0f},
+        .q = helper::vis3d::Quat::Identity()
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 0 to scene");
     }
-    if (!scene_container->addObject(register_id_complex, helper::Pose{
-        .t = helper::Vec3{0.5f, 0.0f, 0.0f},
+    if (!scene_container->addObject(register_id_complex, helper::vis3d::Pose{
+        .t = helper::vis3d::Vec3{0.5f, 0.0f, 0.0f},
         // rotate -30 deg around X
         .q = { -0.2588f, 0, 0, 0.9659f } // sin(-15deg), 0, 0, cos(-15deg)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 1 to scene");
     }
-    if (!scene_container->addObject(register_id_complex, helper::Pose{
-        .t = helper::Vec3{0.0f, 1.0f, 0.0f},
+    if (!scene_container->addObject(register_id_complex, helper::vis3d::Pose{
+        .t = helper::vis3d::Vec3{0.0f, 1.0f, 0.0f},
         // rotate 30 deg around Z
         .q = {0, 0, 0.2588f, 0.9659f} // sin(15deg), 0, cos(15deg)
     }, obj_id))
     {
         base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to add object 2 to scene");
     }
-    if (!scene_container->addObject(register_id_complex, helper::Pose{
-        .t = helper::Vec3{-2.f, 0.0f, 0.0f},
+    if (!scene_container->addObject(register_id_complex, helper::vis3d::Pose{
+        .t = helper::vis3d::Vec3{-2.f, 0.0f, 0.0f},
         // rotate -90deg around Y
         .q = {0, -0.7071f, 0, 0.7071f} // sin(-45deg), 0, 0, cos(-45deg)
     }, obj_id))
@@ -104,10 +104,10 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
 
     scene_container->enableGrid(true);
 
-    std::vector<helper::Vec3> pts;
+    std::vector<helper::vis3d::Vec3> pts;
     for (float t = 0; t < 2*3.141592; t += 0.01)
     {
-        pts.push_back(helper::Vec3{ std::cos(t), std::sin(t), std::sin(5*t) * 0.2f } );
+        pts.push_back(helper::vis3d::Vec3{ std::cos(t), std::sin(t), std::sin(5*t) * 0.2f } );
     }
     
     scene_container->addTrajectory(pts, {0, 0, 0}, true, obj_id);

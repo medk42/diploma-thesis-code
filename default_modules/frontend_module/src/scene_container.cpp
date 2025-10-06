@@ -1,5 +1,7 @@
 #include "webapp/ui/helper/scene_container.h"
 
+#include "module_helpers/visualization_3d_interface/serialization_helper.h"
+
 #include <Wt/WServer.h>
 
 #undef ERROR // Gotta love Windows.h
@@ -9,6 +11,7 @@
 #include <iostream>
 
 using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
+using namespace aergo::module::helpers::visualization_3d_interface;
 
 
 
@@ -94,206 +97,23 @@ SceneSocket::~SceneSocket()
 
 
 
-void pushUint32(std::vector<char>& buf, uint32_t v)
-{
-    const char* byte_data = reinterpret_cast<const char*>(&v);
-    buf.insert(buf.end(), byte_data, byte_data + sizeof(uint32_t));
-}
-
-
-
-void pushUint8(std::vector<char>& buf, uint8_t v)
-{
-    buf.push_back(static_cast<char>(v));
-}
-
-
-
-void pushF32(std::vector<char>& buf, float v)
-{
-    static_assert(sizeof(float) == 4, "float must be 4 bytes");
-
-    const char* byte_data = reinterpret_cast<const char*>(&v);
-    buf.insert(buf.end(), byte_data, byte_data + sizeof(float));
-}
-
-
-
-/// @brief Push pose (t: x,y,z; q: x,y,z,w) as 7 floats (4 bytes each, little-endian) into buffer
-void pushPose(std::vector<char>& buf, const Pose& pose)
-{
-    // [7*f32 t.x,t.y,t.z,q.x,q.y,q.z,q.w]
-    pushF32(buf, pose.t.x);
-    pushF32(buf, pose.t.y);
-    pushF32(buf, pose.t.z);
-    pushF32(buf, pose.q.x);
-    pushF32(buf, pose.q.y);
-    pushF32(buf, pose.q.z);
-    pushF32(buf, pose.q.w);
-}
-
-
-
-bool pushPendingRegistration(std::vector<char>& buf, const std::vector<std::tuple<ResourceId, ComplexShape>>& registrations)
-{
-    uint32_t registration_count = static_cast<uint32_t>(registrations.size());
-    pushUint32(buf, registration_count); // [u32 registration_count]
-
-    for (const auto& [res_id, shape] : registrations)
-    {
-        pushUint32(buf, res_id.id);      // [u32 resource_id]
-        uint32_t part_count = static_cast<uint32_t>(shape.parts.size());
-        pushUint32(buf, part_count);     // [u32 part_count]
-        for (const auto& part : shape.parts)
-        {
-            // Box: [u8 type=0][3*f32 sx,sy,sz][7*f32 origin][4*u8 color]
-            // Sphere: [u8 type=1][1*f32 r][7*f32 origin][4*u8 color]
-            // Cylinder: [u8 type=2][3*f32 rTop,rBot,h][7*f32 origin][4*u8 color]
-
-            // push type
-            pushUint8(buf, static_cast<uint8_t>(part.type));
-
-            // push description
-            if (part.type == PrimitiveShapeType::BOX)
-            {
-                if (!std::holds_alternative<BoxDesc>(part.desc))
-                {
-                    return false; // invalid
-                }
-                const BoxDesc& d = std::get<BoxDesc>(part.desc);
-                pushF32(buf, d.sx);
-                pushF32(buf, d.sy);
-                pushF32(buf, d.sz);
-            }
-            else if (part.type == PrimitiveShapeType::SPHERE)
-            {
-                if (!std::holds_alternative<SphereDesc>(part.desc))
-                {
-                    return false; // invalid
-                }
-                const SphereDesc& d = std::get<SphereDesc>(part.desc);
-                pushF32(buf, d.r);
-            }
-            else if (part.type == PrimitiveShapeType::CYLINDER)
-            {
-                if (!std::holds_alternative<CylinderDesc>(part.desc))
-                {
-                    return false; // invalid
-                }
-                const CylinderDesc& d = std::get<CylinderDesc>(part.desc);
-                pushF32(buf, d.rTop);
-                pushF32(buf, d.rBot);
-                pushF32(buf, d.h);
-            }
-
-            // push local origin pose
-            pushPose(buf, part.origin);
-
-            // push color
-            pushUint8(buf, part.color.r);
-            pushUint8(buf, part.color.g);
-            pushUint8(buf, part.color.b);
-            pushUint8(buf, part.color.a);
-        }
-    }
-
-    return true;
-}
-
-
-
-void pushObjectCommands(std::vector<char>& buf, const std::map<ObjectId, CommandBuffer::ObjectParameters>& objects)
-{
-    uint32_t object_count = static_cast<uint32_t>(objects.size());
-    pushUint32(buf, object_count); // [u32 object_count]
-
-    for (const auto& [obj_id, params] : objects)
-    {
-        // Add: [u32 new_id][u8 action=0][u32 resource_id][7*f32 pose]
-        // Update: [u32 id][u8 action=1][7*f32 pose]
-        // Remove: [u32 id][u8 action=2]
-
-        pushUint32(buf, obj_id.id);
-        pushUint8(buf, static_cast<uint8_t>(params.action));
-        if (params.action == CommandBuffer::Action::ADD)
-        {
-            pushUint32(buf, params.resource_id.id);
-            pushPose(buf, params.pose);
-        }
-        if (params.action == CommandBuffer::Action::UPDATE)
-        {
-            pushPose(buf, params.pose);
-        }
-    }
-}
-
-
-
-void pushTrajectoryCommands(std::vector<char>& buf, const std::map<ObjectId, CommandBuffer::TrajectoryParameters>& trajectories)
-{
-    uint32_t trajectory_count = static_cast<uint32_t>(trajectories.size());
-    pushUint32(buf, trajectory_count); // [u32 trajectory_count]
-
-    for (const auto& [traj_id, params] : trajectories)
-    {
-        // Add: [u32 new_id][u8 action=0][4*u8 r,g,b,a][u8 dashed][u32 point_count][point_count*3*f32 points]
-        // Update: [u32 id][u8 action=1][u32 point_count][point_count*3*f32 points][u32 remove_from_head]
-        // Remove: [u32 id][u8 action=2]
-
-        pushUint32(buf, traj_id.id);                             // [u32 id]
-        pushUint8(buf, static_cast<uint8_t>(params.action));    // [u8 action]
-        if (params.action == CommandBuffer::Action::ADD)
-        {
-            // push color
-            pushUint8(buf, params.color.r);
-            pushUint8(buf, params.color.g);
-            pushUint8(buf, params.color.b);
-            pushUint8(buf, params.color.a);
-
-            pushUint8(buf, params.dashed ? 1 : 0);          // [u8 dashed]
-            uint32_t point_count = static_cast<uint32_t>(params.points.size());
-            pushUint32(buf, point_count);                        // [u32 point_count]
-            for (const auto& p : params.points)
-            {
-                pushF32(buf, p.x);                             // [f32 x]
-                pushF32(buf, p.y);                             // [f32 y]
-                pushF32(buf, p.z);                             // [f32 z]
-            }
-        }
-        else if (params.action == CommandBuffer::Action::UPDATE)
-        {
-            uint32_t point_count = static_cast<uint32_t>(params.points.size());
-            pushUint32(buf, point_count);                        // [u32 point_count]
-            for (const auto& p : params.points)
-            {
-                pushF32(buf, p.x);                             // [f32 x]
-                pushF32(buf, p.y);                             // [f32 y]
-                pushF32(buf, p.z);                             // [f32 z]
-            }
-            pushUint32(buf, params.remove_from_head);            // [u32 remove_from_head]
-        }
-    }
-}
-
-
-
 size_t SceneSocket::sendCommandBuffer(const CommandBuffer& cmd_buf)
 {
     std::vector<char> command_frame;
 
     uint32_t magic = 0x314E4353u; // 'SCN1' LE
-    pushUint32(command_frame, magic);  // [u32 magic 'SCN1']
+    serialization::pushUint32(command_frame, magic);  // [u32 magic 'SCN1']
     uint32_t seq = ++seq_;
-    pushUint32(command_frame, seq);    // [u32 seq]
-    pushUint8(command_frame, cmd_buf.grid_commanded_ ? 1 : 0); // [u8 grid_commanded]
-    pushUint8(command_frame, cmd_buf.grid_enabled_ ? 1 : 0);   // [u8 grid_enabled]
+    serialization::pushUint32(command_frame, seq);    // [u32 seq]
+    serialization::pushUint8(command_frame, cmd_buf.grid_commanded_ ? 1 : 0); // [u8 grid_commanded]
+    serialization::pushUint8(command_frame, cmd_buf.grid_enabled_ ? 1 : 0);   // [u8 grid_enabled]
     
-    if (!pushPendingRegistration(command_frame, cmd_buf.pending_registrations_))
+    if (!serialization::pushPendingRegistration(command_frame, cmd_buf.pending_registrations_))
     {
         return 0; // invalid registration
     }
-    pushObjectCommands(command_frame, cmd_buf.objects_);
-    pushTrajectoryCommands(command_frame, cmd_buf.trajectories_);
+    serialization::pushObjectCommands(command_frame, cmd_buf.objects_);
+    serialization::pushTrajectoryCommands(command_frame, cmd_buf.trajectories_);
 
     std::lock_guard<std::mutex> lk(m_);
     q_.emplace_back(std::move(command_frame));
@@ -378,16 +198,10 @@ SceneContainer::SceneContainer(aergo::module::BaseModule* base_module, uint8_t f
     auto *app = Wt::WApplication::instance();
     app->doJavaScript("window.sceneSocketURL = " + Wt::WString(socket_->url()).jsStringLiteral() + ";"); // make URL available to JS before loading the script (if script is not yet loaded)
     app->require("/static/scene_frontend.js");
-
-    cmd_buf_.clear();
+    
+    cmd_coalescer_.clearBuffer();
 
     update_thread_ = std::thread(&SceneContainer::updateWorker, this);
-
-    // TODO request all modules to register shapes
-    // TODO modules will call announce() at startup (without registering), SceneContainer will 
-    // request registration on modules that it doesn't yet know
-    // TODO if scene container receives update from a module that it doesn't know, it requests registration
-    // TODO registration will include the current scene state for that module
 }
 
 
@@ -406,17 +220,18 @@ void SceneContainer::updateWorker()
     while (running_)
     {
         {
-            std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
-            if (!cmd_buf_.isEmpty())
+            std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
+            auto& cmd_buf = cmd_coalescer_.getBuffer();
+            if (!cmd_buf.isEmpty())
             {
                 base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocket::sendCommandBuffer(): sending command buffer:  " + 
-                    std::to_string(cmd_buf_.pending_registrations_.size()) + " registrations, " +
-                    std::to_string(cmd_buf_.objects_.size()) + " object commands, " +
-                    std::to_string(cmd_buf_.trajectories_.size()) + " trajectory commands, " +
-                    (cmd_buf_.grid_commanded_ ? (cmd_buf_.grid_enabled_ ? "enabling" : "disabling") : "no grid command")
+                    std::to_string(cmd_buf.pending_registrations_.size()) + " registrations, " +
+                    std::to_string(cmd_buf.objects_.size()) + " object commands, " +
+                    std::to_string(cmd_buf.trajectories_.size()) + " trajectory commands, " +
+                    (cmd_buf.grid_commanded_ ? (cmd_buf.grid_enabled_ ? "enabling" : "disabling") : "no grid command")
                 );
 
-                size_t queued = socket_->sendCommandBuffer(cmd_buf_);
+                size_t queued = socket_->sendCommandBuffer(cmd_buf);
                 if (queued == 0)
                 {
                     base_module_->log(aergo::module::logging::LogType::ERROR, "SceneSocket::sendCommandBuffer() failed (invalid commands)");
@@ -425,7 +240,7 @@ void SceneContainer::updateWorker()
                 {
                     base_module_->log(aergo::module::logging::LogType::WARNING, "WebSocket send queue has " + std::to_string(queued) + " messages queued (not sending fast enough?)");
                 }
-                cmd_buf_.clear();
+                cmd_coalescer_.clearBuffer();
             }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(frame_sleep_millis_));
@@ -436,21 +251,19 @@ void SceneContainer::updateWorker()
 
 void SceneContainer::enableGrid(bool enable)
 {
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
-
-    cmd_buf_.grid_commanded_ = true;
-    cmd_buf_.grid_enabled_ = enable;
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
+    cmd_coalescer_.enableGrid(enable);
 }
 
 
 
 ResourceId SceneContainer::createObjectDescription(const ComplexShape& shape)
 {
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
 
     ResourceId rid { next_resource_id_++ };
-    cmd_buf_.pending_registrations_.emplace_back(rid, shape);
 
+    cmd_coalescer_.createObjectDescription(rid, shape);
     registered_resources_.emplace(rid, shape);
 
     return rid;
@@ -466,18 +279,13 @@ bool SceneContainer::addObject(ResourceId resource_id, const Pose& pose, ObjectI
         return false;
     }
 
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
 
 
     ObjectId oid { next_object_id_++ };
-    CommandBuffer::ObjectParameters params {
-        .action = CommandBuffer::Action::ADD,
-        .resource_id = resource_id,
-        .pose = pose
-    };
-    cmd_buf_.objects_[oid] = params;
-
+    cmd_coalescer_.addObject(resource_id, pose, oid);
     existing_objects_[oid] = std::make_tuple(resource_id, pose);
+    out_id = oid;
 
     return true;
 }
@@ -494,24 +302,10 @@ bool SceneContainer::updateObject(ObjectId object_id, const Pose& pose)
     }
     it->second = std::make_tuple(std::get<0>(it->second), pose);
 
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
+    cmd_coalescer_.updateObject(object_id, pose);
 
-    if (cmd_buf_.objects_.find(object_id) != cmd_buf_.objects_.end())
-    {
-        // already in command buffer (as ADD, UPDATE or REMOVE), just update the pose (REMOVE ignores pose)
-        cmd_buf_.objects_[object_id].pose = pose;
-        return true;
-    }
-    else
-    {
-        // not yet in command buffer, add an update command
-        CommandBuffer::ObjectParameters params {
-            .action = CommandBuffer::Action::UPDATE,
-            .pose = pose
-        };
-        cmd_buf_.objects_[object_id] = params;
-        return true;
-    }
+    return true;
 }
 
 
@@ -526,34 +320,10 @@ bool SceneContainer::removeObject(ObjectId object_id)
     }
     existing_objects_.erase(it);
 
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
+    cmd_coalescer_.removeObject(object_id);
 
-    if (cmd_buf_.objects_.find(object_id) != cmd_buf_.objects_.end())
-    {
-        // already in command buffer (as ADD, UPDATE or REMOVE)
-        if (cmd_buf_.objects_[object_id].action == CommandBuffer::Action::ADD)
-        {
-            // was an ADD, just remove the command
-            cmd_buf_.objects_.erase(object_id);
-        }
-        else
-        {
-            // was an UPDATE or REMOVE, change to REMOVE
-            cmd_buf_.objects_[object_id].action = CommandBuffer::Action::REMOVE;
-        }
-
-        return true;
-    }
-    else
-    {
-        // not yet in command buffer, add a remove command
-        CommandBuffer::ObjectParameters params {
-            .action = CommandBuffer::Action::REMOVE
-        };
-        cmd_buf_.objects_[object_id] = params;
-        
-        return true;
-    }
+    return true;
 }
 
 
@@ -566,21 +336,13 @@ bool SceneContainer::addTrajectory(const std::vector<Vec3>& pts, Color color, bo
         return false;
     }
 
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
 
     ObjectId oid { next_object_id_++ };
-    CommandBuffer::TrajectoryParameters params {
-        .action = CommandBuffer::Action::ADD,
-        .color = color,
-        .dashed = dashed,
-        .points = pts,
-        .remove_from_head = 0
-    };
-    cmd_buf_.trajectories_[oid] = params;
-
+    cmd_coalescer_.addTrajectory(pts, color, dashed, oid);
     existing_trajectories_[oid] = std::make_tuple(dashed, pts);
-
     out_id = oid;
+
     return true;
 }
 
@@ -609,42 +371,10 @@ bool SceneContainer::updateTrajectory(ObjectId trajectory_id, const std::vector<
     pts.insert(pts.end(), add_pts.begin(), add_pts.end());
 
 
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
+    cmd_coalescer_.updateTrajectory(trajectory_id, add_pts, remove_from_head);
 
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
-
-    if (cmd_buf_.trajectories_.find(trajectory_id) != cmd_buf_.trajectories_.end())
-    {
-        // already in command buffer (as ADD, UPDATE or REMOVE), just update the points (REMOVE ignores points)
-        if (cmd_buf_.trajectories_[trajectory_id].action == CommandBuffer::Action::ADD)
-        {
-            // was an ADD, just update the points
-            auto& buf_pts = cmd_buf_.trajectories_[trajectory_id].points;
-            if (remove_from_head > buf_pts.size())
-                remove_from_head = buf_pts.size();
-            buf_pts.erase(buf_pts.begin(), buf_pts.begin() + remove_from_head);
-            buf_pts.insert(buf_pts.end(), add_pts.begin(), add_pts.end());
-        }
-        else if (cmd_buf_.trajectories_[trajectory_id].action == CommandBuffer::Action::UPDATE)
-        {
-            // was an UPDATE, add new points and add up the remove_from_head
-            cmd_buf_.trajectories_[trajectory_id].remove_from_head += remove_from_head;
-            auto& buf_pts = cmd_buf_.trajectories_[trajectory_id].points;
-            buf_pts.insert(buf_pts.end(), add_pts.begin(), add_pts.end());
-        }
-
-        return true;
-    }
-    else
-    {
-        // not yet in command buffer, add an update command
-        CommandBuffer::TrajectoryParameters params {
-            .action = CommandBuffer::Action::UPDATE,
-            .points = add_pts,
-            .remove_from_head = remove_from_head
-        };
-        cmd_buf_.trajectories_[trajectory_id] = params;
-        return true;
-    }
+    return true;
 }
 
 
@@ -660,33 +390,8 @@ bool SceneContainer::removeTrajectory(ObjectId trajectory_id)
     existing_trajectories_.erase(it);
 
 
+    std::lock_guard<std::mutex> lock(cmd_coalescer_mtx_);
+    cmd_coalescer_.removeTrajectory(trajectory_id);
 
-    std::lock_guard<std::mutex> lock(cmd_buf_mtx_);
-
-    if (cmd_buf_.trajectories_.find(trajectory_id) != cmd_buf_.trajectories_.end())
-    {
-        // already in command buffer (as ADD, UPDATE or REMOVE)
-        if (cmd_buf_.trajectories_[trajectory_id].action == CommandBuffer::Action::ADD)
-        {
-            // was an ADD, just remove the command
-            cmd_buf_.trajectories_.erase(trajectory_id);
-        }
-        else
-        {
-            // was an UPDATE or REMOVE, change to REMOVE
-            cmd_buf_.trajectories_[trajectory_id].action = CommandBuffer::Action::REMOVE;
-        }
-
-        return true;
-    }
-    else
-    {
-        // not yet in command buffer, add a remove command
-        CommandBuffer::TrajectoryParameters params {
-            .action = CommandBuffer::Action::REMOVE
-        };
-        cmd_buf_.trajectories_[trajectory_id] = params;
-        
-        return true;
-    }
+    return true;
 }

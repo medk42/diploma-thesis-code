@@ -2,6 +2,10 @@
 
 #include "module_common/base_module.h"
 
+#include "module_helpers/visualization_3d_interface/scene_desc_api.h"
+#include "module_helpers/visualization_3d_interface/command_buffer.h"
+#include "module_helpers/visualization_3d_interface/command_coalescer.h"
+
 #include <Wt/WContainerWidget.h>
 #include <Wt/WFileResource.h>
 #include <Wt/WLink.h>
@@ -19,104 +23,8 @@
 #include <condition_variable>
 
 namespace aergo::default_modules::frontend_module::webapp::ui::helper
-{    
-    // External Scene API
-    struct Vec3 
-    { 
-        static Vec3 Zero() { return {0,0,0}; }
-        static Vec3 One()  { return {1,1,1}; }
-
-        float x,y,z; 
-    };
-
-    struct Quat
-    { 
-        static Quat Identity() { return {0,0,0,1}; }
-
-        float x,y,z,w; 
-    };
-
-    struct Pose
-    {
-        Vec3 t = Vec3::Zero();
-        Quat q = Quat::Identity();
-    };
-
-    struct Color
-    {
-        // default: light blue
-        uint8_t r = 0x66;
-        uint8_t g = 0x99;
-        uint8_t b = 0xFF;
-        uint8_t a = 0xFF;
-    };
-
-    enum class PrimitiveShapeType : uint8_t { BOX=0, SPHERE=1, CYLINDER=2 };
-
-    struct BoxDesc { float sx, sy, sz; };
-    struct SphereDesc { float r; };
-    struct CylinderDesc { float rBot, rTop, h; };
-
-    struct PrimitiveShape
-    {
-        PrimitiveShapeType type;
-        std::variant<BoxDesc, SphereDesc, CylinderDesc> desc;
-        Pose     origin;          // local pose
-        Color    color;
-    };
-
-    struct ComplexShape
-    {
-        std::vector<PrimitiveShape> parts;
-    };
-
-    enum class ObjectType : uint8_t { Complex=0 };
-
-    struct ResourceId
-    {
-        uint32_t id; 
-        auto operator<=>(const ResourceId&) const = default;
-    };
-    struct ObjectId
-    { 
-        uint32_t id; 
-        auto operator<=>(const ObjectId&) const = default;
-    };
-    
-    
-
-    /// Internal Scene API
-
-    struct CommandBuffer
-    {
-        enum class Action : uint8_t { ADD=0, UPDATE=1, REMOVE=2 };
-        struct ObjectParameters { Action action; ResourceId resource_id; Pose pose; };
-        struct TrajectoryParameters { Action action; Color color; bool dashed; std::vector<Vec3> points; uint32_t remove_from_head; };
-
-        void clear()
-        {
-            pending_registrations_.clear();
-            objects_.clear();
-            trajectories_.clear();
-            grid_commanded_ = false;
-            grid_enabled_ = false;
-        }
-
-        bool isEmpty() const
-        {
-            return pending_registrations_.empty() && objects_.empty() && trajectories_.empty() && !grid_commanded_;
-        }
-
-        bool grid_commanded_{false};
-        bool grid_enabled_{false};
-
-        std::vector<std::tuple<ResourceId, ComplexShape>> pending_registrations_;
-
-        std::map<ObjectId, ObjectParameters> objects_;
-        std::map<ObjectId, TrajectoryParameters> trajectories_;
-    };
-
-
+{
+    namespace vis3d = aergo::module::helpers::visualization_3d_interface;
 
     class SceneSocket : public Wt::WWebSocketResource
     {
@@ -126,7 +34,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         /// @brief Thread-safe, non-blocking. Returns number of queued messages (if >1, messages are not being sent fast enough).
         /// Returns 0 on failure (commands invalid).
-        size_t sendCommandBuffer(const CommandBuffer& cmd_buf);
+        size_t sendCommandBuffer(const vis3d::CommandBuffer& cmd_buf);
 
     protected:
         std::unique_ptr<Wt::WWebSocketConnection> handleConnect(const Wt::Http::Request &req) override;
@@ -158,18 +66,18 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void enableGrid(bool on);
 
         // Static resource registry
-        ResourceId createObjectDescription(const ComplexShape& s); // returns resource_id
+        vis3d::ResourceId createObjectDescription(const vis3d::ComplexShape& s); // returns resource_id
         // (reserve for future) uint32_t createMeshDescription(const MeshMeshDesc& m);
 
         // Instances (object_id)
-        bool addObject(ResourceId resource_id, const Pose& pose, ObjectId& out_id);
-        bool updateObject(ObjectId object_id, const Pose& pose);
-        bool removeObject(ObjectId object_id);
+        bool addObject(vis3d::ResourceId resource_id, const vis3d::Pose& pose, vis3d::ObjectId& out_id);
+        bool updateObject(vis3d::ObjectId object_id, const vis3d::Pose& pose);
+        bool removeObject(vis3d::ObjectId object_id);
 
         // Trajectories
-        bool addTrajectory(const std::vector<Vec3>& pts, Color color, bool dashed, ObjectId& out_id);
-        bool updateTrajectory(ObjectId trajectory_id, const std::vector<Vec3>& add_pts, uint32_t remove_from_head);
-        bool removeTrajectory(ObjectId trajectory_id);
+        bool addTrajectory(const std::vector<vis3d::Vec3>& pts, vis3d::Color color, bool dashed, vis3d::ObjectId& out_id);
+        bool updateTrajectory(vis3d::ObjectId trajectory_id, const std::vector<vis3d::Vec3>& add_pts, uint32_t remove_from_head);
+        bool removeTrajectory(vis3d::ObjectId trajectory_id);
 
     private:
         void updateWorker();
@@ -179,12 +87,12 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         uint32_t next_resource_id_{0};
         uint32_t next_object_id_{0};
 
-        CommandBuffer cmd_buf_;
-        std::mutex cmd_buf_mtx_;
+        std::mutex cmd_coalescer_mtx_;
+        vis3d::CommandCoalescer cmd_coalescer_;
 
-        std::map<ResourceId, ComplexShape> registered_resources_;
-        std::map<ObjectId, std::tuple<ResourceId, Pose>> existing_objects_;
-        std::map<ObjectId, std::tuple<bool, std::vector<Vec3>>> existing_trajectories_;
+        std::map<vis3d::ResourceId, vis3d::ComplexShape> registered_resources_;
+        std::map<vis3d::ObjectId, std::tuple<vis3d::ResourceId, vis3d::Pose>> existing_objects_;
+        std::map<vis3d::ObjectId, std::tuple<bool, std::vector<vis3d::Vec3>>> existing_trajectories_;
 
         std::thread update_thread_;
         std::atomic<bool> running_{true};

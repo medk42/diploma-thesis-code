@@ -52,7 +52,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 add_library(${MODULE_NAME} MODULE ${PROJECT_SOURCES})
 
 # Link with libraries needed by this module
-target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___activation_wrapper Wt::Wt Wt::HTTP libzippp::libzippp opencv_core opencv_imgcodecs)
+target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___activation_wrapper helpers___visualization_3d_interface Wt::Wt Wt::HTTP libzippp::libzippp opencv_core opencv_imgcodecs)
 
 # Add include directories
 target_include_directories(${MODULE_NAME} PRIVATE
