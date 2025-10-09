@@ -4,7 +4,7 @@
 
 #include <Wt/WServer.h>
 
-#undef ERROR // Gotta love Windows.h
+#undef ERROR // Gotta love Windows
 
 #include <sstream>
 #include <iomanip>
