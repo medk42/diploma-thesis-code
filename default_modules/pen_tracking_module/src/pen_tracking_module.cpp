@@ -80,6 +80,7 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
 {
     if (!announced_)
     {
+        // announce in process message, because constructor and threadStart() have a core mutex locked
         std::lock_guard<std::mutex> lock(vis3d_mutex_);
         vis3d_helper_->announce();
         announced_ = true;
