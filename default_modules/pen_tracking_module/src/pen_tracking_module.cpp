@@ -67,10 +67,16 @@ void* PenTrackingModule::query_capability(const std::type_info& id) noexcept
 IModule::IngressDecision PenTrackingModule::onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, QueueStatus queue_status) noexcept
 {
     // accept only messages on subscribe channel 0 (image data), drop all others
-    if (kind == ProcessingType::MESSAGE && local_channel_id == 0)
+    if (kind == ProcessingType::MESSAGE && local_channel_id == subscribe_camera_channel_id_)
     {
         return IngressDecision::ACCEPT_REPLACE_QUEUE; // only keep the latest image
     }
+    if (kind == ProcessingType::REQUEST && local_channel_id == vis3d_helper_->getResponseProducerChannel())
+    {
+        return IngressDecision::ACCEPT; // accept all visualization requests
+    }
+
+    log(logging::LogType::WARNING, "Pen tracking module received message on invalid channel, dropping, kind: " + std::to_string(static_cast<int>(kind)) + ", local_channel_id: " + std::to_string((int)local_channel_id) + ", src_module_id: " + std::to_string(src.producer_module_id_) + ", src_channel_id: " + std::to_string(src.producer_channel_id_));
     return IngressDecision::DROP;
 }
 
@@ -133,7 +139,7 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
 
     if (last_detect_success_ && result.lost_tracking)
     {
-        log(logging::LogType::INFO, "Pen tracking module lost tracking of the pen");
+        // log(logging::LogType::INFO, "Pen tracking module lost tracking of the pen");
     }
 
     last_detect_success_ = result.success;
@@ -147,7 +153,7 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
             vis3d_helper_->sendUpdate();
             pen_object_added_ = false;
         }
-        log(aergo::module::logging::LogType::INFO, "MODULE,PEN,INTERNAL,INFO=\"tracking fail, processing: " + std::to_string(processing_time_ms) + " ms\"\n\n\n\n\n");
+        // log(aergo::module::logging::LogType::INFO, "MODULE,PEN,INTERNAL,INFO=\"tracking fail, processing: " + std::to_string(processing_time_ms) + " ms\"\n\n\n\n\n");
         return;
     }
 
@@ -164,11 +170,11 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
         .blob_count_ = 0
     };
 
-    std::string msg = "Detected at " + 
-        std::to_string(tvec.at<double>(0) * 1000) + ", " + std::to_string(tvec.at<double>(1) * 1000) + ", " + std::to_string(tvec.at<double>(2) * 1000) + 
-        ") mm, processing: " + std::to_string(processing_time_ms) + " ms";
+    // std::string msg = "Detected at " + 
+    //     std::to_string(tvec.at<double>(0) * 1000) + ", " + std::to_string(tvec.at<double>(1) * 1000) + ", " + std::to_string(tvec.at<double>(2) * 1000) + 
+    //     ") mm, processing: " + std::to_string(processing_time_ms) + " ms";
 
-    log(aergo::module::logging::LogType::INFO, "MODULE,PEN,PUBLISH,INFO=\"" + msg + "\"\n\n\n\n\n");
+    // log(aergo::module::logging::LogType::INFO, "MODULE,PEN,PUBLISH,INFO=\"" + msg + "\"\n\n\n\n\n");
 
     sendMessage(publish_pen_channel_id_, pen_pose_message); // publish on pen pose channel
 
@@ -194,6 +200,29 @@ void PenTrackingModule::processMessage(uint32_t subscribe_consumer_id, ChannelId
         }
         vis3d_helper_->sendUpdate();
     }
+}
+
+
+
+ResponseData PenTrackingModule::processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+{
+    if (response_producer_id == vis3d_helper_->getResponseProducerChannel())
+    {
+        std::lock_guard<std::mutex> lock(vis3d_mutex_);
+        return vis3d_helper_->processVisualizationRequest(message);
+    }
+
+    log(logging::LogType::WARNING, "Pen tracking module received request on invalid response producer channel, dropping, response_producer_id: " + std::to_string(response_producer_id) + ", src_module_id: " + std::to_string(source_channel.producer_module_id_) + ", src_channel_id: " + std::to_string(source_channel.producer_channel_id_));
+
+    return { .success_ = false };
+}
+
+
+
+void PenTrackingModule::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
+{
+    // Pen tracking module does not send any requests, so it should not receive any responses
+    log(logging::LogType::WARNING, "Pen tracking module received unexpected response message, dropping, request_consumer_id: " + std::to_string(request_consumer_id) + ", src_module_id: " + std::to_string(source_channel.producer_module_id_) + ", src_channel_id: " + std::to_string(source_channel.producer_channel_id_));
 }
 
 

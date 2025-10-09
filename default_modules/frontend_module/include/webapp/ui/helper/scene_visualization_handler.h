@@ -53,12 +53,14 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
             std::optional<vis3d::ObjectId> local_id; // ID in the scene container
         };
 
+        void sendReadFullRequest(uint64_t module_id);
         void sendReadFullRequest(aergo::module::ChannelIdentifier target_channel);
         void processUpdate(
             uint64_t module_id,
             std::map<vis3d::ObjectId, vis3d::CommandBuffer::ObjectParameters>& object_commands, 
             std::map<vis3d::ObjectId, vis3d::CommandBuffer::TrajectoryParameters>& trajectory_commands
         );
+        std::vector<aergo::module::ChannelIdentifier> getAllSceneVisualizationRequestChannels();
 
         aergo::module::BaseModule* base_module_{nullptr};
         uint32_t scene_subscribe_channel_id_ { 0 }; // ID of subscribe consumer channel for 3D visualization data

@@ -80,21 +80,21 @@ void CameraCalibrationModule::processMessage(uint32_t subscribe_consumer_id, aer
     memcpy(calibrated_img_header.camera_matrix_, camera_matrix_.ptr<double>(), 9 * sizeof(double));
     memcpy(calibrated_img_header.distortion_coefficients_, distortion_coefficients_.ptr<double>(), 5 * sizeof(double));
 
-    std::string msg = std::to_string(calibrated_img_header.image_header_.width_) + "x" + std::to_string(calibrated_img_header.image_header_.height_)
-    + " + cam[";
-    for (int i = 0; i < 9; i++)
-    {
-        msg += std::to_string(calibrated_img_header.camera_matrix_[i]);
-        if (i < 8) msg += ", ";
-    }
-    msg += "] + dist[";
-    for (int i = 0; i < 5; i++)
-    {
-        msg += std::to_string(calibrated_img_header.distortion_coefficients_[i]);
-        if (i < 4) msg += ", ";
-    }
-    msg += "]";
-    log(aergo::module::logging::LogType::INFO, "MODULE,CAMERA_CALIB,PUBLISH,INFO=\"" + msg + "\"");
+    // std::string msg = std::to_string(calibrated_img_header.image_header_.width_) + "x" + std::to_string(calibrated_img_header.image_header_.height_)
+    // + " + cam[";
+    // for (int i = 0; i < 9; i++)
+    // {
+    //     msg += std::to_string(calibrated_img_header.camera_matrix_[i]);
+    //     if (i < 8) msg += ", ";
+    // }
+    // msg += "] + dist[";
+    // for (int i = 0; i < 5; i++)
+    // {
+    //     msg += std::to_string(calibrated_img_header.distortion_coefficients_[i]);
+    //     if (i < 4) msg += ", ";
+    // }
+    // msg += "]";
+    // log(aergo::module::logging::LogType::INFO, "MODULE,CAMERA_CALIB,PUBLISH,INFO=\"" + msg + "\"");
 
     message::MessageHeader calibrated_image_msg {
         .data_ = reinterpret_cast<uint8_t*>(&calibrated_img_header),

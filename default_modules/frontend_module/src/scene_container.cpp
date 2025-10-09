@@ -224,12 +224,12 @@ void SceneContainer::updateWorker()
             auto& cmd_buf = cmd_coalescer_.getBuffer();
             if (!cmd_buf.isEmpty())
             {
-                base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocket::sendCommandBuffer(): sending command buffer:  " + 
-                    std::to_string(cmd_buf.pending_registrations_.size()) + " registrations, " +
-                    std::to_string(cmd_buf.objects_.size()) + " object commands, " +
-                    std::to_string(cmd_buf.trajectories_.size()) + " trajectory commands, " +
-                    (cmd_buf.grid_commanded_ ? (cmd_buf.grid_enabled_ ? "enabling" : "disabling") : "no grid command")
-                );
+                // base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocket::sendCommandBuffer(): sending command buffer:  " + 
+                //     std::to_string(cmd_buf.pending_registrations_.size()) + " registrations, " +
+                //     std::to_string(cmd_buf.objects_.size()) + " object commands, " +
+                //     std::to_string(cmd_buf.trajectories_.size()) + " trajectory commands, " +
+                //     (cmd_buf.grid_commanded_ ? (cmd_buf.grid_enabled_ ? "enabling" : "disabling") : "no grid command")
+                // );
 
                 size_t queued = socket_->sendCommandBuffer(cmd_buf);
                 if (queued == 0)

@@ -81,6 +81,9 @@ namespace aergo::default_modules::frontend_module
 
         bool valid_;
 
+        uint32_t camera_subscribe_channel_id_{ 0 }; // subscribe channel for camera image data
+        uint32_t activation_request_channel_id_{ 0 }; // request channel for activation wrapper requests
+
         ServerParameters server_parameters_;
         std::unique_ptr<Wt::WServer> w_server_;
         

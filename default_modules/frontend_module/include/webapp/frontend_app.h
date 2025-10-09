@@ -27,7 +27,7 @@ namespace aergo::default_modules::frontend_module::webapp
     class FrontendApp : public Wt::WApplication
     {
     public:
-        FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, FrontendState* frontend_state, aergo::module::BaseModule* base_module);
+        FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, FrontendState* frontend_state, aergo::module::BaseModule* base_module, uint32_t activation_request_channel_id);
         ~FrontendApp() override;
 
         void updateFrame(std::vector<uint8_t>&& jpeg_data); // update camera frame
@@ -95,6 +95,8 @@ namespace aergo::default_modules::frontend_module::webapp
         ui::helper::ReusableDialog* reusable_dialog_ = nullptr;
         ui::helper::FileDialog* file_dialog_ = nullptr;
         Wt::WTimer* update_timer_ = nullptr;
+
+        uint32_t activation_request_channel_id_{ 0 }; // request channel for activation wrapper requests
     };
 
 }

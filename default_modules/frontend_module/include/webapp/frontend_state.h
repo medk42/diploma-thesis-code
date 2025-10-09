@@ -8,6 +8,7 @@
 #include "ui/activation_ui.h"
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_common/base_module.h"
+#include "ui/helper/scene_visualization_handler.h"
 
 #include <mutex>
 #include <vector>
@@ -113,6 +114,8 @@ namespace aergo::default_modules::frontend_module::webapp
         std::atomic<bool> has_camera_input_ { false }; // true if one of the running modules has a camera input channel, false otherwise; used to lock the camera channel onto the first available camera module
         std::atomic<uint64_t> camera_module_id_ { 0 }; // id of the module from which we are accepting camera input, 0 if none; used to lock the camera channel onto the first available camera module
         std::vector<uint8_t> camera_frame_data_jpeg_; // latest camera frame data received from the camera module, used to display the camera image in the main visualization UI
+
+        std::unique_ptr<ui::helper::SceneVisualizationHandler> scene_visualization_handler_;
 
         struct {
             /// @brief Map of required channel type to existing channels. Keys are subscribe channel types that are required by one or more modules to be created.

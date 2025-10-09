@@ -9,6 +9,8 @@
 #include <fstream>
 #include <opencv2/opencv.hpp>
 
+#undef ERROR
+
 
 #define APP_NAME "aergo_frontend"
 
@@ -21,8 +23,29 @@ using namespace aergo::module;
 FrontendModule::FrontendModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, const ModuleInfo* module_info)
 : BaseModule(data_path, core, channel_map_info, logger, module_id, module_info), valid_(false)
 {
-    if (!parseConfigFile()) {
+    if (!parseConfigFile()) 
+    {
         log(aergo::module::logging::LogType::ERROR, "Failed to parse configuration file.");
+        return;
+    }
+
+    // find channel IDs
+    if (!getRequestChannelByName(helpers::activation_wrapper::message_types::activation_request_consumer.channel_type_identifier_, activation_request_channel_id_))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to find activation request channel.");
+        return;
+    }
+
+    if (!getSubscribeChannelByName(message_types::image_bgr_channel_type, camera_subscribe_channel_id_))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to find camera image subscribe channel.");
+        return;
+    }
+
+    frontend_state_.scene_visualization_handler_ = std::make_unique<webapp::ui::helper::SceneVisualizationHandler>(this);
+    if (!frontend_state_.scene_visualization_handler_->valid())
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to initialize scene visualization handler.");
         return;
     }
 
@@ -41,27 +64,56 @@ void* FrontendModule::query_capability(const std::type_info& id) noexcept
 
 IModule::IngressDecision FrontendModule::onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, QueueStatus queue_status) noexcept
 {
-    if (kind == ProcessingType::RESPONSE && local_channel_id == 0) // accept activation responses
+    if (kind == ProcessingType::RESPONSE) 
     {
-        // TODO if queue is full, we should notify the visualizer that the message was dropped
-        return IngressDecision::ACCEPT; // accept all, responses will be dropped automatically if queue is full
-    }
-    if (kind == ProcessingType::MESSAGE && local_channel_id == 0) // accept camera input messages 
-    {
-        if (!frontend_state_.has_camera_input_)
+        if (queue_status == QueueStatus::QUEUE_FULL)
         {
-            frontend_state_.camera_module_id_ = src.producer_module_id_;
-            frontend_state_.has_camera_input_ = true;
+            // TODO if queue is full, we should notify the visualizer that the message was dropped
+            log(aergo::module::logging::LogType::WARNING, "Response queue full, dropping response message on channel " + std::to_string(local_channel_id));
         }
 
-        if (frontend_state_.camera_module_id_ == src.producer_module_id_)
+        if (local_channel_id == activation_request_channel_id_) // accept activation responses
         {
-            return IngressDecision::ACCEPT_REPLACE_QUEUE; // accept camera messages from the selected module, keep only the latest message
+            return IngressDecision::ACCEPT; // accept all, responses will be dropped automatically if queue is full
         }
-        else
+        if (local_channel_id == frontend_state_.scene_visualization_handler_->getSceneRequestChannelId()) // accept visualization responses
         {
-            return IngressDecision::DROP; // drop messages from other modules
+            return IngressDecision::ACCEPT; // accept all, responses will be dropped automatically if queue is full
         }
+        
+        return IngressDecision::DROP; // drop all other responses (they are not expected)
+    }
+    else if (kind == ProcessingType::MESSAGE)
+    {
+        if (queue_status == QueueStatus::QUEUE_FULL)
+        {
+            // TODO if queue is full, we should notify the visualizer that the message was dropped
+            log(aergo::module::logging::LogType::WARNING, "Message queue full, dropping message on channel " + std::to_string(local_channel_id));
+        }
+
+        if (local_channel_id == 0) // accept camera input messages 
+        {
+            if (!frontend_state_.has_camera_input_)
+            {
+                frontend_state_.camera_module_id_ = src.producer_module_id_;
+                frontend_state_.has_camera_input_ = true;
+            }
+
+            if (frontend_state_.camera_module_id_ == src.producer_module_id_)
+            {
+                return IngressDecision::ACCEPT_REPLACE_QUEUE; // accept camera messages from the selected module, keep only the latest message
+            }
+            else
+            {
+                return IngressDecision::DROP; // drop messages from other modules
+            }
+        }
+        if (local_channel_id == frontend_state_.scene_visualization_handler_->getSceneSubscribeChannelId()) // accept visualization messages
+        {
+            return IngressDecision::ACCEPT; // accept all, messages will be dropped automatically if queue is full
+        }
+
+        return IngressDecision::DROP; // drop all other messages (they are not expected)
     }
     return IngressDecision::DROP;
 }
@@ -85,7 +137,7 @@ bool FrontendModule::threadStart(uint32_t timeout_ms) noexcept
         w_server_ = std::make_unique<Wt::WServer>(APP_NAME, server_parameters_.wt_config_path);
         w_server_->setServerConfiguration(static_cast<int>(cargs.size()), cargs.data());
         w_server_->addEntryPoint(Wt::EntryPointType::Application, [this](const Wt::WEnvironment& env) {
-            return std::make_unique<webapp::FrontendApp>(env, w_server_.get(), &frontend_state_, this);
+            return std::make_unique<webapp::FrontendApp>(env, w_server_.get(), &frontend_state_, this, activation_request_channel_id_);
         });
         if (!w_server_->start())
         {
@@ -145,33 +197,38 @@ bool FrontendModule::threadStop(uint32_t timeout_ms) noexcept
 
 void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    if (subscribe_consumer_id != 0) // camera input messages
-        return;
+    if (subscribe_consumer_id == camera_subscribe_channel_id_) // camera input messages
+    {
+        if (source_channel.producer_module_id_ != frontend_state_.camera_module_id_)
+            return;
 
-    if (source_channel.producer_module_id_ != frontend_state_.camera_module_id_)
-        return;
+        if (message.data_ == nullptr || message.data_len_ != sizeof(message_types::ImageHeader))
+            return;
 
-    if (message.data_ == nullptr || message.data_len_ != sizeof(message_types::ImageHeader))
-        return;
+        auto img_header = reinterpret_cast<message_types::ImageHeader*>(message.data_);
+        if (message.blobs_ == nullptr || message.blob_count_ != 1 || !message.blobs_[0].valid() || message.blobs_[0].size() != img_header->width_ * img_header->height_ * 3)
+            return;
 
-    auto img_header = reinterpret_cast<message_types::ImageHeader*>(message.data_);
-    if (message.blobs_ == nullptr || message.blob_count_ != 1 || !message.blobs_[0].valid() || message.blobs_[0].size() != img_header->width_ * img_header->height_ * 3)
-        return;
+        cv::Mat img(img_header->height_, img_header->width_, CV_8UC3, message.blobs_[0].data());
+        std::vector<uint8_t> jpeg;
+        std::vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 80 };
 
-    cv::Mat img(img_header->height_, img_header->width_, CV_8UC3, message.blobs_[0].data());
-    std::vector<uint8_t> jpeg;
-    std::vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 80 };
+        // TODO lower resolution or frame rate if too high, replace direct send with some better solution 
+        cv::imencode(".jpg", img, jpeg, params);
+        // log(aergo::module::logging::LogType::INFO, "Received camera frame " + std::to_string(img_header->width_) + "x" + std::to_string(img_header->height_) + ", encoded to JPEG size " + std::to_string(jpeg.size()) + " bytes");
 
-    // TODO lower resolution or frame rate if too high, replace direct send with some better solution 
-    cv::imencode(".jpg", img, jpeg, params);
-    log(aergo::module::logging::LogType::INFO, "Received camera frame " + std::to_string(img_header->width_) + "x" + std::to_string(img_header->height_) + ", encoded to JPEG size " + std::to_string(jpeg.size()) + " bytes");
-
+        {
+            std::lock_guard lock(frontend_state_.mutex_);
+            if (frontend_state_.active_app_ && frontend_state_.current_screen_ == webapp::FrontendScreen::MAIN_VISUALIZATION)
+            {
+                frontend_state_.active_app_->updateFrame(std::move(jpeg));
+            }
+        }
+    }
+    else if (subscribe_consumer_id == frontend_state_.scene_visualization_handler_->getSceneSubscribeChannelId()) // 3D visualization messages
     {
         std::lock_guard lock(frontend_state_.mutex_);
-        if (frontend_state_.active_app_ && frontend_state_.current_screen_ == webapp::FrontendScreen::MAIN_VISUALIZATION)
-        {
-            frontend_state_.active_app_->updateFrame(std::move(jpeg));
-        }
+        frontend_state_.scene_visualization_handler_->processMessage(subscribe_consumer_id, source_channel, message);
     }
 }
 
@@ -180,7 +237,7 @@ void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdent
 void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
     // process responses on request consumer channel 0 from activation wrapper to control module activation and parameters
-    if (request_consumer_id == 0)
+    if (request_consumer_id == activation_request_channel_id_)
     {
         std::lock_guard lock(frontend_state_.mutex_);
         webapp::ActivationResponse resp {
@@ -197,6 +254,11 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
             }
             frontend_state_.pending_activation_responses_.push_back(std::move(resp));
         }
+    }
+    else if (request_consumer_id == frontend_state_.scene_visualization_handler_->getSceneRequestChannelId())
+    {
+        std::lock_guard lock(frontend_state_.mutex_);
+        frontend_state_.scene_visualization_handler_->processVisualizationResponse(request_consumer_id, source_channel, message);
     }
 }
 

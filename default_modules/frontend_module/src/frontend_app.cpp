@@ -9,7 +9,7 @@
 #include <libzippp/libzippp.h>
 
 
-#define ACTIVATION_REQUEST_ID 0
+#undef ERROR
 
 
 using namespace aergo::default_modules::frontend_module::webapp;
@@ -18,7 +18,7 @@ using namespace aergo::module::helpers::activation_wrapper;
 
 
 
-FrontendApp::FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, FrontendState* frontend_state, aergo::module::BaseModule* base_module)
+FrontendApp::FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, FrontendState* frontend_state, aergo::module::BaseModule* base_module, uint32_t activation_request_channel_id)
 : Wt::WApplication(env), connected_(true), server_(server), frontend_state_(frontend_state), base_module_(base_module), core_(base_module->getCoreControl()), life_guard_(std::make_shared<int>(0))
 {
     enableUpdates(true);                          // enable updates from other threads
@@ -59,6 +59,8 @@ FrontendApp::~FrontendApp()
     if (frontend_state_->active_app_ == this)
     {
         frontend_state_->active_app_ = nullptr;
+        // clear scene container in visualization handler to avoid dangling pointer (only if this was the active app)
+        frontend_state_->scene_visualization_handler_->setSceneContainer(nullptr, false);
     }
 
     base_module_->log(aergo::module::logging::LogType::INFO, "FrontendApp destroyed: " + session_id_);
@@ -169,6 +171,10 @@ void FrontendApp::loadUiFromState()
     // TODO here we only load the modules, but not activation!
 
     refreshRunningModules();
+
+    // set scene container for 3D visualization and fill with existing data
+    // careful when changing this code, ensure that the "setSceneContainer" and "reload" call order makes sense
+    frontend_state_->scene_visualization_handler_->setSceneContainer(main_visualization_ui_->getSceneContainer(), true);
 
     // TODO load correctly activation state
 }
@@ -469,7 +475,7 @@ void FrontendApp::timerUpdate()
             .blob_count_ = 0
         };
         base_module_->sendRequest(
-            ACTIVATION_REQUEST_ID, 
+            activation_request_channel_id_, 
             ChannelIdentifier {
                 frontend_state_->current_custom_parameter_.running_module_id_, 
                 frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
@@ -633,7 +639,7 @@ void FrontendApp::refreshRunningModules()
                     // TODO first we design it as if we start with no running modules
                     //     later we can add support for activating already running modules
                     base_module_->sendRequest(
-                        ACTIVATION_REQUEST_ID,
+                        activation_request_channel_id_,
                         aergo::module::ChannelIdentifier { i, activation_it->second },
                         header
                     );
@@ -1053,6 +1059,10 @@ void FrontendApp::setupState()
 
     frontend_state_->allocator_ = base_module_->createDynamicAllocator();
 
+    // load existing visualizations, scene_container_ is still nullptr here, so we just prepare the handler
+    // careful when changing this code, ensure that the "setSceneContainer" and "reload" call order makes sense
+    frontend_state_->scene_visualization_handler_->reload();
+
     frontend_state_->setup_done_ = true;
 }
 
@@ -1087,7 +1097,7 @@ void FrontendApp::requestReadCurrentParameters(uint64_t running_module_index)
     };
 
     base_module_->sendRequest(
-        ACTIVATION_REQUEST_ID,
+        activation_request_channel_id_,
         aergo::module::ChannelIdentifier { running_module_index, activation_data.activation_channel_id_ },
         header
     );
@@ -1299,7 +1309,7 @@ void FrontendApp::requestAddRemoveListEntry(ui::ActivationUi::ModuleSingleParame
     };
 
     base_module_->sendRequest(
-        ACTIVATION_REQUEST_ID,
+        activation_request_channel_id_,
         ChannelIdentifier {param.running_module_id_, activation_data.activation_channel_id_},
         header
     );
@@ -1411,7 +1421,7 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
     };
 
     ChannelIdentifier channel_id {param.running_module_id_, activation_data.activation_channel_id_};
-    base_module_->sendRequest(ACTIVATION_REQUEST_ID, channel_id, header);
+    base_module_->sendRequest(activation_request_channel_id_, channel_id, header);
 
     if (type != params::ParameterType::CUSTOM || (type == params::ParameterType::CUSTOM && value_blob.data()[0] == 0))
     {
@@ -1471,7 +1481,7 @@ void FrontendApp::createLoadCustomValueDialog()
         };
 
         base_module_->sendRequest(
-            ACTIVATION_REQUEST_ID, 
+            activation_request_channel_id_, 
             {
                 .producer_module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
                 .producer_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
@@ -1522,7 +1532,7 @@ void FrontendApp::requestActivate(uint64_t running_module_index, bool activate)
     frontend_state_->current_custom_parameter_.running_module_id_ = running_module_index;
 
     base_module_->sendRequest(
-        ACTIVATION_REQUEST_ID,
+        activation_request_channel_id_,
         ChannelIdentifier { running_module_index, activation_data.activation_channel_id_ },
         header
     );
@@ -1563,7 +1573,7 @@ void FrontendApp::createActivationDialog()
         };
 
         base_module_->sendRequest(
-            ACTIVATION_REQUEST_ID, 
+            activation_request_channel_id_, 
             {
                 .producer_module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
                 .producer_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
@@ -2109,6 +2119,10 @@ void FrontendApp::handleLoadingState()
     frontend_state_->running_modules_response_channel_lookup_.clear();
     frontend_state_->pending_activation_responses_.clear();
     frontend_state_->last_modules_mapping_state_id_ = 0;
+
+    // reload scene visualization data after loading, this will clear existing objects and reload from core
+    // careful when changing this code, ensure that the "setSceneContainer" and "reload" call order makes sense
+    frontend_state_->scene_visualization_handler_->reload();
 
     frontend_state_->current_screen_ = webapp::FrontendScreen::SETUP_MODULES;
 

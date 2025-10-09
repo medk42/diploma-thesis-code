@@ -29,7 +29,7 @@ SceneVisualizationHandler::SceneVisualizationHandler(BaseModule* base_module)
     reload(); // request data from all existing modules
 
     valid_ = true;
-    
+
 }
 
 
@@ -45,7 +45,7 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
         return; // not our channel
     }
 
-    if (!message.success_ && awaiting_full_read_.find(source_channel.producer_module_id_) != awaiting_full_read_.end())
+    if (!message.success_)
     {
         base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received failed response from module " + std::to_string(source_channel.producer_module_id_) + ", removing from awaiting list");
         awaiting_full_read_.erase(source_channel.producer_module_id_);
@@ -136,7 +136,7 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
         if (res_it == module_registered_resources_.end())
         {
             base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received response from unknown module " + std::to_string(source_channel.producer_module_id_) + ", sending READ_FULL request");
-            sendReadFullRequest(source_channel);
+            sendReadFullRequest(source_channel.producer_module_id_);
             return;
         }
         auto& module_resource_map = res_it->second;
@@ -255,7 +255,7 @@ void SceneVisualizationHandler::processMessage(uint32_t subscribe_consumer_id, C
         // New module, request full scene (with registrations)
         if (module_registered_resources_.find(source_channel.producer_module_id_) == module_registered_resources_.end())
         {
-            sendReadFullRequest(source_channel);
+            sendReadFullRequest(source_channel.producer_module_id_);
         }
         // Otherwise ignore, we already know this module
     }
@@ -264,7 +264,7 @@ void SceneVisualizationHandler::processMessage(uint32_t subscribe_consumer_id, C
         if (module_registered_resources_.find(source_channel.producer_module_id_) == module_registered_resources_.end())
         {
             base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processMessage: received UPDATE message from unknown module " + std::to_string(source_channel.producer_module_id_) + ", sending READ_FULL request");
-            sendReadFullRequest(source_channel);
+            sendReadFullRequest(source_channel.producer_module_id_);
             return;
         }
 
@@ -302,14 +302,36 @@ void SceneVisualizationHandler::processMessage(uint32_t subscribe_consumer_id, C
 
 
 
-void SceneVisualizationHandler::sendReadFullRequest(aergo::module::ChannelIdentifier target_channel)
+void SceneVisualizationHandler::sendReadFullRequest(uint64_t module_id)
 {
-    if (awaiting_full_read_.find(target_channel.producer_module_id_) != awaiting_full_read_.end())
+    if (awaiting_full_read_.find(module_id) != awaiting_full_read_.end())
     {
         // Already requested full read from this module, wait for response
         return;
     }
 
+    auto available_scene_visualization_channels = getAllSceneVisualizationRequestChannels();
+    auto it = std::find_if(
+        available_scene_visualization_channels.begin(), 
+        available_scene_visualization_channels.end(),
+        [module_id](const ChannelIdentifier& ch_id) {
+            return ch_id.producer_module_id_ == module_id;
+        }
+    );
+
+    if (it == available_scene_visualization_channels.end())
+    {
+        base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::sendReadFullRequest: no response channel found for module " + std::to_string(module_id));
+        return;
+    }
+
+    sendReadFullRequest(*it);
+}
+
+
+
+void SceneVisualizationHandler::sendReadFullRequest(ChannelIdentifier target_channel)
+{
     vis3d::ReqType request = vis3d::ReqType::READ_FULL;
     message::MessageHeader msg {
         .data_ = reinterpret_cast<uint8_t*>(&request),
@@ -607,29 +629,48 @@ void SceneVisualizationHandler::reload()
     awaiting_full_read_.clear();
 
     // Request full data from all modules
-    auto response_producers = base_module_->getCoreControl()->getExistingResponseChannelsByName(vis3d::visualization_3d_interface_response_producer.channel_type_identifier_); // ensure we have up-to-date list of existing channels
-    if (!response_producers.valid() || response_producers.data() == nullptr || response_producers.size() < sizeof(uint64_t))
+    std::vector<ChannelIdentifier> available_visualization_request_channels = getAllSceneVisualizationRequestChannels();
+    for (auto request_channel : available_visualization_request_channels)
     {
-        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::reload: failed to get existing response channels");
-        return;
+        sendReadFullRequest(request_channel);
+    }
+}
+
+
+
+std::vector<ChannelIdentifier> SceneVisualizationHandler::getAllSceneVisualizationRequestChannels()
+{
+    auto buf = base_module_->getCoreControl()->getExistingResponseChannelsByName(
+        vis3d::visualization_3d_interface_response_producer.channel_type_identifier_
+    );
+
+    if (!buf.valid() || buf.data() == nullptr) {
+        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::getAllSceneVisualizationRequestChannels: no data");
+        return {};
     }
 
-    uint8_t* data = response_producers.data();
-    uint64_t count = response_producers.size();
-    
-    uint64_t* data_uint64 = reinterpret_cast<uint64_t*>(data);
-    uint64_t channel_count = data_uint64[0];
-    data_uint64++;
+    const std::size_t byte_count = buf.size(); // bytes
+    const std::byte*  bytes      = reinterpret_cast<const std::byte*>(buf.data());
 
-    if (count != sizeof(uint64_t) + channel_count * sizeof(ChannelIdentifier))
-    {
-        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::reload: invalid data received from getExistingResponseChannelsByName");
-        return;
+    // Need at least the leading u64
+    if (byte_count < sizeof(std::uint64_t)) {
+        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::getAllSceneVisualizationRequestChannels: buffer too small for header");
+        return {};
     }
 
-    ChannelIdentifier* data_ch_id = reinterpret_cast<ChannelIdentifier*>(data_uint64);
-    for (uint64_t i = 0; i < channel_count; i++)
-    {
-        sendReadFullRequest(data_ch_id[i]);
+    std::uint64_t channel_count = 0;
+    std::memcpy(&channel_count, bytes, sizeof(channel_count)); // avoids alignment issues
+
+    if (byte_count != sizeof(std::uint64_t) + channel_count * sizeof(ChannelIdentifier)) {
+        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::getAllSceneVisualizationRequestChannels: invalid buffer size");
+        return {};
     }
+
+    std::vector<ChannelIdentifier> out;
+    out.resize(static_cast<std::size_t>(channel_count));
+
+    // Copy payload
+    std::memcpy(out.data(), bytes + sizeof(std::uint64_t), out.size() * sizeof(ChannelIdentifier));
+
+    return out;
 }

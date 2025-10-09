@@ -51,7 +51,7 @@
         const vec = new THREE.Vector3(v.x, v.y, v.z);
         let orig = vec.clone();
         if (INCOMING_Z_UP) vec.applyQuaternion(U2T);  // (x, z, -y)
-        console.log(`Pos: incoming ${orig.x.toFixed(2)},${orig.y.toFixed(2)},${orig.z.toFixed(2)} -> three.js ${vec.x.toFixed(2)},${vec.y.toFixed(2)},${vec.z.toFixed(2)}`);
+        // console.log(`Pos: incoming ${orig.x.toFixed(2)},${orig.y.toFixed(2)},${orig.z.toFixed(2)} -> three.js ${vec.x.toFixed(2)},${vec.y.toFixed(2)},${vec.z.toFixed(2)}`);
         return vec;
     }
     function toThreeQuaternion(q) {
@@ -59,7 +59,7 @@
         let orig = qU.clone();
         if (INCOMING_Z_UP) quat = U2T.clone().multiply(qU).multiply(U2T_INV).normalize(); // q_R * qU * q_R^-1
         else quat = qU;
-        console.log(`Quat: incoming ${orig.x.toFixed(2)},${orig.y.toFixed(2)},${orig.z.toFixed(2)},${orig.w.toFixed(2)} -> three.js ${quat.x.toFixed(2)},${quat.y.toFixed(2)},${quat.z.toFixed(2)},${quat.w.toFixed(2)}`);
+        // console.log(`Quat: incoming ${orig.x.toFixed(2)},${orig.y.toFixed(2)},${orig.z.toFixed(2)},${orig.w.toFixed(2)} -> three.js ${quat.x.toFixed(2)},${quat.y.toFixed(2)},${quat.z.toFixed(2)},${quat.w.toFixed(2)}`);
         return quat;
     }
     function applyPose(obj, pose) {
@@ -129,8 +129,8 @@
 
 
             // Setup camera
-            const camera = new THREE.PerspectiveCamera(60, host.clientWidth / host.clientHeight, 0.1, 1000);
-            camera.position.set(5, 5, 7);
+            const camera = new THREE.PerspectiveCamera(60, host.clientWidth / host.clientHeight, 0.01, 10);
+            camera.position.set(0.5, 0.5, 0.7);
             camera.lookAt(0, 0, 0);
 
 
@@ -160,7 +160,7 @@
 
 
             // Add some demo objects
-            const gridHelper = new THREE.GridHelper(20, 20);
+            const gridHelper = new THREE.GridHelper(2, 20);
             scene.add(gridHelper);
 
             // Handle animating
@@ -221,8 +221,8 @@
                 geom.computeBoundingSphere();
                 const color_three = new THREE.Color(color.r / 255, color.g / 255, color.b / 255);
                 const mat = dashed
-                    ? new THREE.LineDashedMaterial({ color: color_three, linewidth: 1, dashSize: 0.2, gapSize: 0.1 })
-                    : new THREE.LineBasicMaterial({ color: color_three, linewidth: 1 });
+                    ? new THREE.LineDashedMaterial({ color: color_three, linewidth: 2, dashSize: 0.02, gapSize: 0.01 })
+                    : new THREE.LineBasicMaterial({ color: color_three, linewidth: 2 });
                 const line = new THREE.Line(geom, mat);
                 if (dashed) line.computeLineDistances();
                 scene.add(line);
@@ -344,6 +344,10 @@
             }
 
             window.startSceneSocket = function (url) {
+                const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+                const basePath  = location.pathname.replace(/\/[^/]*$/, "/"); // ensure folder path if needed
+                url = `${wsScheme}://${location.host}${basePath}${url}`;
+
                 console.log("Starting SceneSocket:", url);
                 const ws = new WebSocket(url);
                 ws.binaryType = "arraybuffer";

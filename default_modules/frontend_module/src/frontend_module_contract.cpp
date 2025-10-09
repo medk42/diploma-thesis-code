@@ -1,9 +1,11 @@
 #include "frontend_module.h"
 
+#include "message_structure.h"
 #include "module_common/module_contract.h"
 #include "module_common/dll_module_wrapper.h"
 
 #include "module_helpers/activation_wrapper/message_types.h"
+#include "module_helpers/visualization_3d_interface/message_types.h"
 
 
 #define MODULE_API_VERSION 2
@@ -16,17 +18,26 @@ using namespace aergo::module;
 
 
 static constexpr communication_channel::Consumer web_visualization_module_request_consumers[] = {
-    aergo::module::helpers::activation_wrapper::message_types::activation_request_consumer
+    aergo::module::helpers::activation_wrapper::message_types::activation_request_consumer,
+    aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_request_consumer
 };
 
 static constexpr communication_channel::Consumer web_visualization_module_subscribe_consumers[] = {
     communication_channel::Consumer {
         .count_ = communication_channel::Consumer::Count::AUTO_ALL,
-        .channel_type_identifier_ = "image_bgr/v1:struct{width:uint16,height:uint16}+blob{width*height*3}",
+        .channel_type_identifier_ = aergo::default_modules::frontend_module::message_types::image_bgr_channel_type,
         .display_name_ = "Camera Feed",
         .display_description_ = "Subscribe to camera image feed in BGR format.",
         .prioritized_ = false,
         .message_queue_capacity_ = 1
+    },
+    communication_channel::Consumer {
+        .count_ = communication_channel::Consumer::Count::AUTO_ALL,
+        .channel_type_identifier_ = aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_publish_producer.channel_type_identifier_,
+        .display_name_ = "3D Visualization Data",
+        .display_description_ = "Subscribe to 3D announcements and scene updates from modules supporting 3D visualization.",
+        .prioritized_ = true,
+        .message_queue_capacity_ = 10
     }
 };
 
@@ -43,7 +54,7 @@ static constexpr ModuleInfo module_info = {
     .request_consumers_ = web_visualization_module_request_consumers,
     .request_consumer_count_ = std::size(web_visualization_module_request_consumers),
     .auto_create_ = true,
-    .prioritized_workers_count_ = 1,
+    .prioritized_workers_count_ = 2,
     .regular_workers_count_ = 1
 };
 
