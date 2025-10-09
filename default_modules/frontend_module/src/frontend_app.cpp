@@ -34,7 +34,6 @@ FrontendApp::FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, Front
     session_id_ = sessionId();
 
 
-    std::string name;
     {
         std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
         if (frontend_state_->active_app_ != nullptr)
@@ -46,11 +45,10 @@ FrontendApp::FrontendApp(const Wt::WEnvironment& env, Wt::WServer* server, Front
         frontend_state_->active_app_ = this;
 
         setupState();
-    }
+        setupUi();
 
-    setupUi();
-    
-    base_module_->log(aergo::module::logging::LogType::INFO, "FrontendApp created: " + session_id_);
+        base_module_->log(aergo::module::logging::LogType::INFO, "FrontendApp created: " + session_id_);
+    }
 }
 
 
@@ -95,8 +93,6 @@ void FrontendApp::disconnect()
 
 void FrontendApp::setupUi()
 {
-    std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
-
     root()->setStyleClass("app-root");
 
     main_container_ = root()->addWidget(std::make_unique<Wt::WStackedWidget>());
