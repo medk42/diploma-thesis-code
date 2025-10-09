@@ -363,351 +363,352 @@ namespace aergo::module::helpers::visualization_3d_interface
             size_t size_{ 0 };
             size_t pos_{ 0 };
         };
-    }
 
-    /// @brief Read pose (t: x,y,z; q: x,y,z,w) as 7 floats (4 bytes each, little-endian) from buffer
-    inline bool readPose(deserialization::BufferReader& reader, Pose& pose)
-    {
-        // [7*f32 t.x,t.y,t.z,q.x,q.y,q.z,q.w]
-        if (!reader.readF32(pose.t.x)) return false;
-        if (!reader.readF32(pose.t.y)) return false;
-        if (!reader.readF32(pose.t.z)) return false;
-        if (!reader.readF32(pose.q.x)) return false;
-        if (!reader.readF32(pose.q.y)) return false;
-        if (!reader.readF32(pose.q.z)) return false;
-        if (!reader.readF32(pose.q.w)) return false;
-        return true;
-    }
-
-
-    /// @brief Read color (r,g,b,a) as 4 bytes (1 byte each) from buffer
-    inline bool readColor(deserialization::BufferReader& reader, Color& color)
-    {
-        // [4*u8 r,g,b,a]
-        if (!reader.readUint8(color.r)) return false;
-        if (!reader.readUint8(color.g)) return false;
-        if (!reader.readUint8(color.b)) return false;
-        if (!reader.readUint8(color.a)) return false;
-        return true;
-    }
-
-
-    /// @brief Read vector3 (x,y,z) as 3 floats (4 bytes each, little-endian) from buffer
-    inline bool readVec3(deserialization::BufferReader& reader, Vec3& v)
-    {
-        if (!reader.readF32(v.x)) return false;
-        if (!reader.readF32(v.y)) return false;
-        if (!reader.readF32(v.z)) return false;
-        return true;
-    }
-
-
-    /// @brief Read a boolean as a uint8_t (1 byte, 0=false, 1=true; values larger than 1 also considered true) from buffer.
-    inline bool readBool(deserialization::BufferReader& reader, bool& v)
-    {
-        uint8_t b;
-        if (!reader.readUint8(b)) return false;
-        v = (b != 0);
-        return true;
-    }
-
-
-    /// @brief Read pending resource registrations from buffer. The format is:
-    ///    REGISTRATION_SECTION:
-    ///        u32 registration_count
-    ///        repeat registration_count times:
-    ///        {
-    ///            u32   resource_id
-    ///            u32   part_count
-    ///            repeat part_count times:
-    ///            {
-    ///                u8 type                 // 0=Box, 1=Sphere, 2=Cylinder
-    ///                switch(type):
-    ///                    case Box:      f32 sx, sy, sz
-    ///                    case Sphere:   f32 r
-    ///                    case Cylinder: f32 rTop, rBot, h
-    ///                Pose7 origin            // local pose of this primitive
-    ///                u8 r, g, b, a           // color
-    ///            }
-    ///        }
-    inline bool readPendingRegistration(deserialization::BufferReader& reader, std::map<ResourceId, ComplexShape>& registrations)
-    {
-        registrations.clear();
-
-        uint32_t registration_count;
-        if (!reader.readUint32(registration_count)) return false; // [u32 registration_count]
-
-        for (uint32_t i = 0; i < registration_count; i++)
+        /// @brief Read pose (t: x,y,z; q: x,y,z,w) as 7 floats (4 bytes each, little-endian) from buffer
+        inline bool readPose(deserialization::BufferReader& reader, Pose& pose)
         {
-            ResourceId res_id;
-            if (!reader.readUint32(res_id.id)) return false; // [u32 resource_id]
+            // [7*f32 t.x,t.y,t.z,q.x,q.y,q.z,q.w]
+            if (!reader.readF32(pose.t.x)) return false;
+            if (!reader.readF32(pose.t.y)) return false;
+            if (!reader.readF32(pose.t.z)) return false;
+            if (!reader.readF32(pose.q.x)) return false;
+            if (!reader.readF32(pose.q.y)) return false;
+            if (!reader.readF32(pose.q.z)) return false;
+            if (!reader.readF32(pose.q.w)) return false;
+            return true;
+        }
 
-            uint32_t part_count;
-            if (!reader.readUint32(part_count)) return false; // [u32 part_count]
 
-            ComplexShape shape;
-            for (uint32_t j = 0; j < part_count; j++)
+        /// @brief Read color (r,g,b,a) as 4 bytes (1 byte each) from buffer
+        inline bool readColor(deserialization::BufferReader& reader, Color& color)
+        {
+            // [4*u8 r,g,b,a]
+            if (!reader.readUint8(color.r)) return false;
+            if (!reader.readUint8(color.g)) return false;
+            if (!reader.readUint8(color.b)) return false;
+            if (!reader.readUint8(color.a)) return false;
+            return true;
+        }
+
+
+        /// @brief Read vector3 (x,y,z) as 3 floats (4 bytes each, little-endian) from buffer
+        inline bool readVec3(deserialization::BufferReader& reader, Vec3& v)
+        {
+            if (!reader.readF32(v.x)) return false;
+            if (!reader.readF32(v.y)) return false;
+            if (!reader.readF32(v.z)) return false;
+            return true;
+        }
+
+
+        /// @brief Read a boolean as a uint8_t (1 byte, 0=false, 1=true; values larger than 1 also considered true) from buffer.
+        inline bool readBool(deserialization::BufferReader& reader, bool& v)
+        {
+            uint8_t b;
+            if (!reader.readUint8(b)) return false;
+            v = (b != 0);
+            return true;
+        }
+
+
+        /// @brief Read pending resource registrations from buffer. The format is:
+        ///    REGISTRATION_SECTION:
+        ///        u32 registration_count
+        ///        repeat registration_count times:
+        ///        {
+        ///            u32   resource_id
+        ///            u32   part_count
+        ///            repeat part_count times:
+        ///            {
+        ///                u8 type                 // 0=Box, 1=Sphere, 2=Cylinder
+        ///                switch(type):
+        ///                    case Box:      f32 sx, sy, sz
+        ///                    case Sphere:   f32 r
+        ///                    case Cylinder: f32 rTop, rBot, h
+        ///                Pose7 origin            // local pose of this primitive
+        ///                u8 r, g, b, a           // color
+        ///            }
+        ///        }
+        inline bool readPendingRegistration(deserialization::BufferReader& reader, std::map<ResourceId, ComplexShape>& registrations)
+        {
+            registrations.clear();
+
+            uint32_t registration_count;
+            if (!reader.readUint32(registration_count)) return false; // [u32 registration_count]
+
+            for (uint32_t i = 0; i < registration_count; i++)
             {
-                PrimitiveShape part;
+                ResourceId res_id;
+                if (!reader.readUint32(res_id.id)) return false; // [u32 resource_id]
 
-                // read type
-                uint8_t type_u8;
-                if (!reader.readUint8(type_u8)) return false; // [u8 type]
-                if (type_u8 != static_cast<uint8_t>(PrimitiveShapeType::CYLINDER) 
-                 && type_u8 != static_cast<uint8_t>(PrimitiveShapeType::SPHERE)
-                 && type_u8 != static_cast<uint8_t>(PrimitiveShapeType::BOX))
-                {
-                    return false; // invalid type
-                }
-                part.type = static_cast<PrimitiveShapeType>(type_u8);
+                uint32_t part_count;
+                if (!reader.readUint32(part_count)) return false; // [u32 part_count]
 
-                // read description
-                if (part.type == PrimitiveShapeType::BOX)
+                ComplexShape shape;
+                for (uint32_t j = 0; j < part_count; j++)
                 {
-                    BoxDesc d;
-                    if (!reader.readF32(d.sx)) return false;
-                    if (!reader.readF32(d.sy)) return false;
-                    if (!reader.readF32(d.sz)) return false;
-                    part.desc = d;
-                }
-                else if (part.type == PrimitiveShapeType::SPHERE)
-                {
-                    SphereDesc d;
-                    if (!reader.readF32(d.r)) return false;
-                    part.desc = d;
-                }
-                else if (part.type == PrimitiveShapeType::CYLINDER)
-                {
-                    CylinderDesc d;
-                    if (!reader.readF32(d.rTop)) return false;
-                    if (!reader.readF32(d.rBot)) return false;
-                    if (!reader.readF32(d.h)) return false;
-                    part.desc = d;
+                    PrimitiveShape part;
+
+                    // read type
+                    uint8_t type_u8;
+                    if (!reader.readUint8(type_u8)) return false; // [u8 type]
+                    if (type_u8 != static_cast<uint8_t>(PrimitiveShapeType::CYLINDER) 
+                    && type_u8 != static_cast<uint8_t>(PrimitiveShapeType::SPHERE)
+                    && type_u8 != static_cast<uint8_t>(PrimitiveShapeType::BOX))
+                    {
+                        return false; // invalid type
+                    }
+                    part.type = static_cast<PrimitiveShapeType>(type_u8);
+
+                    // read description
+                    if (part.type == PrimitiveShapeType::BOX)
+                    {
+                        BoxDesc d;
+                        if (!reader.readF32(d.sx)) return false;
+                        if (!reader.readF32(d.sy)) return false;
+                        if (!reader.readF32(d.sz)) return false;
+                        part.desc = d;
+                    }
+                    else if (part.type == PrimitiveShapeType::SPHERE)
+                    {
+                        SphereDesc d;
+                        if (!reader.readF32(d.r)) return false;
+                        part.desc = d;
+                    }
+                    else if (part.type == PrimitiveShapeType::CYLINDER)
+                    {
+                        CylinderDesc d;
+                        if (!reader.readF32(d.rTop)) return false;
+                        if (!reader.readF32(d.rBot)) return false;
+                        if (!reader.readF32(d.h)) return false;
+                        part.desc = d;
+                    }
+
+                    // read local origin pose
+                    if (!readPose(reader, part.origin)) return false; // [7*f32 origin]
+
+                    // read color
+                    if (!readColor(reader, part.color)) return false; // [4*u8 r,g,b,a]
+
+                    shape.parts.push_back(part);
                 }
 
-                // read local origin pose
-                if (!readPose(reader, part.origin)) return false; // [7*f32 origin]
+                registrations[res_id] = shape;
+            }
+
+            return true;
+        }
+
+
+        /// @brief Read object commands from buffer. The format is:
+        ///    OBJECT_SECTION:
+        ///        u32 object_count
+        ///        repeat object_count times:
+        ///        {
+        ///            u32 id
+        ///            u8  action               // 0=Add, 1=Update,
+        ///            if action == Add:
+        ///                u32 resource_id
+        ///            if action != Remove:
+        ///                Pose7 pose
+        ///        }
+        inline bool readObjectCommands(deserialization::BufferReader& reader, std::map<ObjectId, CommandBuffer::ObjectParameters>& objects)
+        {
+            objects.clear();
+
+            uint32_t object_count;
+            if (!reader.readUint32(object_count)) return false; // [u32 object_count]
+
+            for (uint32_t i = 0; i < object_count; i++)
+            {
+                ObjectId obj_id;
+                if (!reader.readUint32(obj_id.id)) return false; // [u32 id]
+
+                uint8_t action_u8;
+                if (!reader.readUint8(action_u8)) return false; // [u8 action]
+                if (action_u8 != static_cast<uint8_t>(CommandBuffer::Action::ADD)
+                && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::UPDATE)
+                && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::REMOVE))
+                {
+                    return false; // invalid action
+                }
+                CommandBuffer::Action action = static_cast<CommandBuffer::Action>(action_u8);
+
+                CommandBuffer::ObjectParameters params;
+                params.action = action;
+
+                if (action == CommandBuffer::Action::ADD)
+                {
+                    if (!reader.readUint32(params.resource_id.id)) return false; // [u32 resource_id]
+                    if (!readPose(reader, params.pose)) return false;           // [7*f32 pose]
+                }
+                else if (action == CommandBuffer::Action::UPDATE)
+                {
+                    if (!readPose(reader, params.pose)) return false;           // [7*f32 pose]
+                }
+                // if action == REMOVE: no payload
+
+                objects[obj_id] = params;
+            }
+
+            return true;
+        }
+
+
+        /// @brief Read trajectory commands from buffer. The format is:
+        ///    TRAJECTORY_SECTION:
+        ///        u32 trajectory_count
+        ///        repeat trajectory_count times:
+        ///        {
+        ///            u32 id
+        ///            u8  action               // 0=Add, 1=Update, 2=Remove
+        ///
+        ///            if action == Add:
+        ///                u8 r, g, b, a        // color
+        ///                u8  dashed           // 0/1
+        ///                u32 point_count
+        ///                repeat point_count times: f32 x, y, z
+        ///
+        ///            if action == Update:
+        ///                u32 point_count
+        ///                repeat point_count times: f32 x, y, z
+        ///                u32 remove_from_head
+        ///
+        ///            // if Remove: no payload
+        ///        }
+        inline bool readTrajectoryCommands(deserialization::BufferReader& reader, std::map<ObjectId, CommandBuffer::TrajectoryParameters>& trajectories)
+        {
+            trajectories.clear();
+
+            uint32_t trajectory_count;
+            if (!reader.readUint32(trajectory_count)) return false; // [u32 trajectory_count]
+
+            for (uint32_t i = 0; i < trajectory_count; i++)
+            {
+                ObjectId traj_id;
+                if (!reader.readUint32(traj_id.id)) return false; // [u32 id]
+
+                uint8_t action_u8;
+                if (!reader.readUint8(action_u8)) return false; // [u8 action]
+                if (action_u8 != static_cast<uint8_t>(CommandBuffer::Action::ADD)
+                && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::UPDATE)
+                && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::REMOVE))
+                {
+                    return false; // invalid action
+                }
+                CommandBuffer::Action action = static_cast<CommandBuffer::Action>(action_u8);
+
+                CommandBuffer::TrajectoryParameters params;
+                params.action = action;
+
+                if (action == CommandBuffer::Action::ADD)
+                {
+                    if (!readColor(reader, params.color)) return false; // [4*u8 r,g,b,a]
+                    if (!readBool(reader, params.dashed)) return false; // [u8 dashed]
+
+                    uint32_t point_count;
+                    if (!reader.readUint32(point_count)) return false; // [u32 point_count]
+                    params.points.resize(point_count);
+                    for (uint32_t j = 0; j < point_count; j++)
+                    {
+                        if (!readVec3(reader, params.points[j])) return false; // [3*f32 x,y,z]
+                    }
+                }
+                else if (action == CommandBuffer::Action::UPDATE)
+                {
+                    uint32_t point_count;
+                    if (!reader.readUint32(point_count)) return false; // [u32 point_count]
+                    params.points.resize(point_count);
+                    for (uint32_t j = 0; j < point_count; j++)
+                    {
+                        if (!readVec3(reader, params.points[j])) return false; // [3*f32 x,y,z]
+                    }
+                    if (!reader.readUint32(params.remove_from_head)) return false; // [u32 remove_from_head]
+                }
+                // if action == REMOVE: no payload
+
+                trajectories[traj_id] = params;
+            }
+
+            return true;
+        }
+
+
+        /// @brief Read current scene objects from buffer. The format is:
+        ///    SCENE_OBJECTS_SECTION:
+        ///        u32 object_count
+        ///        repeat object_count times:
+        ///        {
+        ///            u32 id
+        ///            u32 resource_id
+        ///            Pose7 pose
+        ///        }
+        inline bool readSceneObjects(deserialization::BufferReader& reader, std::map<ObjectId, ObjectData>& objects)
+        {
+            objects.clear();
+
+            uint32_t object_count;
+            if (!reader.readUint32(object_count)) return false; // [u32 object_count]
+
+            for (uint32_t i = 0; i < object_count; i++)
+            {
+                ObjectId obj_id;
+                if (!reader.readUint32(obj_id.id)) return false; // [u32 id]
+
+                ObjectData obj;
+
+                if (!reader.readUint32(obj.resource_id.id)) return false; // [u32 resource_id]
+                if (!readPose(reader, obj.pose)) return false;           // [7*f32 pose]
+
+                objects[obj_id] = obj;
+            }
+
+            return true;
+        }
+
+
+        /// @brief Read current scene trajectories from buffer. The format is:
+        ///    SCENE_TRAJECTORIES_SECTION:
+        ///        u32 trajectory_count
+        ///        repeat trajectory_count times:
+        ///        {
+        ///            u32 id
+        ///            u8 r, g, b, a           // color
+        ///            u8  dashed              // 0/1
+        ///            u32 point_count
+        ///            repeat point_count times: f32 x, y, z
+        ///        }
+        inline bool readSceneTrajectories(deserialization::BufferReader& reader, std::map<ObjectId, TrajectoryData>& trajectories)
+        {
+            trajectories.clear();
+
+            uint32_t trajectory_count;
+            if (!reader.readUint32(trajectory_count)) return false; // [u32 trajectory_count]
+
+            for (uint32_t i = 0; i < trajectory_count; i++)
+            {
+                ObjectId traj_id;
+                if (!reader.readUint32(traj_id.id)) return false; // [u32 id]
+
+                TrajectoryData traj;
 
                 // read color
-                if (!readColor(reader, part.color)) return false; // [4*u8 r,g,b,a]
-
-                shape.parts.push_back(part);
-            }
-
-            registrations[res_id] = shape;
-        }
-
-        return true;
-    }
-
-
-    /// @brief Read object commands from buffer. The format is:
-    ///    OBJECT_SECTION:
-    ///        u32 object_count
-    ///        repeat object_count times:
-    ///        {
-    ///            u32 id
-    ///            u8  action               // 0=Add, 1=Update,
-    ///            if action == Add:
-    ///                u32 resource_id
-    ///            if action != Remove:
-    ///                Pose7 pose
-    ///        }
-    inline bool readObjectCommands(deserialization::BufferReader& reader, std::map<ObjectId, CommandBuffer::ObjectParameters>& objects)
-    {
-        objects.clear();
-
-        uint32_t object_count;
-        if (!reader.readUint32(object_count)) return false; // [u32 object_count]
-
-        for (uint32_t i = 0; i < object_count; i++)
-        {
-            ObjectId obj_id;
-            if (!reader.readUint32(obj_id.id)) return false; // [u32 id]
-
-            uint8_t action_u8;
-            if (!reader.readUint8(action_u8)) return false; // [u8 action]
-            if (action_u8 != static_cast<uint8_t>(CommandBuffer::Action::ADD)
-             && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::UPDATE)
-             && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::REMOVE))
-            {
-                return false; // invalid action
-            }
-            CommandBuffer::Action action = static_cast<CommandBuffer::Action>(action_u8);
-
-            CommandBuffer::ObjectParameters params;
-            params.action = action;
-
-            if (action == CommandBuffer::Action::ADD)
-            {
-                if (!reader.readUint32(params.resource_id.id)) return false; // [u32 resource_id]
-                if (!readPose(reader, params.pose)) return false;           // [7*f32 pose]
-            }
-            else if (action == CommandBuffer::Action::UPDATE)
-            {
-                if (!readPose(reader, params.pose)) return false;           // [7*f32 pose]
-            }
-            // if action == REMOVE: no payload
-
-            objects[obj_id] = params;
-        }
-
-        return true;
-    }
-
-
-    /// @brief Read trajectory commands from buffer. The format is:
-    ///    TRAJECTORY_SECTION:
-    ///        u32 trajectory_count
-    ///        repeat trajectory_count times:
-    ///        {
-    ///            u32 id
-    ///            u8  action               // 0=Add, 1=Update, 2=Remove
-    ///
-    ///            if action == Add:
-    ///                u8 r, g, b, a        // color
-    ///                u8  dashed           // 0/1
-    ///                u32 point_count
-    ///                repeat point_count times: f32 x, y, z
-    ///
-    ///            if action == Update:
-    ///                u32 point_count
-    ///                repeat point_count times: f32 x, y, z
-    ///                u32 remove_from_head
-    ///
-    ///            // if Remove: no payload
-    ///        }
-    inline bool readTrajectoryCommands(deserialization::BufferReader& reader, std::map<ObjectId, CommandBuffer::TrajectoryParameters>& trajectories)
-    {
-        trajectories.clear();
-
-        uint32_t trajectory_count;
-        if (!reader.readUint32(trajectory_count)) return false; // [u32 trajectory_count]
-
-        for (uint32_t i = 0; i < trajectory_count; i++)
-        {
-            ObjectId traj_id;
-            if (!reader.readUint32(traj_id.id)) return false; // [u32 id]
-
-            uint8_t action_u8;
-            if (!reader.readUint8(action_u8)) return false; // [u8 action]
-            if (action_u8 != static_cast<uint8_t>(CommandBuffer::Action::ADD)
-             && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::UPDATE)
-             && action_u8 != static_cast<uint8_t>(CommandBuffer::Action::REMOVE))
-            {
-                return false; // invalid action
-            }
-            CommandBuffer::Action action = static_cast<CommandBuffer::Action>(action_u8);
-
-            CommandBuffer::TrajectoryParameters params;
-            params.action = action;
-
-            if (action == CommandBuffer::Action::ADD)
-            {
-                if (!readColor(reader, params.color)) return false; // [4*u8 r,g,b,a]
-                if (!readBool(reader, params.dashed)) return false; // [u8 dashed]
+                if (!readColor(reader, traj.color)) return false; // [4*u8 r,g,b,a]
+                if (!readBool(reader, traj.dashed)) return false; // [u8 dashed]
 
                 uint32_t point_count;
                 if (!reader.readUint32(point_count)) return false; // [u32 point_count]
-                params.points.resize(point_count);
+                traj.points.resize(point_count);
                 for (uint32_t j = 0; j < point_count; j++)
                 {
-                    if (!readVec3(reader, params.points[j])) return false; // [3*f32 x,y,z]
+                    if (!readVec3(reader, traj.points[j])) return false; // [3*f32 x,y,z]
                 }
-            }
-            else if (action == CommandBuffer::Action::UPDATE)
-            {
-                uint32_t point_count;
-                if (!reader.readUint32(point_count)) return false; // [u32 point_count]
-                params.points.resize(point_count);
-                for (uint32_t j = 0; j < point_count; j++)
-                {
-                    if (!readVec3(reader, params.points[j])) return false; // [3*f32 x,y,z]
-                }
-                if (!reader.readUint32(params.remove_from_head)) return false; // [u32 remove_from_head]
-            }
-            // if action == REMOVE: no payload
 
-            trajectories[traj_id] = params;
-        }
-
-        return true;
-    }
-
-
-    /// @brief Read current scene objects from buffer. The format is:
-    ///    SCENE_OBJECTS_SECTION:
-    ///        u32 object_count
-    ///        repeat object_count times:
-    ///        {
-    ///            u32 id
-    ///            u32 resource_id
-    ///            Pose7 pose
-    ///        }
-    inline bool readSceneObjects(deserialization::BufferReader& reader, std::map<ObjectId, ObjectData>& objects)
-    {
-        objects.clear();
-
-        uint32_t object_count;
-        if (!reader.readUint32(object_count)) return false; // [u32 object_count]
-
-        for (uint32_t i = 0; i < object_count; i++)
-        {
-            ObjectId obj_id;
-            if (!reader.readUint32(obj_id.id)) return false; // [u32 id]
-
-            ObjectData obj;
-
-            if (!reader.readUint32(obj.resource_id.id)) return false; // [u32 resource_id]
-            if (!readPose(reader, obj.pose)) return false;           // [7*f32 pose]
-
-            objects[obj_id] = obj;
-        }
-
-        return true;
-    }
-
-
-    /// @brief Read current scene trajectories from buffer. The format is:
-    ///    SCENE_TRAJECTORIES_SECTION:
-    ///        u32 trajectory_count
-    ///        repeat trajectory_count times:
-    ///        {
-    ///            u32 id
-    ///            u8 r, g, b, a           // color
-    ///            u8  dashed              // 0/1
-    ///            u32 point_count
-    ///            repeat point_count times: f32 x, y, z
-    ///        }
-    inline bool readSceneTrajectories(deserialization::BufferReader& reader, std::map<ObjectId, TrajectoryData>& trajectories)
-    {
-        trajectories.clear();
-
-        uint32_t trajectory_count;
-        if (!reader.readUint32(trajectory_count)) return false; // [u32 trajectory_count]
-
-        for (uint32_t i = 0; i < trajectory_count; i++)
-        {
-            ObjectId traj_id;
-            if (!reader.readUint32(traj_id.id)) return false; // [u32 id]
-
-            TrajectoryData traj;
-
-            // read color
-            if (!readColor(reader, traj.color)) return false; // [4*u8 r,g,b,a]
-            if (!readBool(reader, traj.dashed)) return false; // [u8 dashed]
-
-            uint32_t point_count;
-            if (!reader.readUint32(point_count)) return false; // [u32 point_count]
-            traj.points.resize(point_count);
-            for (uint32_t j = 0; j < point_count; j++)
-            {
-                if (!readVec3(reader, traj.points[j])) return false; // [3*f32 x,y,z]
+                trajectories[traj_id] = traj;
             }
 
-            trajectories[traj_id] = traj;
+            return true;
         }
-
-        return true;
+    
     }
 }
