@@ -102,11 +102,11 @@ size_t SceneSocket::sendCommandBuffer(const CommandBuffer& cmd_buf)
     std::vector<char> command_frame;
 
     uint32_t magic = 0x314E4353u; // 'SCN1' LE
-    serialization::pushUint32(command_frame, magic);  // [u32 magic 'SCN1']
+    serialization::ser::push<uint32_t>(command_frame, magic);  // [u32 magic 'SCN1']
     uint32_t seq = ++seq_;
-    serialization::pushUint32(command_frame, seq);    // [u32 seq]
-    serialization::pushUint8(command_frame, cmd_buf.grid_commanded_ ? 1 : 0); // [u8 grid_commanded]
-    serialization::pushUint8(command_frame, cmd_buf.grid_enabled_ ? 1 : 0);   // [u8 grid_enabled]
+    serialization::ser::push<uint32_t>(command_frame, seq);    // [u32 seq]
+    serialization::ser::push<uint8_t>(command_frame, cmd_buf.grid_commanded_ ? 1 : 0); // [u8 grid_commanded]
+    serialization::ser::push<uint8_t>(command_frame, cmd_buf.grid_enabled_ ? 1 : 0);   // [u8 grid_enabled]
     
     if (!serialization::pushPendingRegistration(command_frame, cmd_buf.pending_registrations_))
     {

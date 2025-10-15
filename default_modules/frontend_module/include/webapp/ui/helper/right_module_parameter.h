@@ -1,6 +1,6 @@
 #pragma once
 
-#include "module_helpers/activation_wrapper/parameter_description.h"
+#include "module_helpers/parameter_description/parameter_description.h"
 #include "button.h"
 #include "input_fields.h"
 
@@ -15,8 +15,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     class RightModuleParameter : public Wt::WContainerWidget
     {
     public:
-        using value_type_t = aergo::module::helpers::activation_wrapper::params::ParameterType;
-        using desc_t = aergo::module::helpers::activation_wrapper::params::ParameterDescription;
+        using value_type_t = aergo::module::helpers::parameter_description::ParameterType;
+        using desc_t = aergo::module::helpers::parameter_description::ParameterDescription;
     
         RightModuleParameter(desc_t parameter_description);
 
@@ -44,7 +44,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void addParameterWidget(Wt::WContainerWidget* parent);
         void updateListButtonsVisibility();
 
-        aergo::module::helpers::activation_wrapper::params::ParameterDescription parameter_description_;
+        aergo::module::helpers::parameter_description::ParameterDescription parameter_description_;
 
         Wt::Signal<const std::string&, const std::string&> onShowDescriptionClicked_; // parameter title and description
         Wt::Signal<size_t, value_opt_t> onValueAdded_; // list index, optionally value (if exists)

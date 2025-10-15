@@ -68,7 +68,7 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
     }
 
     message::SharedDataBlob blob = message.blobs_[0];
-    vis3d::deserialization::BufferReader reader(reinterpret_cast<const char*>(blob.data()), blob.size());
+    vis3d::deserialization::des::BufferReader reader(blob.data(), blob.size());
 
 
     if (req_type == vis3d::ReqType::READ_FULL)
@@ -275,7 +275,7 @@ void SceneVisualizationHandler::processMessage(uint32_t subscribe_consumer_id, C
         }
 
         message::SharedDataBlob blob = message.blobs_[0];
-        vis3d::deserialization::BufferReader reader(reinterpret_cast<const char*>(blob.data()), blob.size());
+        vis3d::deserialization::des::BufferReader reader(blob.data(), blob.size());
 
         std::map<vis3d::ObjectId, vis3d::CommandBuffer::ObjectParameters> object_commands;
         std::map<vis3d::ObjectId, vis3d::CommandBuffer::TrajectoryParameters> trajectory_commands;

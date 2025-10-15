@@ -15,6 +15,7 @@
 using namespace aergo::default_modules::frontend_module::webapp;
 using namespace aergo::module;
 using namespace aergo::module::helpers::activation_wrapper;
+using namespace aergo::module::helpers::parameter_description;
 
 
 
@@ -575,7 +576,7 @@ void FrontendApp::refreshRunningModules()
                 auto activation_it = activation_channels_map.find(i);
                 bool can_activate = activation_it != activation_channels_map.end() && !running_info.module_info_->auto_create_;
                 
-                std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription> empty_params;
+                std::vector<aergo::module::helpers::parameter_description::ParameterDescription> empty_params;
                 if (!running_info.module_info_->auto_create_)
                 {
                     activation_ui_->addModule(i, running_info.module_info_->display_name_, running_info.module_info_->display_description_, can_activate, can_activate, empty_params);
@@ -838,7 +839,7 @@ void FrontendApp::processPendingActivationResponses()
             }
             
             std::string params_str(reinterpret_cast<const char*>(response.data_blob_.data()), response.data_blob_.size());
-            activation_data.activation_parameters_ = std::move(aergo::module::helpers::activation_wrapper::params::ParameterList::fromString(params_str));
+            activation_data.activation_parameters_ = std::move(aergo::module::helpers::parameter_description::ParameterList::fromString(params_str));
             activation_data.waiting_for_parameters_ = false;
 
             activation_ui_->setParameters(response.running_module_index_, activation_data.activation_parameters_.getParameters());
@@ -1163,7 +1164,7 @@ bool FrontendApp::parseParameterValues(const std::vector<uint8_t>& data_blob, Ac
 
             switch (param.type_)
             {
-                case aergo::module::helpers::activation_wrapper::params::ParameterType::LONG:
+                case aergo::module::helpers::parameter_description::ParameterType::LONG:
                 {
                     if (param_value_size != sizeof(int64_t))
                     {
@@ -1184,7 +1185,7 @@ bool FrontendApp::parseParameterValues(const std::vector<uint8_t>& data_blob, Ac
                     values.push_back(long_value);
                     break;
                 }
-                case aergo::module::helpers::activation_wrapper::params::ParameterType::DOUBLE:
+                case aergo::module::helpers::parameter_description::ParameterType::DOUBLE:
                 {
                     if (param_value_size != sizeof(double))
                     {
@@ -1205,7 +1206,7 @@ bool FrontendApp::parseParameterValues(const std::vector<uint8_t>& data_blob, Ac
                     values.push_back(double_value);
                     break;
                 }
-                case aergo::module::helpers::activation_wrapper::params::ParameterType::STRING:
+                case aergo::module::helpers::parameter_description::ParameterType::STRING:
                 {
                     if (param_value_size > data_size)
                     {
@@ -1218,7 +1219,7 @@ bool FrontendApp::parseParameterValues(const std::vector<uint8_t>& data_blob, Ac
                     values.push_back(string_value);
                     break;
                 }
-                case aergo::module::helpers::activation_wrapper::params::ParameterType::ENUM:
+                case aergo::module::helpers::parameter_description::ParameterType::ENUM:
                 {
                     if (param_value_size != sizeof(size_t))
                     {
@@ -1239,8 +1240,8 @@ bool FrontendApp::parseParameterValues(const std::vector<uint8_t>& data_blob, Ac
                     values.push_back(static_cast<int>(enum_index)); // store as int, value is the index of the selected enum value
                     break;
                 }
-                case aergo::module::helpers::activation_wrapper::params::ParameterType::BOOL:
-                case aergo::module::helpers::activation_wrapper::params::ParameterType::CUSTOM:
+                case aergo::module::helpers::parameter_description::ParameterType::BOOL:
+                case aergo::module::helpers::parameter_description::ParameterType::CUSTOM:
                 {
                     if (param_value_size != 1)
                     {
@@ -1343,7 +1344,7 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
     message::SharedDataBlob value_blob;
     switch (type)
     {
-        case aergo::module::helpers::activation_wrapper::params::ParameterType::LONG:
+        case aergo::module::helpers::parameter_description::ParameterType::LONG:
         {
             int64_t long_value = std::get<int64_t>(value);
             value_blob = frontend_state_->allocator_->allocate(sizeof(long_value));
@@ -1355,7 +1356,7 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
             memcpy(value_blob.data(), &long_value, sizeof(long_value));
             break;
         }
-        case aergo::module::helpers::activation_wrapper::params::ParameterType::DOUBLE:
+        case aergo::module::helpers::parameter_description::ParameterType::DOUBLE:
         {
             double double_value = std::get<double>(value);
             value_blob = frontend_state_->allocator_->allocate(sizeof(double_value));
@@ -1367,7 +1368,7 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
             memcpy(value_blob.data(), &double_value, sizeof(double_value));
             break;
         }
-        case aergo::module::helpers::activation_wrapper::params::ParameterType::STRING:
+        case aergo::module::helpers::parameter_description::ParameterType::STRING:
         {
             const std::string& string_value = std::get<std::string>(value);
             value_blob = frontend_state_->allocator_->allocate(string_value.size());
@@ -1379,7 +1380,7 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
             memcpy(value_blob.data(), string_value.data(), string_value.size());
             break;
         }
-        case aergo::module::helpers::activation_wrapper::params::ParameterType::ENUM:
+        case aergo::module::helpers::parameter_description::ParameterType::ENUM:
         {
             size_t enum_index = static_cast<size_t>(std::get<int>(value));
             value_blob = frontend_state_->allocator_->allocate(sizeof(enum_index));
@@ -1391,8 +1392,8 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
             memcpy(value_blob.data(), &enum_index, sizeof(enum_index));
             break;
         }
-        case aergo::module::helpers::activation_wrapper::params::ParameterType::BOOL:
-        case aergo::module::helpers::activation_wrapper::params::ParameterType::CUSTOM:
+        case aergo::module::helpers::parameter_description::ParameterType::BOOL:
+        case aergo::module::helpers::parameter_description::ParameterType::CUSTOM:
         {
             uint8_t bool_value = std::get<bool>(value) ? 1 : 0;
             value_blob = frontend_state_->allocator_->allocate(sizeof(bool_value));
@@ -1423,12 +1424,12 @@ void FrontendApp::requestParameterChange(ui::ActivationUi::ModuleSingleParameter
     ChannelIdentifier channel_id {param.running_module_id_, activation_data.activation_channel_id_};
     base_module_->sendRequest(activation_request_channel_id_, channel_id, header);
 
-    if (type != params::ParameterType::CUSTOM || (type == params::ParameterType::CUSTOM && value_blob.data()[0] == 0))
+    if (type != ParameterType::CUSTOM || (type == ParameterType::CUSTOM && value_blob.data()[0] == 0))
     {
         frontend_state_->known_running_modules_activation_data_[param.running_module_id_].parameter_values_[param.parameter_id_][param.list_id_] = value;
     }
 
-    if (type == params::ParameterType::CUSTOM) 
+    if (type == ParameterType::CUSTOM) 
     {
         if (value_blob.data()[0] == 1) // display dialog waiting to finish loading the custom value
         {

@@ -3,7 +3,7 @@
 #include "webapp/ui/helper/topbar.h"
 
 using namespace aergo::default_modules::frontend_module::webapp::ui;
-using namespace aergo::module::helpers::activation_wrapper::params;
+using namespace aergo::module::helpers::parameter_description;
 
 ActivationUi::ActivationUi()
 {
@@ -200,7 +200,7 @@ void ActivationUi::removeModule(uint64_t running_module_id)
 
 
 
-void ActivationUi::setParameters(uint64_t running_module_id, const std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription>& parameters)
+void ActivationUi::setParameters(uint64_t running_module_id, const std::vector<aergo::module::helpers::parameter_description::ParameterDescription>& parameters)
 {
     // get inner index
     auto it = running_module_id_to_inner_index_.find(running_module_id);

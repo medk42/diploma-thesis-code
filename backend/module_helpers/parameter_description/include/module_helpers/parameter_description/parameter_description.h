@@ -7,7 +7,7 @@
 
 
 
-namespace aergo::module::helpers::activation_wrapper::params
+namespace aergo::module::helpers::parameter_description
 {
     enum class ParameterType
     {

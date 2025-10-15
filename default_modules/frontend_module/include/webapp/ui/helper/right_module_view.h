@@ -1,6 +1,6 @@
 #pragma once
 
-#include "module_helpers/activation_wrapper/parameter_description.h"
+#include "module_helpers/parameter_description/parameter_description.h"
 #include "right_module_parameter.h"
 #include "button.h"
 
@@ -72,7 +72,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     struct RightModuleView::ParameterSection
     {
         std::string section_header_;
-        std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription> parameters_;
+        std::vector<aergo::module::helpers::parameter_description::ParameterDescription> parameters_;
     };
 
     struct RightModuleView::ParameterId

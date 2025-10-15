@@ -1,4 +1,4 @@
-#include "module_helpers/activation_wrapper/parameter_description.h"
+#include "module_helpers/parameter_description/parameter_description.h"
 
 #include <limits>
 
@@ -7,7 +7,7 @@
 #define CHECKED_READ(read_call) if (!(read_call)) throw std::runtime_error("Invalid parameter description.");
 
 
-using namespace aergo::module::helpers::activation_wrapper::params;
+using namespace aergo::module::helpers::parameter_description;
 
 
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "helper/parameter_value.h"
-#include "module_helpers/activation_wrapper/parameter_description.h"
+#include "module_helpers/parameter_description/parameter_description.h"
 #include "helper/right_module_view.h"
 #include "helper/reusable_dialog.h"
 #include "helper/left_module_list.h"
@@ -29,10 +29,10 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         /// @param supports_activation If false, module is always active and cannot be deactivated. If true, module can be activated/deactivated (Activate/Deactivate buttons shown).
         /// @param parameters_delayed If true, parameters will be set later using setParameters(), and no parameters are shown now. If false, parameters are shown now.
         /// @param parameters parameters if supports_activation is true and parameters_delayed is false, otherwise empty vector
-        void addModule(uint64_t running_module_id, const char* module_name, const char* module_description, bool supports_activation, bool parameters_delayed, const std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription>& parameters);
+        void addModule(uint64_t running_module_id, const char* module_name, const char* module_description, bool supports_activation, bool parameters_delayed, const std::vector<aergo::module::helpers::parameter_description::ParameterDescription>& parameters);
         void removeModule(uint64_t running_module_id);  // removes module with the specified ID from the list, "running_module_id" never repeats, so this module will never be re-added
 
-        void setParameters(uint64_t running_module_id, const std::vector<aergo::module::helpers::activation_wrapper::params::ParameterDescription>& parameters); // resets all set values to defaults
+        void setParameters(uint64_t running_module_id, const std::vector<aergo::module::helpers::parameter_description::ParameterDescription>& parameters); // resets all set values to defaults
         bool setParameterValues(uint64_t running_module_id, const std::vector<std::vector<helper::value_t>>& values); // sets all parameters of the module, size of values and inner vectors must match the parameter descriptions, returns true if successful, false if not (e.g. invalid running_module_id or size mismatch)
         void setActive(uint64_t running_module_id, bool active);
         bool setValue(uint64_t running_module_id, size_t section_id, size_t param_id, const helper::value_t& value, size_t index = 0); // returns true if set (successful), false if not (invalid running_module_id or section_id or param_id or index or type mismatch)

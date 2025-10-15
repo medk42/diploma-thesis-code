@@ -11,11 +11,12 @@
 
 
 using namespace aergo::module::helpers::activation_wrapper;
+using namespace aergo::module::helpers::parameter_description;
 using namespace aergo::module;
 using json = nlohmann::json;
 
 
-ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, params::ParameterList* parameters_)
+ActivationWrapper::ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, ParameterList* parameters_)
 : valid_(false), module_ref_(std::move(module)), parameters_(parameters_), activated_(false), message_wait_{false, 0, 0}
 {
     if (module_ref_.get() == nullptr || parameters_ == nullptr)
@@ -86,7 +87,7 @@ void ActivationWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelId
         if (message_wait_.expected_.load(std::memory_order_acquire)) // double check after locking
         {
             auto& param = parameters_->getParameters()[message_wait_.param_id_];
-            if (param.custom_channel_type_ == params::CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == subscribe_consumer_id)
+            if (param.custom_channel_type_ == CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == subscribe_consumer_id)
             {
                 setCustomValueOnReceive(message);
                 return;
@@ -114,7 +115,7 @@ aergo::module::ResponseData ActivationWrapper::processRequest(uint32_t response_
 
         auto* request = reinterpret_cast<message_types::Request*>(message.data_);
 
-        if (request->request_type_ == message_types::ReqType::SET_VALUE && request->parameter_type_ != params::ParameterType::CUSTOM)
+        if (request->request_type_ == message_types::ReqType::SET_VALUE && request->parameter_type_ != ParameterType::CUSTOM)
         {
             if (message.blob_count_ != 1 || message.blobs_ == nullptr || !message.blobs_[0].valid())
             {
@@ -155,7 +156,7 @@ void ActivationWrapper::processResponse(uint32_t request_consumer_id, ChannelIde
         if (message_wait_.expected_.load(std::memory_order_acquire)) // double check after locking
         {
             auto& param = parameters_->getParameters()[message_wait_.param_id_];
-            if (param.custom_channel_type_ == params::CustomChannelType::REQUEST && param.custom_channel_id_ == request_consumer_id)
+            if (param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == request_consumer_id)
             {
                 setCustomValueOnReceive(message);
                 return;
@@ -207,8 +208,8 @@ aergo::module::IModule::IngressDecision ActivationWrapper::onIngress(aergo::modu
     if (message_wait_.expected_.load(std::memory_order_acquire))
     {
         auto& param = parameters_->getParameters()[message_wait_.param_id_];
-        if ((kind == aergo::module::IModule::ProcessingType::MESSAGE && param.custom_channel_type_ == params::CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == local_channel_id) ||
-            (kind == aergo::module::IModule::ProcessingType::RESPONSE && param.custom_channel_type_ == params::CustomChannelType::REQUEST && param.custom_channel_id_ == local_channel_id))
+        if ((kind == aergo::module::IModule::ProcessingType::MESSAGE && param.custom_channel_type_ == CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == local_channel_id) ||
+            (kind == aergo::module::IModule::ProcessingType::RESPONSE && param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == local_channel_id))
         {
             return aergo::module::IModule::IngressDecision::ACCEPT;
         }
@@ -252,7 +253,7 @@ bool ActivationWrapper::initializeDefaultParameters()
         {
             switch (param.type_)
             {
-                case params::ParameterType::BOOL:
+                case ParameterType::BOOL:
                 {
                     if (param.default_value_ == "1")
                     {
@@ -271,7 +272,7 @@ bool ActivationWrapper::initializeDefaultParameters()
                     }
                     break;
                 }
-                case params::ParameterType::LONG:
+                case ParameterType::LONG:
                 {
                     int64_t value = 0;
                     if (!param.default_value_.empty())
@@ -299,7 +300,7 @@ bool ActivationWrapper::initializeDefaultParameters()
                     memcpy(&parameter_values_[i][j][0], &value, sizeof(int64_t));
                     break;
                 }
-                case params::ParameterType::DOUBLE:
+                case ParameterType::DOUBLE:
                 {
                     double dvalue = 0;
                     if (!param.default_value_.empty())
@@ -327,14 +328,14 @@ bool ActivationWrapper::initializeDefaultParameters()
                     memcpy(&parameter_values_[i][j][0], &dvalue, sizeof(double));
                     break;
                 }
-                case params::ParameterType::STRING:
+                case ParameterType::STRING:
                 {
                     parameter_values_[i][j].resize(param.default_value_.size());
                     memcpy(&parameter_values_[i][j][0], param.default_value_.data(), param.default_value_.size());
                     break;
                 }
                     
-                case params::ParameterType::ENUM:
+                case ParameterType::ENUM:
                 {
                     size_t enum_id = 0;
                     bool found = false;
@@ -541,7 +542,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
 
     switch (param.type_)
     {
-        case params::ParameterType::BOOL:
+        case ParameterType::BOOL:
         {
             if (blob->size() != 1 || (blob->data()[0] != 0 && blob->data()[0] != 1))
             {
@@ -554,7 +555,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
             response.result_ = message_types::Result::SUCCESS;
             return {response, {}};
         }
-        case params::ParameterType::LONG:
+        case ParameterType::LONG:
         {
             if (blob->size() != sizeof(int64_t))
             {
@@ -581,7 +582,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
             response.result_ = message_types::Result::SUCCESS;
             return {response, {}};
         }
-        case params::ParameterType::DOUBLE:
+        case ParameterType::DOUBLE:
         {
             if (blob->size() != sizeof(double))
             {
@@ -608,14 +609,14 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
             response.result_ = message_types::Result::SUCCESS;
             return {response, {}};
         }
-        case params::ParameterType::STRING:
+        case ParameterType::STRING:
         {
             chosen_value.resize(blob->size());
             memcpy(&chosen_value[0], blob->data(), blob->size());
             response.result_ = message_types::Result::SUCCESS;
             return {response, {}};
         }
-        case params::ParameterType::ENUM:
+        case ParameterType::ENUM:
         {
             if (blob->size() != sizeof(size_t))
             {
@@ -636,7 +637,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
             response.result_ = message_types::Result::SUCCESS;
             return {response, {}};
         }
-        case params::ParameterType::CUSTOM:
+        case ParameterType::CUSTOM:
         {
             if (blob->size() != 1 || (blob->data()[0] != 0 && blob->data()[0] != 1))
             {
@@ -651,7 +652,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
                 message_wait_.list_id_ = list_id;
                 message_wait_.expected_.store(true, std::memory_order_release);
 
-                if (param.custom_channel_type_ == params::CustomChannelType::REQUEST)
+                if (param.custom_channel_type_ == CustomChannelType::REQUEST)
                 {
                     activable_module_ref_->sendRequestFromActivation(param.custom_channel_id_);
                 }
@@ -701,7 +702,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
         for (const auto& item : param_list) {
             size_t item_size = item.size();
             // If parameter is CUSTOM, write 0 and skip data
-            if (params[param_idx].type_ == params::ParameterType::CUSTOM) {
+            if (params[param_idx].type_ == ParameterType::CUSTOM) {
                 size_t custom_item_size = 1;
                 all_parameters_data.insert(all_parameters_data.end(),
                     reinterpret_cast<const uint8_t*>(&custom_item_size),
@@ -907,7 +908,7 @@ bool ActivationWrapper::areParametersValid()
         {
             switch (param.type_)
             {
-                case params::ParameterType::BOOL:
+                case ParameterType::BOOL:
                 {
                     if (item.size() != 1 || (item[0] != 0 && item[0] != 1))
                     {
@@ -915,7 +916,7 @@ bool ActivationWrapper::areParametersValid()
                     }
                     break;
                 }
-                case params::ParameterType::LONG:
+                case ParameterType::LONG:
                 {
                     if (item.size() != sizeof(int64_t))
                     {
@@ -935,7 +936,7 @@ bool ActivationWrapper::areParametersValid()
                     }
                     break;
                 }
-                case params::ParameterType::DOUBLE:
+                case ParameterType::DOUBLE:
                 {
                     if (item.size() != sizeof(double))
                     {
@@ -955,12 +956,12 @@ bool ActivationWrapper::areParametersValid()
                     }
                     break;
                 }
-                case params::ParameterType::STRING:
+                case ParameterType::STRING:
                 {
                     // any size is valid
                     break;
                 }
-                case params::ParameterType::ENUM:
+                case ParameterType::ENUM:
                 {
                     if (item.size() != sizeof(size_t))
                     {
@@ -975,7 +976,7 @@ bool ActivationWrapper::areParametersValid()
                     }
                     break;
                 }
-                case params::ParameterType::CUSTOM:
+                case ParameterType::CUSTOM:
                 {
                     // any size is valid
                     break;
@@ -1049,7 +1050,7 @@ ISerializableModule::SaveData ActivationWrapper::save() noexcept
         for (size_t j = 0; j < param_value.size(); ++j)
         {
             const auto& single_param_value = param_value[j];
-            if (param_type.type_ != params::ParameterType::CUSTOM)
+            if (param_type.type_ != ParameterType::CUSTOM)
             {
                 param_data["values"].push_back(std::vector<uint8_t>(single_param_value));
             }
@@ -1113,11 +1114,11 @@ bool ActivationWrapper::load(ISerializableModule::SaveData data) noexcept
         }
 
         int type_int = param_data["type"].get<int>();
-        if (type_int < 0 || type_int > static_cast<int>(params::ParameterType::CUSTOM))
+        if (type_int < 0 || type_int > static_cast<int>(ParameterType::CUSTOM))
         {
             return false; // invalid parameter type
         }
-        params::ParameterType type = static_cast<params::ParameterType>(type_int);
+        ParameterType type = static_cast<ParameterType>(type_int);
 
         auto& values_data = param_data["values"];
 
@@ -1132,7 +1133,7 @@ bool ActivationWrapper::load(ISerializableModule::SaveData data) noexcept
                 return false; // invalid non-CUSTOM value
             }
 
-            if (type != params::ParameterType::CUSTOM)
+            if (type != ParameterType::CUSTOM)
             {
                 
                 parameter_values_[i][j] = single_value_data.get<std::vector<uint8_t>>();

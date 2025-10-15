@@ -20,7 +20,7 @@ namespace aergo::module::helpers::activation_wrapper
         constexpr static uint32_t SCHEMA_VERSION = 1; // schema version for saved data
 
     public:
-        ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, params::ParameterList* parameters_);
+        ActivationWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::helpers::parameter_description::ParameterList* parameters_);
         
         virtual void processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
         virtual aergo::module::ResponseData processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override;
@@ -56,7 +56,7 @@ namespace aergo::module::helpers::activation_wrapper
         std::unique_ptr<aergo::module::IModule> module_ref_;      // reference to module to send IModule calls to; only changed during initialization, no need to synchronize
         BaseModule* base_module_ref_;             // reference to base module to allow sending messages and logging
         IActivableModule* activable_module_ref_;  // reference to activable module to allow activation/deactivation logic
-        params::ParameterList* parameters_;       // reference to parameter list; only changed during initialization, no need to synchronize
+        aergo::module::helpers::parameter_description::ParameterList* parameters_;       // reference to parameter list; only changed during initialization, no need to synchronize
 
         aergo::module::BaseModule::AllocatorPtr dynamic_allocator_; // dynamic allocator for responses (READ_VALUE, READ_ACTIVATION_PARAMETERS)
 

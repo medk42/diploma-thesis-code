@@ -5,7 +5,7 @@
 
 
 using namespace aergo::default_modules::frontend_module::webapp::ui;
-using namespace aergo::module::helpers::activation_wrapper::params;
+using namespace aergo::module::helpers::parameter_description;
 
 
 

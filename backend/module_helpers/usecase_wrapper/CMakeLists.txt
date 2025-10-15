@@ -1,7 +1,5 @@
-set(LIB_NAME helpers___activation_wrapper)
+set(LIB_NAME helpers___usecase_wrapper)
 
-# add JSON library
-find_package(nlohmann_json CONFIG REQUIRED)
 
 # find all sources
 file(GLOB_RECURSE PROJECT_SOURCES
@@ -13,8 +11,9 @@ add_library(${LIB_NAME} STATIC ${PROJECT_SOURCES})
 
 target_include_directories(${LIB_NAME} PUBLIC include)
 
-target_link_libraries(${LIB_NAME} PRIVATE module_common nlohmann_json::nlohmann_json)
-target_link_libraries(${LIB_NAME} PUBLIC helpers___parameter_description)
+target_link_libraries(${LIB_NAME} PRIVATE module_common helpers___parameter_description)
+target_link_libraries(${LIB_NAME} PUBLIC helpers___serialization_helper)
+
 
 # MSVC: force dynamic CRT
 if (MSVC)

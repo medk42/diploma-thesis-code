@@ -1,6 +1,6 @@
 #pragma once
 
-#include "parameter_description.h"
+#include "module_helpers/parameter_description/parameter_description.h"
 #include "module_common/module_interface_.h"
 
 
@@ -65,7 +65,7 @@ namespace aergo::module::helpers::activation_wrapper::message_types
     {
         ReqType request_type_;  // type of request
 
-        aergo::module::helpers::activation_wrapper::params::ParameterType parameter_type_; // type of parameter that is being send (to double check)
+        aergo::module::helpers::parameter_description::ParameterType parameter_type_; // type of parameter that is being send (to double check)
 
         size_t param_id_;       // ID of the parameter being changed
         size_t list_id_;        // ID into the list inside the parameter

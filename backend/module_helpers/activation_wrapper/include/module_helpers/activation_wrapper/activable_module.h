@@ -1,7 +1,6 @@
 #pragma once
 
 #include "module_common/module_interface_.h"
-#include "parameter_description.h"
 #include "message_types.h"
 
 namespace aergo::module::helpers::activation_wrapper

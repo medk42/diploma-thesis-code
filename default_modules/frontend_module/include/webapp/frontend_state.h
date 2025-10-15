@@ -1,7 +1,7 @@
 #pragma once
 
 #include "module_common/module_interface_.h"
-#include "module_helpers/activation_wrapper/parameter_description.h"
+#include "module_helpers/parameter_description/parameter_description.h"
 #include "ui/helper/parameter_value.h"
 #include "module_helpers/activation_wrapper/async_task.h"
 #include "ui/add_module_ui.h"
@@ -74,7 +74,7 @@ namespace aergo::default_modules::frontend_module::webapp
         bool waiting_for_parameters_;
         bool waiting_for_parameter_values_;
         uint32_t activation_channel_id_; // channel id of the other module used for activation/deactivation requests and responses
-        aergo::module::helpers::activation_wrapper::params::ParameterList activation_parameters_;
+        aergo::module::helpers::parameter_description::ParameterList activation_parameters_;
         std::vector<std::vector<ui::helper::value_t>> parameter_values_; // current values of the module's parameters, indexed by parameter index and list index
     };
 
