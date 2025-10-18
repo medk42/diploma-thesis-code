@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <tuple>
+#include <span>
 
 namespace aergo::module
 {
@@ -337,6 +338,60 @@ namespace aergo::module
 
     struct ResponseData
     {
+        /// @brief Create ResponseData from trivially copyable data. Blob list will be empty.
+        /// @tparam T Trivially copyable data type.
+        template<typename T>
+        static ResponseData createResponse(T data)
+        {
+            static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
+
+            ResponseData response;
+            response.success_ = true;
+
+            const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(&data);
+            response.data_.assign(data_ptr, data_ptr + sizeof(T));
+
+            return response;
+        }
+
+        /// @brief Create ResponseData from trivially copyable data and optional blob. 
+        /// If blob is empty (no data), an empty blob is still created.
+        /// @tparam T Trivially copyable data type.
+        template<typename T, typename ByteT>
+        static ResponseData createResponse(T data, std::span<ByteT> blob, IAllocator* allocator)
+        {
+            static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
+            static_assert(sizeof(ByteT) == 1, "ByteT must be a byte type (size 1)");
+
+            ResponseData response;
+            response.success_ = true;
+
+            // handle blob first (to avoid partial response on failure)
+            if (!allocator)
+            {
+                response.success_ = false;
+                return response;
+            }
+
+            // create shared data blob
+            message::SharedDataBlob shared_blob = allocator->allocate(blob.size());
+            if (!shared_blob.valid() || shared_blob.size() != blob.size())
+            {
+                response.success_ = false;
+                return response;
+            }
+
+            // copy blob data
+            std::memcpy(shared_blob.data(), blob.data(), blob.size());
+            response.blobs_.emplace_back(std::move(shared_blob));
+
+            // copy data
+            const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(&data);
+            response.data_.assign(data_ptr, data_ptr + sizeof(T));
+
+            return response;
+        }
+
         bool success_;
         std::vector<uint8_t> data_;
         std::vector<message::SharedDataBlob> blobs_;

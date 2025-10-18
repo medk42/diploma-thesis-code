@@ -8,6 +8,8 @@ namespace aergo::module::helpers::activation_wrapper
     class IActivableModule
     {
     public:
+        virtual ~IActivableModule() = default;
+
         /// @brief Activate the module with specified parameters. During long operation check cancel_flag periodically and return if set to true.
         /// If the activation is cancelled, set cancelled to true and the module should stay deactivated.
         /// @return true if activation finished successfully, false if failed

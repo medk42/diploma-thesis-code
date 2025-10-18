@@ -1,22 +1,25 @@
 #pragma once
 
 #include "module_common/module_interface_.h"
+#include "helper_types.h"
 
 // READ_COMMAND_PARAMETERS -> SUCCESS (+ blob with parameters), FAIL
-// READ_CUSTOM_PARAMETER (+ parameter_id) -> SUCCESS (+ blob with serialized response & blobs), FAIL (failed to allocate memory or invalid parameter id))
-// CREATE_COMMAND (+ blob with filled parameters) -> SUCCESS (+ blob representing command data), FAIL (failed to allocate memory or invalid parameters)
+// READ_CUSTOM_PARAMETER_START (+ parameter_id) -> SUCCESS (+task_id, parameter read started), FAIL (invalid parameter id or failed to start read)
+// READ_CUSTOM_PARAMETER_CHECK (+ task_id, + cancel flag) -> SUCCESS (+ blob with serialized response & blobs; or without blobs if cancelled), 
+//    IN_PROGRESS (read is in progress), FAIL (failed to allocate memory or invalid response), ID_INVALID (invalid task_id)
+// CREATE_COMMAND (+ blob with filled parameters (3x ParameterValues)) -> SUCCESS (+ blob representing command data), FAIL (failed to allocate memory or invalid parameters)
 // PROGRAM_READ_VISUALIZATION (+ blob with command data) -> SUCCESS (+ blob with visualization data), FAIL (failed to allocate memory or invalid command data)
-// PROGRAM_START_REAL (+ blob with command data) -> SUCCESS (+ command_id), FAIL (failed to allocate memory or invalid command data)
-// PROGRAM_START_SIMULATED (+ blob with command data) -> SUCCESS (+ command_id), FAIL (failed to allocate memory or invalid command data)
-// PROGRAM_PAUSE (+ command_id) -> SUCCESS (paused), FAIL (pausing not supported), IN_PROGRESS (pause request was accepted, check status), ID_INVALID (command_id does not exist)
-// PROGRAM_RESUME (+ command_id) -> SUCCESS (resumed), FAIL (resuming not supported), IN_PROGRESS (resume request was accepted, check status), ID_INVALID (command_id does not exist)
-// PROGRAM_STATUS (+ command_id) -> SUCCESS (+ status), FAIL (failed to get status), ID_INVALID (command_id does not exist)
-// PROGRAM_STOP (+ command_id) -> SUCCESS (stopped), FAIL (stopping not supported), IN_PROGRESS (stop request was accepted, check status), ID_INVALID (command_id does not exist)
-// PROGRAM_REMOVE (+ command_id) -> SUCCESS (removed, + status), FAIL (command not in a removable state), ID_INVALID (command_id does not exist)
+// PROGRAM_START_REAL (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command)
+// PROGRAM_START_SIMULATED (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command)
+// PROGRAM_PAUSE (+ task_id) -> SUCCESS (paused), FAIL (pausing not supported), IN_PROGRESS (pause request was accepted, check status), ID_INVALID (task_id does not exist)
+// PROGRAM_RESUME (+ task_id) -> SUCCESS (resumed), FAIL (resuming not supported), IN_PROGRESS (resume request was accepted, check status), ID_INVALID (task_id does not exist)
+// PROGRAM_STATUS (+ task_id) -> SUCCESS (+ status), FAIL (failed to get status), ID_INVALID (task_id does not exist)
+// PROGRAM_STOP (+ task_id) -> SUCCESS (stopped), FAIL (stopping not supported), IN_PROGRESS (stop request was accepted, check status), ID_INVALID (task_id does not exist)
+// PROGRAM_REMOVE (+ task_id) -> SUCCESS (removed, + status), FAIL (command not in a removable state), ID_INVALID (task_id does not exist)
 
 // Expected usecase module behavior:
 // 1) READ_COMMAND_PARAMETERS: read parameters for command from module and fill them out in your module
-//    (optionally) READ_CUSTOM_PARAMETER: read custom parameter value from module input if you have CUSTOM parameters
+//    (optionally) READ_CUSTOM_PARAMETER_START/CHECK: read custom parameter value from module input if you have CUSTOM parameters
 // 2) CREATE_COMMAND: create command with filled parameters, get command data blob
 // 3) PROGRAM_START_REAL or PROGRAM_START_SIMULATED: start command execution, get command ID
 // 4) PROGRAM_STATUS: check status of command execution (RUNNING, PAUSED, COMPLETED, FAILED, STOPPED) periodically
@@ -30,7 +33,8 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
     enum class ReqType : uint8_t
     {
         READ_COMMAND_PARAMETERS,      // get parameters required to create a command from the module
-        READ_CUSTOM_PARAMETER,        // read a custom parameter value from the modules input (for CUSTOM parameter types)
+        READ_CUSTOM_PARAMETER_START,  // start a read of a custom parameter value from the modules input (for CUSTOM parameter types)
+        READ_CUSTOM_PARAMETER_CHECK,  // check if the custom parameter value is ready, if yes, get the value (allows also cancelling the read)
         CREATE_COMMAND,               // create a command with filled parameters, get command data blob representing the created command
         PROGRAM_READ_VISUALIZATION,   // create a visualization of the command in its current state, get visualization data blob
         PROGRAM_START_REAL,           // start executing the command in real mode, get command ID
@@ -52,24 +56,25 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
 
     enum class ProgramStatus : uint8_t
     {
-        RUNNING,
-        PAUSED,
-        COMPLETED,
-        FAILED,
-        STOPPED
+        RUNNING,    // command is currently executing
+        PAUSED,     // command is currently paused
+        COMPLETED,  // command execution finished with success
+        FAILED,     // command execution finished with failure
+        STOPPED     // command execution finished due to stop request
     };
 
     struct Request
     {
         ReqType req_type_;
-        uint64_t command_id_; // for PROGRAM_STATUS, PROGRAM_PAUSE, PROGRAM_RESUME, PROGRAM_STOP
+        uint64_t task_id_;    // program id for PROGRAM_STATUS, PROGRAM_PAUSE, PROGRAM_RESUME, PROGRAM_STOP; parameter id for READ_CUSTOM_PARAMETER_CHECK
         uint32_t param_id_;   // for READ_CUSTOM_PARAMETER, id in the CUSTOM parameters list
+        bool cancel_;         // for READ_CUSTOM_PARAMETER_CHECK, if true, cancels the read
     };
 
     struct Response
     {
         Result result_;
-        uint64_t command_id_; // for PROGRAM_START_REAL, PROGRAM_START_SIMULATED
+        uint64_t task_id_; // program id for PROGRAM_START_REAL, PROGRAM_START_SIMULATED; id of read CUSTOM parameter task for READ_CUSTOM_PARAMETER_START
         ProgramStatus program_status_; // for PROGRAM_STATUS, PROGRAM_STOP
     };
 

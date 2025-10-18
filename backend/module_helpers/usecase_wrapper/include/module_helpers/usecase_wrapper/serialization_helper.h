@@ -35,7 +35,7 @@ namespace aergo::module::helpers::usecase_wrapper
         /// repeat blob_count_ times:
         ///     u64 blob_size
         ///     [blob_size * u8 blob_data]
-        inline bool pushMessage(std::vector<uint8_t>& buf, aergo::module::message::MessageHeader& header)
+        inline bool pushMessage(std::vector<uint8_t>& buf, const aergo::module::message::MessageHeader& header)
         {
             if (!header.success_ || (header.data_len_ > 0 && header.data_ == nullptr) || (header.blob_count_ > 0 && header.blobs_ == nullptr))
             {
@@ -116,7 +116,7 @@ namespace aergo::module::helpers::usecase_wrapper
         ///              ParameterType::CUSTOM: u64 custom_data_len, custom_data_len * u8 custom_data
         inline void pushParameterValues(
             std::vector<uint8_t>& buf,
-            const std::vector<std::vector<helper::ParameterValue>>& parameter_values
+            const std::vector<std::vector<helper::ParameterTypeValue>>& parameter_values
         )
         {
             ser::push<uint64_t>(buf, static_cast<uint64_t>(parameter_values.size())); // [u64 parameter_count]
@@ -313,7 +313,7 @@ namespace aergo::module::helpers::usecase_wrapper
         ///              ParameterType::CUSTOM: u64 custom_data_len, custom_data_len * u8 custom_data
         inline bool readParameterValues(
             des::BufferReader& reader,
-            std::vector<std::vector<helper::ParameterValue>>& out_parameter_values
+            std::vector<std::vector<helper::ParameterTypeValue>>& out_parameter_values
         )
         {
             uint64_t parameter_count = 0;
@@ -353,7 +353,7 @@ namespace aergo::module::helpers::usecase_wrapper
                         return false; // invalid ParameterType
                     }
 
-                    helper::ParameterValue& param_value = out_parameter_values[param_id][list_id];
+                    helper::ParameterTypeValue& param_value = out_parameter_values[param_id][list_id];
                     param_value.type_ = static_cast<p_desc::ParameterType>(param_type_int);
 
                     switch (param_value.type_)

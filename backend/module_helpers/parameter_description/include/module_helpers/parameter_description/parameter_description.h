@@ -4,11 +4,22 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <variant>
+#include <optional>
 
 
 
 namespace aergo::module::helpers::parameter_description
 {
+    using ParameterValue = std::variant<
+        bool,                // boolean
+        int64_t,             // long
+        double,              // double
+        std::string,         // string
+        int32_t,             // enum index (or -1 for no selection)
+        std::vector<uint8_t> // custom channel data
+    >;
+
     enum class ParameterType
     {
         BOOL,
@@ -53,6 +64,8 @@ namespace aergo::module::helpers::parameter_description
         std::string default_value_; // default value as a string (for all types, except CUSTOM; for lists, value is used for all entries), for enum it is the enum string value (if empty, first enum value is used)
         
 
+        /// @brief Parse the default value string into ParameterValue. If no default value is set or parsing fails, returns std::nullopt.
+        std::optional<ParameterValue> parseDefaultValue() const;
         void toStringStream(std::stringstream& stream);
         static ParameterDescription fromStringStream(std::stringstream& stream);
     };

@@ -11,6 +11,81 @@ using namespace aergo::module::helpers::parameter_description;
 
 
 
+std::optional<ParameterValue> ParameterDescription::parseDefaultValue() const
+{
+    if (default_value_.empty())
+    {
+        return std::nullopt;
+    }
+
+    try
+    {
+        switch (type_)
+        {
+            case ParameterType::BOOL:
+            {
+                if (default_value_ == "1")
+                {
+                    return ParameterValue(true);
+                }
+                else if (default_value_ == "0")
+                {
+                    return ParameterValue(false);
+                }
+                break;
+            }
+            case ParameterType::LONG:
+            {
+                int64_t value = std::stoll(default_value_);
+                if (limit_min_ && value < min_value_long_)
+                {
+                    value = min_value_long_;
+                }
+                if (limit_max_ && value > max_value_long_)
+                {
+                    value = max_value_long_;
+                }
+                return ParameterValue(value);
+            }
+            case ParameterType::DOUBLE:
+            {
+                double value = std::stod(default_value_);
+                if (limit_min_ && value < min_value_double_)
+                {
+                    value = min_value_double_;
+                }
+                if (limit_max_ && value > max_value_double_)
+                {
+                    value = max_value_double_;
+                }
+                return ParameterValue(value);
+            }
+            case ParameterType::STRING:
+            {
+                return ParameterValue(default_value_);
+            }
+            case ParameterType::ENUM:
+            {
+                for (size_t i = 0; i < enum_values_.size(); ++i)
+                {
+                    if (enum_values_[i] == default_value_)
+                    {
+                        return ParameterValue(static_cast<int32_t>(i));
+                    }
+                }
+            }
+        }
+    }
+    catch (...)
+    {
+        // parsing error
+    }
+
+    return std::nullopt;
+}
+
+
+
 void ParameterDescription::toStringStream(std::stringstream& stream)
 {
     stream << (size_t)type_ << " ";
