@@ -667,6 +667,7 @@ aergo::module::ResponseData UsecaseWrapper::handleProgramStart(message::SharedDa
 aergo::module::ResponseData UsecaseWrapper::handleProgramCommand(message_types::ReqType command_type, uint64_t task_id) noexcept
 {
     message_types::Response response;
+    response.task_id_ = task_id;
 
     switch (command_type)
     {
