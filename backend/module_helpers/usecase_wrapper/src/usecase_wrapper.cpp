@@ -666,37 +666,29 @@ aergo::module::ResponseData UsecaseWrapper::handleProgramStart(message::SharedDa
 
 aergo::module::ResponseData UsecaseWrapper::handleProgramCommand(message_types::ReqType command_type, uint64_t task_id) noexcept
 {
-    message_types::Result command_response;
-    message_types::ProgramStatus program_status;
+    message_types::Response response;
 
     switch (command_type)
     {
         case message_types::ReqType::PROGRAM_STATUS:
-            command_response = usecase_module_ref_->programStatus(task_id, program_status);
-            if (command_response == message_types::Result::SUCCESS)
-            {
-                return ResponseData::createResponse(
-                    message_types::Response{ .result_ = command_response, .program_status_ = program_status }
-                );
-            }
-            else
-            {
-                return ResponseData::createResponse(
-                    message_types::Response{ .result_ = command_response }
-                );
-            }
+            response.result_ = usecase_module_ref_->programStatus(task_id, response.program_status_);
             break;
         case message_types::ReqType::PROGRAM_PAUSE:
+            response.result_ = usecase_module_ref_->programPause(task_id);
+            break;
         case message_types::ReqType::PROGRAM_RESUME:
+            response.result_ = usecase_module_ref_->programResume(task_id);
+            break;
         case message_types::ReqType::PROGRAM_STOP:
+            response.result_ = usecase_module_ref_->programStop(task_id);
+            break;
         case message_types::ReqType::PROGRAM_REMOVE:
-            command_response = usecase_module_ref_->programRemove(task_id);
-            return ResponseData::createResponse(
-                message_types::Response{ .result_ = command_response }
-            );
+            response.result_ = usecase_module_ref_->programRemove(task_id);
+            break;
         default:
-            return ResponseData::createResponse(
-                message_types::Response{ .result_ = message_types::Result::FAIL }
-            );
+            response.result_ = message_types::Result::FAIL;
+            break;
     }
+
+    return ResponseData::createResponse(response);
 }
