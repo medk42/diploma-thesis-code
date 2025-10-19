@@ -334,7 +334,7 @@ aergo::module::ResponseData UsecaseWrapper::processUsecaseRequest(message::Messa
 {
     if (message.data_ == nullptr || message.data_len_ != sizeof(message_types::Request))
     {
-        return { .success_ = false };
+        return ResponseData::createFailure(); // invalid message
     }
 
     auto& request = *reinterpret_cast<message_types::Request*>(message.data_);
@@ -344,7 +344,7 @@ aergo::module::ResponseData UsecaseWrapper::processUsecaseRequest(message::Messa
          request.req_type_ == message_types::ReqType::PROGRAM_START_SIMULATED) &&
         (message.blob_count_ == 0 || message.blobs_ == nullptr || !message.blobs_[0].valid()))
     {
-        return { .success_ = false }; // missing required blob
+        return ResponseData::createFailure(); // missing required blob
     }
 
 
@@ -371,10 +371,10 @@ aergo::module::ResponseData UsecaseWrapper::processUsecaseRequest(message::Messa
         case message_types::ReqType::PROGRAM_REMOVE:
             return handleProgramCommand(request.req_type_, request.task_id_);
         default:
-            return { .success_ = false }; // unknown request type
+            return ResponseData::createFailure(); // unknown request type
     }
 
-    return { .success_ = false };
+    return ResponseData::createFailure(); // should not reach here
 }
 
 
@@ -586,7 +586,7 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
         );
     }
 
-    std::string command_data_json;
+    nlohmann::json command_data_json;
     if (!usecase_module_ref_->createCommandFromParameters(
         auto_parameters_,
         manual_parameters_,
@@ -603,9 +603,23 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
         );
     }
 
+    std::string command_data_json_str;
+    try
+    {
+        command_data_json_str = command_data_json.dump(-1, ' ', true, nlohmann::json::error_handler_t::strict);
+    }
+    catch (const std::exception& e)
+    {
+        base_module_ref_->log(aergo::module::logging::LogType::ERROR, std::string("UsecaseWrapper: handleCreateCommand failed to serialize command JSON: ") + e.what());
+        return ResponseData::createResponse(
+            message_types::Response{ .result_ = message_types::Result::FAIL }
+        );
+    }
+    
+
     return ResponseData::createResponse(
         message_types::Response{ .result_ = message_types::Result::SUCCESS },
-        std::span(reinterpret_cast<const uint8_t*>(command_data_json.data()), command_data_json.size()),
+        std::span(reinterpret_cast<const uint8_t*>(command_data_json_str.data()), command_data_json_str.size()),
         dynamic_allocator_.get()
     );
 }
@@ -642,7 +656,14 @@ aergo::module::ResponseData UsecaseWrapper::handleProgramStart(message::SharedDa
         );
     }
 
-    std::string command_data_json(reinterpret_cast<const char*>(blob.data()), blob.size());
+    nlohmann::json command_data_json = nlohmann::json::parse(blob.data(), blob.data() + blob.size(), nullptr, false); // false == non-throwing parse
+    if (command_data_json.is_discarded())
+    {
+        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: handleProgramStart failed to parse command JSON.");
+        return ResponseData::createResponse(
+            message_types::Response{ .result_ = message_types::Result::FAIL }
+        );
+    }
     
     uint64_t task_id = 0;
     message_types::Result start_response = usecase_module_ref_->programStart(command_data_json, simulated, task_id);

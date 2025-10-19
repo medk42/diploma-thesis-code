@@ -392,6 +392,13 @@ namespace aergo::module
             return response;
         }
 
+        static ResponseData createFailure()
+        {
+            ResponseData response;
+            response.success_ = false;
+            return response;
+        }
+
         bool success_;
         std::vector<uint8_t> data_;
         std::vector<message::SharedDataBlob> blobs_;

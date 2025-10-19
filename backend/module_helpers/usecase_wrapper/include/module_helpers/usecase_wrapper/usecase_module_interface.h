@@ -4,6 +4,8 @@
 #include "helper_types.h"
 #include "message_types.h"
 
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
 
 namespace aergo::module::helpers::usecase_wrapper
@@ -36,7 +38,7 @@ namespace aergo::module::helpers::usecase_wrapper
             std::vector<std::vector<helper::ParameterTypeValue>>& auto_parameter_values,
             std::vector<std::vector<helper::ParameterTypeValue>>& required_parameter_values,
             std::vector<std::vector<helper::ParameterTypeValue>>& advanced_parameter_values,
-            std::string& out_command_json
+            nlohmann::json& out_command_json
         ) = 0;
 
         /// @brief Start execution of a command. Command is represented as a string in JSON format.
@@ -44,7 +46,7 @@ namespace aergo::module::helpers::usecase_wrapper
         /// @param simulated true to start command in simulated mode, false to start in real mode
         /// @param out_task_id output parameter to store started task ID to allow control / reading status later, only on SUCCESS
         /// @return SUCCESS + filled out out_task_id (command started successfully), FAIL (failed to allocate memory, invalid command data or unable to start another command)
-        virtual message_types::Result programStart(const std::string& command_json, bool simulated, uint64_t& out_task_id) = 0;
+        virtual message_types::Result programStart(const nlohmann::json& command_json, bool simulated, uint64_t& out_task_id) = 0;
 
         /// @brief Pause execution of a command. Only if supported by the command - if supported, RESUME must also be supported.
         /// @param task_id ID of the task to pause
