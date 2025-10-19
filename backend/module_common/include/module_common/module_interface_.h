@@ -333,7 +333,7 @@ namespace aergo::module
     };
 
     /// @brief Reference to the core.
-    class ICore : public virtual ICoreBase, public virtual ICoreControl
+    class ICore : public ICoreBase, public ICoreControl
     {};
 
     struct ResponseData
@@ -467,7 +467,7 @@ namespace aergo::module
         virtual bool load(SaveData data) noexcept = 0;
     };
 
-    class IModule : public virtual IModuleBase, public virtual ISerializableModule
+    class IModule : public IModuleBase, public ISerializableModule
     {  
     public:
         enum class ProcessingType { MESSAGE, REQUEST, RESPONSE };

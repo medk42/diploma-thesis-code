@@ -11,7 +11,7 @@
 
 namespace aergo::module::helpers::usecase_wrapper
 {
-    class UsecaseWrapper : public virtual aergo::module::IModule
+    class UsecaseWrapper : public aergo::module::IModule
     {
     public:
         /// @param auto_parameters parameters that are set from the input Consumer channels (subscribe/request) - only CUSTOM type allowed (value or list of values)

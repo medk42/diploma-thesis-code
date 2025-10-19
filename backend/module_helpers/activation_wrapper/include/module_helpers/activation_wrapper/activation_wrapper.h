@@ -15,7 +15,7 @@ namespace aergo::module::helpers::activation_wrapper
 {
     /// @brief Wrapper for modules that can be activated/deactivated with parameters.
     /// Holds back all messages/requests/responses until the module is activated.
-    class ActivationWrapper : public virtual aergo::module::IModule
+    class ActivationWrapper : public aergo::module::IModule
     {
         constexpr static uint32_t SCHEMA_VERSION = 1; // schema version for saved data
 
