@@ -7,13 +7,13 @@
 // READ_CUSTOM_PARAMETER_START (+ parameter_id) -> SUCCESS (+task_id, parameter read started), FAIL (invalid parameter id or failed to start read)
 // READ_CUSTOM_PARAMETER_CHECK (+ task_id, + cancel flag) -> SUCCESS (+ blob with serialized response & blobs; or without blobs if cancelled), 
 //    IN_PROGRESS (read is in progress), FAIL (failed to allocate memory or invalid response), ID_INVALID (invalid task_id)
-// CREATE_COMMAND (+ blob with filled parameters (3x ParameterValues)) -> SUCCESS (+ blob representing command data), FAIL (failed to allocate memory or invalid parameters)
+// CREATE_COMMAND (+ blob with filled parameters (3x ParameterValues)) -> SUCCESS (+ blob representing command data), FAIL (failed to allocate memory or invalid parameters, blob with error description)
 // PROGRAM_READ_VISUALIZATION (+ blob with command data) -> SUCCESS (+ blob with visualization data), FAIL (failed to allocate memory or invalid command data)
-// PROGRAM_START_REAL (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command)
-// PROGRAM_START_SIMULATED (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command)
+// PROGRAM_START_REAL (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command, optionally blob with error description)
+// PROGRAM_START_SIMULATED (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command, optionally blob with error description)
 // PROGRAM_PAUSE (+ task_id) -> SUCCESS (paused), FAIL (pausing not supported), IN_PROGRESS (pause request was accepted, check status), ID_INVALID (task_id does not exist)
 // PROGRAM_RESUME (+ task_id) -> SUCCESS (resumed), FAIL (resuming not supported), IN_PROGRESS (resume request was accepted, check status), ID_INVALID (task_id does not exist)
-// PROGRAM_STATUS (+ task_id) -> SUCCESS (+ status), FAIL (failed to get status), ID_INVALID (task_id does not exist)
+// PROGRAM_STATUS (+ task_id) -> SUCCESS (+ ProgramStatus status, optionally blob with error description with failed ProgramStatus states (FAILED, EXCEPTION)), FAIL (failed to get status), ID_INVALID (task_id does not exist)
 // PROGRAM_STOP (+ task_id) -> SUCCESS (stopped), FAIL (stopping not supported), IN_PROGRESS (stop request was accepted, check status), ID_INVALID (task_id does not exist)
 // PROGRAM_REMOVE (+ task_id) -> SUCCESS (removed, + status), FAIL (command not in a removable state), ID_INVALID (task_id does not exist)
 
@@ -48,8 +48,8 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
 
     enum class Result : uint8_t
     {
-        SUCCESS,
-        FAIL,
+        SUCCESS,  // + optionally blob with error description for PROGRAM_STATUS with FAILED, EXCEPTION status
+        FAIL,  // + optionally blob with error description
         IN_PROGRESS,
         ID_INVALID
     };
@@ -60,6 +60,7 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
         PAUSED,     // command is currently paused
         COMPLETED,  // command execution finished with success
         FAILED,     // command execution finished with failure
+        EXCEPTION,  // command raised an exception during execution
         STOPPED     // command execution finished due to stop request
     };
 

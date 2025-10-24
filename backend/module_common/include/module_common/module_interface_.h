@@ -408,7 +408,7 @@ namespace aergo::module
     {
     public:
         
-        virtual ~IModuleBase() = default;
+        virtual ~IModuleBase() noexcept = default;
 
         /// @brief Process a message that came to subscribed channel "subscribe_consumer_id" from module "module_id".
         /// @param subscribe_consumer_id ID of this module's channel from which the message came
@@ -447,7 +447,7 @@ namespace aergo::module
             std::vector<SavedBlob> blobs_;
         };
 
-        inline virtual ~ISerializableModule() = default;
+        inline virtual ~ISerializableModule() noexcept = default;
 
         /// @brief Save the module state. State is saved into a JSON header and a list of named binary blobs.
         /// Any large data should be saved into blobs, small POD data can be saved into the JSON header.
@@ -470,6 +470,8 @@ namespace aergo::module
     class IModule : public IModuleBase, public ISerializableModule
     {  
     public:
+        ~IModule() noexcept override = default;
+
         enum class ProcessingType { MESSAGE, REQUEST, RESPONSE };
 
         enum class QueueStatus 

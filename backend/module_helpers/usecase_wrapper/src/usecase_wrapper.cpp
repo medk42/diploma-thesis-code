@@ -587,7 +587,7 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
     }
 
     nlohmann::json command_data_json;
-    if (!usecase_module_ref_->createCommandFromParameters(
+    auto res = usecase_module_ref_->createCommandFromParameters(
         auto_parameters_,
         manual_parameters_,
         advanced_parameters_,
@@ -595,12 +595,32 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
         required_parameter_values_,
         advanced_parameter_values_,
         command_data_json
-    ))
+    );
+    if (!res)
     {
-        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: handleCreateCommand failed to create command from parameters.");
-        return ResponseData::createResponse(
-            message_types::Response{ .result_ = message_types::Result::FAIL }
-        );
+        auto& error = res.error();
+
+        if (error.has_details_)
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: handleCreateCommand failed to create command from parameters, error " + std::to_string(error.error_code_) + ": " + error.error_message_);
+
+            // include error info in response
+            std::vector<uint8_t> out;
+            serialize::pushErrorInfo(out, error);
+
+            return ResponseData::createResponse(
+                message_types::Response{ .result_ = message_types::Result::FAIL },
+                std::span(out),
+                dynamic_allocator_.get()
+            );
+        }
+        else
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: handleCreateCommand failed to create command from parameters.");
+            return ResponseData::createResponse(
+                message_types::Response{ .result_ = message_types::Result::FAIL }
+            );
+        }
     }
 
     std::string command_data_json_str;
@@ -666,12 +686,25 @@ aergo::module::ResponseData UsecaseWrapper::handleProgramStart(message::SharedDa
     }
     
     uint64_t task_id = 0;
-    message_types::Result start_response = usecase_module_ref_->programStart(command_data_json, simulated, task_id);
+    helper::ErrorInfo error_info;
+    message_types::Result start_response = usecase_module_ref_->programStart(command_data_json, simulated, task_id, error_info);
     
     if (start_response == message_types::Result::SUCCESS)
     {
         return ResponseData::createResponse(
             message_types::Response{ .result_ = message_types::Result::SUCCESS, .task_id_ = task_id }
+        );
+    }
+    else if (start_response == message_types::Result::FAIL && error_info.has_details_)
+    {
+        // include error info in response
+        std::vector<uint8_t> out;
+        serialize::pushErrorInfo(out, error_info);
+
+        return ResponseData::createResponse(
+            message_types::Response{ .result_ = message_types::Result::FAIL },
+            std::span(out),
+            dynamic_allocator_.get()
         );
     }
     else
@@ -689,11 +722,12 @@ aergo::module::ResponseData UsecaseWrapper::handleProgramCommand(message_types::
 {
     message_types::Response response;
     response.task_id_ = task_id;
+    helper::ErrorInfo error_info;
 
     switch (command_type)
     {
         case message_types::ReqType::PROGRAM_STATUS:
-            response.result_ = usecase_module_ref_->programStatus(task_id, response.program_status_);
+            response.result_ = usecase_module_ref_->programStatus(task_id, response.program_status_, error_info);
             break;
         case message_types::ReqType::PROGRAM_PAUSE:
             response.result_ = usecase_module_ref_->programPause(task_id);
@@ -710,6 +744,21 @@ aergo::module::ResponseData UsecaseWrapper::handleProgramCommand(message_types::
         default:
             response.result_ = message_types::Result::FAIL;
             break;
+    }
+
+    if (command_type == message_types::ReqType::PROGRAM_STATUS 
+        && response.result_ == message_types::Result::SUCCESS
+        && error_info.has_details_)
+    {
+        // include error info in response (mainly for FAILED status)
+        std::vector<uint8_t> out;
+        serialize::pushErrorInfo(out, error_info);
+
+        return ResponseData::createResponse(
+            response,
+            std::span(out),
+            dynamic_allocator_.get()
+        );
     }
 
     return ResponseData::createResponse(response);

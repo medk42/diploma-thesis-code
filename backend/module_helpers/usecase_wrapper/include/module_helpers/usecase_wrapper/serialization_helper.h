@@ -160,6 +160,19 @@ namespace aergo::module::helpers::usecase_wrapper
                 }
             }
         }
+
+
+        /// @brief Push error info to buffer: [bool has_details_] if (has_details_) { [bool is_exception_][u32 error_code_][u64 error_message_len][error_message_len * u8 error_message] }
+        inline void pushErrorInfo(std::vector<uint8_t>& buf, const helper::ErrorInfo& error_info)
+        {
+            ser::push<bool>(buf, error_info.has_details_); // [bool has_details_]
+            if (error_info.has_details_)
+            {
+                ser::push<bool>(buf, error_info.is_exception_); // [bool is_exception_]
+                ser::push<uint32_t>(buf, error_info.error_code_); // [u32 error_code_]
+                pushString(buf, error_info.error_message_.c_str(), error_info.error_message_.size()); // [u64 error_message_len, error_message_len * u8 error_message]
+            }
+        }
     }
 
     namespace deserialize
@@ -419,6 +432,39 @@ namespace aergo::module::helpers::usecase_wrapper
                 }
             }
 
+            return true;
+        }
+
+
+        /// @brief Read error info from buffer: [bool has_details_] if (has_details_) { [bool is_exception_][u32 error_code_][u64 error_message_len][error_message_len * u8 error_message] }
+        inline bool readErrorInfo(des::BufferReader& reader, helper::ErrorInfo& out_error_info)
+        {
+            if (!reader.read<bool>(out_error_info.has_details_))
+            {
+                return false; // failed to read has_details_
+            }
+            if (out_error_info.has_details_)
+            {
+                if (!reader.read<bool>(out_error_info.is_exception_))
+                {
+                    return false; // failed to read is_exception_
+                }
+                if (!reader.read<uint32_t>(out_error_info.error_code_))
+                {
+                    return false; // failed to read error_code_
+                }
+                if (!readString(reader, out_error_info.error_message_))
+                {
+                    return false; // failed to read error_message_
+                }
+            }
+            else
+            {
+                // no details, return
+                out_error_info.is_exception_ = false;
+                out_error_info.error_code_ = 0;
+                out_error_info.error_message_.clear();
+            }
             return true;
         }
     }

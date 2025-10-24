@@ -13,6 +13,7 @@ namespace aergo::module
     {
     public:
         BaseModule(const char* data_path, ICore* core, InputChannelMapInfo channel_map_info, const logging::ILogger* logger, uint64_t module_id, const ModuleInfo* module_info);
+        ~BaseModule() noexcept override = default;
 
         using AllocatorPtr = std::unique_ptr<IAllocator, std::function<void(IAllocator*)>>;
 
