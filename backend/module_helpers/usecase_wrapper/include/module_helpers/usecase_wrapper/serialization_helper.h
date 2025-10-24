@@ -76,6 +76,10 @@ namespace aergo::module::helpers::usecase_wrapper
         /// @brief Push module identifier and usecase parameters to buffer: [4 * string]
         /// @param module_type_identifier unique identifier of the module type to identify this usecase module
         /// @param module_type_identifier_len length of the module_type_identifier string
+        /// @param param_name name of the usecase parameter set
+        /// @param param_name_len length of the param_name string
+        /// @param param_desc description of the usecase parameter set
+        /// @param param_desc_len length of the param_desc string
         /// @param auto_parameters parameters that are set from the input Consumer channels (subscribe/request) - only CUSTOM type allowed (value or list of values)
         /// @param required_parameters parameters that are required to be set by the user before activation - any non-CUSTOM type allowed (value or list of values)
         /// @param advanced_parameters parameters that are optional to set by the user before activation - any non-CUSTOM type allowed, need to have default value (value or list of values)
@@ -83,12 +87,18 @@ namespace aergo::module::helpers::usecase_wrapper
             std::vector<uint8_t>& buf,
             const char* module_type_identifier,
             size_t module_type_identifier_len,
+            const char* param_name,
+            size_t param_name_len,
+            const char* param_desc,
+            size_t param_desc_len,
             p_desc::ParameterList& auto_parameters,
             p_desc::ParameterList& required_parameters,
             p_desc::ParameterList& advanced_parameters
         )
         {
             pushString(buf, module_type_identifier, module_type_identifier_len); // [u64 module_type_identifier_len, module_type_identifier_len * u8 module_type_identifier]
+            pushString(buf, param_name, param_name_len); // [u64 param_name_len, param_name_len * u8 param_name]
+            pushString(buf, param_desc, param_desc_len); // [u64 param_desc_len, param_desc_len * u8 param_desc]
 
             std::string auto_parameters_str = auto_parameters.toString();
             pushString(buf, auto_parameters_str.c_str(), auto_parameters_str.size()); // [u64 auto_parameters_str_len, auto_parameters_str_len * u8 auto_parameters_str]
@@ -267,12 +277,16 @@ namespace aergo::module::helpers::usecase_wrapper
 
         /// @brief Read module identifier and usecase parameters from buffer: [4 * string]
         /// @param out_module_type_identifier unique identifier of the module type to identify this usecase module
+        /// @param out_param_name name of the usecase parameter set
+        /// @param out_param_desc description of the usecase parameter set
         /// @param out_auto_parameters parameters that are set from the input Consumer channels (subscribe/request) - only CUSTOM type allowed (value or list of values)
         /// @param out_required_parameters parameters that are required to be set by the user before activation - any non-CUSTOM type allowed (value or list of values)
         /// @param out_advanced_parameters parameters that are optional to set by the user before activation - any non-CUSTOM type allowed, need to have default value (value or list of values)
         inline bool readParameters(
             des::BufferReader& reader,
             std::string& out_module_type_identifier,
+            std::string& out_param_name,
+            std::string& out_param_desc,
             p_desc::ParameterList& out_auto_parameters,
             p_desc::ParameterList& out_required_parameters,
             p_desc::ParameterList& out_advanced_parameters
@@ -281,6 +295,16 @@ namespace aergo::module::helpers::usecase_wrapper
             if (!readString(reader, out_module_type_identifier))
             {
                 return false; // failed to read module_type_identifier
+            }
+
+            if (!readString(reader, out_param_name))
+            {
+                return false; // failed to read param_name
+            }
+
+            if (!readString(reader, out_param_desc))
+            {
+                return false; // failed to read param_desc
             }
 
             std::string auto_parameters_str, required_parameters_str, advanced_parameters_str;

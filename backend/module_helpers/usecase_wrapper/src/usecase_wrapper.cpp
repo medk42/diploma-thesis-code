@@ -8,13 +8,16 @@ using namespace aergo::module;
 
 UsecaseWrapper::UsecaseWrapper(
     std::unique_ptr<aergo::module::IModule> module,
+    std::string param_name,
+    std::string param_desc,
     p_desc::ParameterList auto_parameters,
     p_desc::ParameterList manual_parameters,
     p_desc::ParameterList advanced_parameters
 )
 : valid_(false), module_ref_(std::move(module)), 
   auto_parameters_(std::move(auto_parameters)), manual_parameters_(std::move(manual_parameters)), 
-  advanced_parameters_(std::move(advanced_parameters))
+  advanced_parameters_(std::move(advanced_parameters)),
+  param_name_(std::move(param_name)), param_desc_(std::move(param_desc))
 {
     if (module_ref_.get() == nullptr)
     {
@@ -388,6 +391,10 @@ aergo::module::ResponseData UsecaseWrapper::handleReadCommandParameters() noexce
         out, 
         module_type_identifier,
         strlen(module_type_identifier),
+        param_name_.c_str(),
+        param_name_.size(),
+        param_desc_.c_str(),
+        param_desc_.size(),
         auto_parameters_, 
         manual_parameters_, 
         advanced_parameters_

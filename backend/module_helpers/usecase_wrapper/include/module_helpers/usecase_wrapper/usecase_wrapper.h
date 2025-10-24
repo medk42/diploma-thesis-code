@@ -14,11 +14,16 @@ namespace aergo::module::helpers::usecase_wrapper
     class UsecaseWrapper : public aergo::module::IModule
     {
     public:
+        /// @param module module to wrap
+        /// @param param_name name of the usecase
+        /// @param param_desc description of the usecase
         /// @param auto_parameters parameters that are set from the input Consumer channels (subscribe/request) - only CUSTOM type allowed (value or list of values)
         /// @param required_parameters parameters that are required to be set by the user before activation - any non-CUSTOM type allowed (value or list of values)
         /// @param advanced_parameters parameters that are optional to set by the user before activation - any non-CUSTOM type allowed, need to have default value (value or list of values)
         UsecaseWrapper(
             std::unique_ptr<aergo::module::IModule> module, 
+            std::string param_name,
+            std::string param_desc,
             p_desc::ParameterList auto_parameters, 
             p_desc::ParameterList manual_parameters, 
             p_desc::ParameterList advanced_parameters
@@ -72,6 +77,8 @@ namespace aergo::module::helpers::usecase_wrapper
         std::unique_ptr<aergo::module::IModule> module_ref_;        // reference to module to send IModule calls to; only changed during initialization, no need to synchronize
         aergo::module::BaseModule* base_module_ref_;                // reference to base module to allow sending messages and logging
         IUsecaseModule* usecase_module_ref_;                        // reference to usecase module to allow sending requests from usecase wrapper
+        std::string param_name_;                                    // name of the usecase
+        std::string param_desc_;                                    // description of the usecase
 
         bool valid_;                                                // is the wrapper valid (correctly initialized); only changed during initialization, no need to synchronize
         uint32_t expected_response_producer_id_;                    // ID of the response producer channel for usecase responses
