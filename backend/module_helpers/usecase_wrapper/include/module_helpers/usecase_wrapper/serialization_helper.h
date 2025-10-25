@@ -18,8 +18,11 @@ namespace aergo::module::helpers::usecase_wrapper
 
 
         /// @brief Push a string to buffer [u64 str_len][str_len * u8 str]
-        inline void pushString(std::vector<uint8_t>& buf, const char* str, size_t str_len)
+        template <typename ByteT>
+        inline void pushString(std::vector<ByteT>& buf, const char* str, size_t str_len)
         {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
             ser::push<uint64_t>(buf, static_cast<uint64_t>(str_len)); // [u64 str_len]
             if (str_len > 0)
             {
@@ -35,8 +38,11 @@ namespace aergo::module::helpers::usecase_wrapper
         /// repeat blob_count_ times:
         ///     u64 blob_size
         ///     [blob_size * u8 blob_data]
-        inline bool pushMessage(std::vector<uint8_t>& buf, const aergo::module::message::MessageHeader& header)
+        template <typename ByteT>
+        inline bool pushMessage(std::vector<ByteT>& buf, const aergo::module::message::MessageHeader& header)
         {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
             if (!header.success_ || (header.data_len_ > 0 && header.data_ == nullptr) || (header.blob_count_ > 0 && header.blobs_ == nullptr))
             {
                 return false; // invalid message
@@ -83,8 +89,9 @@ namespace aergo::module::helpers::usecase_wrapper
         /// @param auto_parameters parameters that are set from the input Consumer channels (subscribe/request) - only CUSTOM type allowed (value or list of values)
         /// @param required_parameters parameters that are required to be set by the user before activation - any non-CUSTOM type allowed (value or list of values)
         /// @param advanced_parameters parameters that are optional to set by the user before activation - any non-CUSTOM type allowed, need to have default value (value or list of values)
+        template <typename ByteT>
         inline void pushParameters(
-            std::vector<uint8_t>& buf,
+            std::vector<ByteT>& buf,
             const char* module_type_identifier,
             size_t module_type_identifier_len,
             const char* param_name,
@@ -96,6 +103,8 @@ namespace aergo::module::helpers::usecase_wrapper
             p_desc::ParameterList& advanced_parameters
         )
         {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
             pushString(buf, module_type_identifier, module_type_identifier_len); // [u64 module_type_identifier_len, module_type_identifier_len * u8 module_type_identifier]
             pushString(buf, param_name, param_name_len); // [u64 param_name_len, param_name_len * u8 param_name]
             pushString(buf, param_desc, param_desc_len); // [u64 param_desc_len, param_desc_len * u8 param_desc]
@@ -124,11 +133,14 @@ namespace aergo::module::helpers::usecase_wrapper
         ///              ParameterType::STRING: u64 str_len, str_len * u8 str
         ///              ParameterType::ENUM:   i32 enum_index
         ///              ParameterType::CUSTOM: u64 custom_data_len, custom_data_len * u8 custom_data
+        template <typename ByteT>
         inline void pushParameterValues(
-            std::vector<uint8_t>& buf,
+            std::vector<ByteT>& buf,
             const std::vector<std::vector<helper::ParameterTypeValue>>& parameter_values
         )
         {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
             ser::push<uint64_t>(buf, static_cast<uint64_t>(parameter_values.size())); // [u64 parameter_count]
             for (const auto& param_value : parameter_values)
             {
@@ -172,9 +184,13 @@ namespace aergo::module::helpers::usecase_wrapper
         }
 
 
+
         /// @brief Push error info to buffer: [bool has_details_] if (has_details_) { [bool is_exception_][u32 error_code_][u64 error_message_len][error_message_len * u8 error_message] }
-        inline void pushErrorInfo(std::vector<uint8_t>& buf, const helper::ErrorInfo& error_info)
+        template <typename ByteT>
+        inline void pushErrorInfo(std::vector<ByteT>& buf, const helper::ErrorInfo& error_info)
         {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
             ser::push<bool>(buf, error_info.has_details_); // [bool has_details_]
             if (error_info.has_details_)
             {
