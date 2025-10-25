@@ -6,6 +6,7 @@
 #include <string>
 #include <tuple>
 #include <span>
+#include <span>
 
 namespace aergo::module
 {
@@ -160,6 +161,65 @@ namespace aergo::module
 
         struct MessageHeader
         {
+            template <typename T>
+            static MessageHeader Message(T* data)
+            {
+                static_assert(std::is_pod<T>::value, "Only POD types are supported in MessageHeader::Message");
+                return MessageHeader
+                {
+                    .data_ = reinterpret_cast<uint8_t*>(data),
+                    .data_len_ = sizeof(T),
+                    .blobs_ = nullptr,
+                    .blob_count_ = 0,
+                    .id_ = 0,
+                    .timestamp_ns_ = 0,
+                    .success_ = true
+                };
+            }
+
+            template <typename T>
+            static MessageHeader Message(T* data, SharedDataBlob* blobs, uint64_t blob_count = 1)
+            {
+                static_assert(std::is_pod<T>::value, "Only POD types are supported in MessageHeader::Message");
+                return MessageHeader
+                {
+                    .data_ = reinterpret_cast<uint8_t*>(data),
+                    .data_len_ = sizeof(T),
+                    .blobs_ = blobs,
+                    .blob_count_ = blob_count,
+                    .id_ = 0,
+                    .timestamp_ns_ = 0,
+                    .success_ = true
+                };
+            }
+
+            static MessageHeader Failure()
+            {
+                return MessageHeader
+                {
+                    .data_ = nullptr,
+                    .data_len_ = 0,
+                    .blobs_ = nullptr,
+                    .blob_count_ = 0,
+                    .id_ = 0,
+                    .timestamp_ns_ = 0,
+                    .success_ = false
+                };
+            }
+
+            template<typename T>
+            bool readAs(T& out_data) const
+            {
+                static_assert(std::is_pod<T>::value, "Only POD types are supported in MessageHeader::Message");
+
+                if (!success_ || data_len_ != sizeof(T) || data_ == nullptr)
+                {
+                    return false; // invalid data
+                }
+                std::memcpy(&out_data, data_, sizeof(T)); // safe for alignment & aliasing
+                return true;
+            }
+
             uint8_t* data_;               // copyable data (POD) only, small size, will be copied
             uint64_t data_len_;
             SharedDataBlob* blobs_;       // array of blobs, use for big data that should not be copied
@@ -180,6 +240,23 @@ namespace aergo::module
         /// @brief Allocate "number_of_bytes" bytes of shared memory. If the allocator has fixed byte size, "number_of_bytes" parameter is ignored.
         /// @return SharedDataBlob, check for validity by calling the valid() function
         virtual message::SharedDataBlob allocate(uint64_t number_of_bytes) noexcept = 0;
+
+        /// @brief Allocate shared data from existing data buffer.
+        /// @return SharedDataBlob, check for validity by calling the valid() function
+        template <typename ByteT>
+        message::SharedDataBlob allocateFromData(std::span<ByteT> data) noexcept
+        {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
+            auto blob = allocate(static_cast<uint64_t>(data.size()));
+            if (!blob.valid() || blob.size() != data.size())
+            {
+                return message::SharedDataBlob(); // allocation failed, return invalid blob
+            }
+
+            std::memcpy(blob.data(), data.data(), data.size()); // safe for alignment & aliasing
+            return blob;
+        }
 
     protected:
         /// @brief Add owner for shared data object. Object removed when owners drop to zero.
