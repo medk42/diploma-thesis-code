@@ -7,7 +7,7 @@
 // READ_CUSTOM_PARAMETER_START (+ parameter_id) -> SUCCESS (+task_id, parameter read started), FAIL (invalid parameter id or failed to start read)
 // READ_CUSTOM_PARAMETER_CHECK (+ task_id, + cancel flag) -> SUCCESS (+ blob with serialized response & blobs; or without blobs if cancelled), 
 //    IN_PROGRESS (read is in progress), FAIL (failed to allocate memory or invalid response), ID_INVALID (invalid task_id)
-// CREATE_COMMAND (+ blob with filled parameters (3x ParameterValues)) -> SUCCESS (+ blob representing command data), FAIL (failed to allocate memory or invalid parameters, blob with error description)
+// CREATE_COMMAND (+ blob with filled parameters (3x ParameterValues)) -> SUCCESS (+ blob representing command data), FAIL (failed to allocate memory or invalid parameters, optionally blob with error description)
 // PROGRAM_READ_VISUALIZATION (+ blob with command data) -> SUCCESS (+ blob with visualization data), FAIL (failed to allocate memory or invalid command data)
 // PROGRAM_START_REAL (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command, optionally blob with error description)
 // PROGRAM_START_SIMULATED (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command, optionally blob with error description)
@@ -81,9 +81,7 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
 
 
     constexpr aergo::module::communication_channel::Consumer usecase_request_consumer = {
-        .count_ = aergo::module::communication_channel::Consumer::Count::RANGE,
-        .min_ = 1,
-        .max_ = 1000,
+        .count_ = aergo::module::communication_channel::Consumer::Count::AUTO_ALL,
         .channel_type_identifier_ = "helpers__usecase_wrapper__req/v1:struct{enum:uint8_t,uint64_t,uint32_t}[+blob{filled_parameters|command_data}]",
         .display_name_ = "Registered Usecases",
         .display_description_ = "Request channel for usecase wrapper messages to control usecase commands.",
