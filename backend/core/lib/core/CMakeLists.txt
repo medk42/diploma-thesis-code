@@ -12,7 +12,7 @@ target_include_directories(core_project PUBLIC
     include
 )
 
-target_link_libraries(core_project PUBLIC module_common utils___logging utils___memory_allocation utils___core_module_interface nlohmann_json::nlohmann_json)
+target_link_libraries(core_project PUBLIC module_common utils___logging utils___memory_allocation utils___core_module_interface helpers___serialization_helper nlohmann_json::nlohmann_json)
 
 # MSVC: force dynamic CRT
 if (MSVC)
