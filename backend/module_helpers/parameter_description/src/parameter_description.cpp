@@ -233,3 +233,34 @@ const std::vector<ParameterDescription>& ParameterList::getParameters() const
 {
     return parameters_;
 }
+
+
+
+ParameterValueOptListList ParameterList::buildParameterValues() const
+{
+    ParameterValueOptListList parameter_values;
+    parameter_values.resize(parameters_.size());
+
+    for (size_t param_index = 0; param_index < parameters_.size(); ++param_index)
+    {
+        const ParameterDescription& param_desc = parameters_[param_index];
+        size_t list_size = 1;
+        if (param_desc.as_list_)
+        {
+            list_size = param_desc.list_size_min_;
+        }
+
+        parameter_values[param_index].resize(list_size);
+
+        std::optional<ParameterValue> default_value = param_desc.parseDefaultValue();
+        if (default_value.has_value())
+        {
+            for (size_t list_index = 0; list_index < list_size; ++list_index)
+            {
+                parameter_values[param_index][list_index] = default_value.value();
+            }
+        }
+    }
+
+    return parameter_values;
+}

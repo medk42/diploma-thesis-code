@@ -20,6 +20,10 @@ namespace aergo::module::helpers::parameter_description
         std::vector<uint8_t> // custom channel data
     >;
 
+    using ParameterValueOpt = std::optional<ParameterValue>;
+    using ParameterValueOptList = std::vector<ParameterValueOpt>;
+    using ParameterValueOptListList = std::vector<ParameterValueOptList>;
+
     enum class ParameterType
     {
         BOOL,
@@ -80,6 +84,7 @@ namespace aergo::module::helpers::parameter_description
         static ParameterList fromString(std::string& parameters_str); // can throw runtime_error on parsing error
 
         const std::vector<ParameterDescription>& getParameters() const;
+        ParameterValueOptListList buildParameterValues() const; // builds empty parameter values based on the parameter descriptions, with default values set where applicable and list sizes allocated to minimum size
 
     private:
         std::vector<ParameterDescription> parameters_;
