@@ -2,6 +2,7 @@
 
 #include "module_helpers/visualization_3d_interface/message_types.h"
 #include "module_helpers/visualization_3d_interface/serialization_helper.h"
+#include "module_common/serialization_helper.h"
 
 #undef ERROR // Gotta love Windows
 
@@ -644,33 +645,20 @@ std::vector<ChannelIdentifier> SceneVisualizationHandler::getAllSceneVisualizati
         vis3d::visualization_3d_interface_response_producer.channel_type_identifier_
     );
 
-    if (!buf.valid() || buf.data() == nullptr) {
+    if (!buf.valid() || buf.data() == nullptr)
+    {
         base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::getAllSceneVisualizationRequestChannels: no data");
         return {};
     }
 
-    const std::size_t byte_count = buf.size(); // bytes
-    const std::byte*  bytes      = reinterpret_cast<const std::byte*>(buf.data());
+    aergo::module::deserialize::des::BufferReader deserialize(buf.data(), buf.size());
 
-    // Need at least the leading u64
-    if (byte_count < sizeof(std::uint64_t)) {
-        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::getAllSceneVisualizationRequestChannels: buffer too small for header");
+    std::vector<ChannelIdentifier> identifiers;
+    if (!deserialize::readExistingChannels(deserialize, identifiers))
+    {
+        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::getAllSceneVisualizationRequestChannels: failed to deserialize channels");
         return {};
     }
 
-    std::uint64_t channel_count = 0;
-    std::memcpy(&channel_count, bytes, sizeof(channel_count)); // avoids alignment issues
-
-    if (byte_count != sizeof(std::uint64_t) + channel_count * sizeof(ChannelIdentifier)) {
-        base_module_->log(logging::LogType::ERROR, "SceneVisualizationHandler::getAllSceneVisualizationRequestChannels: invalid buffer size");
-        return {};
-    }
-
-    std::vector<ChannelIdentifier> out;
-    out.resize(static_cast<std::size_t>(channel_count));
-
-    // Copy payload
-    std::memcpy(out.data(), bytes + sizeof(std::uint64_t), out.size() * sizeof(ChannelIdentifier));
-
-    return out;
+    return identifiers;
 }

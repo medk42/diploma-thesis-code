@@ -1,5 +1,6 @@
 #include "core/core.h"
 #include "core/defaults.h"
+#include "module_common/serialization_helper.h"
 #include "utils/memory_allocation/dynamic_allocator.h"
 #include "utils/memory_allocation/static_allocator.h"
 #include "utils/memory_allocation/allocator_wrapper.h"
@@ -8,6 +9,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <cstddef>
 
 using namespace aergo::core;
 using json = nlohmann::json;
@@ -1416,20 +1418,15 @@ aergo::module::message::SharedDataBlob Core::collectDependencies(uint64_t id) no
 aergo::module::message::SharedDataBlob Core::getExistingPublishChannelsByName(const char* channel_type_identifier) noexcept
 {
     auto& channels = getExistingPublishChannels(channel_type_identifier);
-    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels.size());
-    if (!blob.valid())  
+
+    std::vector<std::byte> buffer;
+    aergo::module::serialize::pushExistingChannels(buffer, channels);
+    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(buffer.size());
+    if (!blob.valid() || blob.size() != buffer.size())
     {
         return aergo::module::message::SharedDataBlob(); // return invalid blob
     }
-
-    uint8_t* data_ptr = blob.data();
-    uint64_t* data_as_uint64 = reinterpret_cast<uint64_t*>(data_ptr);
-    data_as_uint64[0] = (uint64_t)channels.size();
-    aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
-    for (size_t i = 0; i < channels.size(); ++i)
-    {
-        data_as_channel_identifier[i] = channels[i];
-    }
+    std::memcpy(blob.data(), buffer.data(), buffer.size());
 
     return blob;
 }
@@ -1439,20 +1436,15 @@ aergo::module::message::SharedDataBlob Core::getExistingPublishChannelsByName(co
 aergo::module::message::SharedDataBlob Core::getExistingResponseChannelsByName(const char* channel_type_identifier) noexcept
 {
     auto& channels = getExistingResponseChannels(channel_type_identifier);
-    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels.size());
-    if (!blob.valid())  
+    
+    std::vector<std::byte> buffer;
+    aergo::module::serialize::pushExistingChannels(buffer, channels);
+    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(buffer.size());
+    if (!blob.valid() || blob.size() != buffer.size())
     {
         return aergo::module::message::SharedDataBlob(); // return invalid blob
     }
-
-    uint8_t* data_ptr = blob.data();
-    uint64_t* data_as_uint64 = reinterpret_cast<uint64_t*>(data_ptr);
-    data_as_uint64[0] = (uint64_t)channels.size();
-    aergo::module::ChannelIdentifier* data_as_channel_identifier = reinterpret_cast<aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
-    for (size_t i = 0; i < channels.size(); ++i)
-    {
-        data_as_channel_identifier[i] = channels[i];
-    }
+    std::memcpy(blob.data(), buffer.data(), buffer.size());
 
     return blob;
 }
