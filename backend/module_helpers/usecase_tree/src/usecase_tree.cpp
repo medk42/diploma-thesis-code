@@ -10,7 +10,10 @@
 #include <chrono>
 #include <condition_variable>
 
+#include <nlohmann/json.hpp>
+
 using namespace aergo::module::helpers::usecase_tree;
+using json = nlohmann::json;
 
 
 UsecaseTree::UsecaseTree(aergo::module::BaseModule* base_module)
@@ -748,4 +751,342 @@ void UsecaseTree::clearCommands()
 
     existing_commands_list_.clear();
     command_id_to_index_map_.clear();
+    next_command_id_ = 1; // we can start from 1 again, no conflicts
+}
+
+
+std::optional<std::string> UsecaseTree::toJson() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto encode_single_parameter_values = [](const p_desc::ParameterValueOptList& value_opt_list, p_desc::ParameterType param_type) -> std::optional<json> {
+        json j_result;
+        auto type_str_opt = p_desc::string_conversions::parameterValueToString(static_cast<int32_t>(param_type));
+        if (!type_str_opt.has_value())
+        {
+            return std::nullopt;
+        }
+
+        j_result["type"] = *type_str_opt;
+        json j_value_list = json::array();
+        for (const auto& value_opt : value_opt_list)
+        {
+            if (value_opt.has_value())
+            {
+                auto single_value_str_opt = p_desc::string_conversions::parameterValueToString(*value_opt);
+                if (!single_value_str_opt.has_value())
+                {
+                    return std::nullopt;
+                }
+
+                j_value_list.push_back(*single_value_str_opt); // push the string representation
+            }
+            else
+            {
+                j_value_list.push_back(false); // represent null value as false
+            }
+        }
+
+        j_result["values"] = j_value_list;
+        return j_result;
+    };
+
+    auto encode_value_opt_list_list = [&encode_single_parameter_values](
+        const p_desc::ParameterValueOptListList& value_opt_list_list, 
+        const p_desc::ParameterList& param_list
+    ) -> std::optional<json> {
+        json j_values = json::array();
+        const auto& parameters = param_list.getParameters();
+        if (value_opt_list_list.size() != parameters.size())
+        {
+            return std::nullopt;
+        }
+
+        for (size_t i = 0; i < value_opt_list_list.size(); ++i)
+        {
+            auto single_param_json_opt = encode_single_parameter_values(value_opt_list_list[i], parameters[i].type_);
+            if (!single_param_json_opt.has_value())
+            {
+                return std::nullopt;
+            }
+            j_values.push_back(*single_param_json_opt);
+        }
+        return j_values;
+    };
+
+    json j;
+    j["program"] = json::array();
+    for (const auto& command : existing_commands_list_)
+    {
+        auto usecase_ref = command.getUsecaseReference();
+        if (!usecase_ref)
+        {
+            base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::toJson: Usecase reference invalid for command with ID " + std::to_string(command.getCommandId()) + ".");
+            return std::nullopt;
+        }
+
+        json single_command_json;
+        single_command_json["usecase_identifier"] = command.getUsecaseIdentifier();
+        
+        auto auto_values_json_opt = encode_value_opt_list_list(command.getParameterValues(structs::ExistingCommand::ParamType::AUTO), usecase_ref->getAutoParameters());
+        if (!auto_values_json_opt.has_value())
+        {
+            base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::toJson: Failed to encode AUTO parameter values for command with ID " + std::to_string(command.getCommandId()) + ".");
+            return std::nullopt;
+        }
+        single_command_json["auto_parameters"] = *auto_values_json_opt;
+
+        auto required_values_json_opt = encode_value_opt_list_list(command.getParameterValues(structs::ExistingCommand::ParamType::REQUIRED), usecase_ref->getRequiredParameters());
+        if (!required_values_json_opt.has_value())
+        {
+            base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::toJson: Failed to encode REQUIRED parameter values for command with ID " + std::to_string(command.getCommandId()) + ".");
+            return std::nullopt;
+        }
+        single_command_json["required_parameters"] = *required_values_json_opt;
+
+        auto advanced_values_json_opt = encode_value_opt_list_list(command.getParameterValues(structs::ExistingCommand::ParamType::ADVANCED), usecase_ref->getAdvancedParameters());
+        if (!advanced_values_json_opt.has_value())
+        {
+            base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::toJson: Failed to encode ADVANCED parameter values for command with ID " + std::to_string(command.getCommandId()) + ".");
+            return std::nullopt;
+        }
+        single_command_json["advanced_parameters"] = *advanced_values_json_opt;
+
+        single_command_json["has_command_data_json"] = command.hasCommandDataJson();
+        if (command.hasCommandDataJson())
+        {
+            single_command_json["command_data_json"] = command.getCommandDataJson();
+        }
+        single_command_json["command_data_json_in_sync"] = command.isCommandDataJsonInSync();
+
+        j["program"].push_back(single_command_json);
+    }
+
+    try
+    {
+        return j.dump(-1, ' ', true, nlohmann::json::error_handler_t::strict);
+    }
+    catch (const std::exception& e)
+    {
+        base_module_ref_->log(aergo::module::logging::LogType::ERROR, std::string("UsecaseTree::toJson: Exception during JSON serialization: ") + e.what());
+    }
+
+    return std::nullopt;
+}
+
+
+bool UsecaseTree::fromJson(const std::string& json_str, std::string& out_missing_usecase_identifier)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto decode_single_param_values = [this](const json& j_param, const p_desc::ParameterDescription& param_desc, p_desc::ParameterValueOptList& out_values) -> bool
+    {
+        if (!j_param.is_object())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Parameter entry is not an object.");
+            return false;
+        }
+
+        if (!j_param.contains("type") || !j_param["type"].is_string() || !j_param.contains("values") || !j_param["values"].is_array())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Parameter entry missing or invalid 'type' or 'values' fields.");
+            return false;
+        }
+
+        // Validate type matches; writer stored it as a stringified integer (enum underlying value).
+        auto value = p_desc::string_conversions::stringToParameterValue(j_param["type"].get<std::string>(), p_desc::ParameterType::ENUM);
+        if (!value.has_value() || !std::holds_alternative<int32_t>(*value))
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Parameter 'type' field is not a valid integer string.");
+            return false;
+        }
+        int32_t type_int = std::get<int32_t>(*value);
+        if (type_int != static_cast<int32_t>(param_desc.type_))
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Parameter type mismatch.");
+            return false;
+        }
+
+        const auto& j_values = j_param["values"];
+
+        // Validate list sizing constraints
+        if (!param_desc.as_list_)
+        {
+            if (j_values.size() != 1)
+            {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Non-list parameter must have exactly one value.");
+                return false;
+            }
+        }
+        else
+        {
+            // list_size_min_ satisfied; list_size_max_ == 0 means unlimited
+            if (j_values.size() < param_desc.list_size_min_)
+            {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: List parameter has fewer values than minimum.");
+                return false;
+            }
+            if (param_desc.list_size_max_ != 0 && j_values.size() > param_desc.list_size_max_)
+            {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: List parameter has more values than maximum.");
+                return false;
+            }
+        }
+
+        out_values.clear();
+        out_values.reserve(j_values.size());
+        for (const auto& j_val : j_values)
+        {
+            if (j_val.is_boolean() && j_val.get<bool>() == false)
+            {
+                // Stored sentinel for null
+                out_values.push_back(std::nullopt);
+                continue;
+            }
+            if (!j_val.is_string())
+            {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Parameter value must be a string (or false for null).\n");
+                return false;
+            }
+
+            auto parsed = p_desc::string_conversions::stringToParameterValue(j_val.get<std::string>(), param_desc.type_);
+            if (!parsed.has_value())
+            {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Failed to load parameter value from string.");
+                return false;
+            }
+            out_values.push_back(parsed);
+        }
+
+        return true;
+    };
+
+    auto decode_param_group = [&decode_single_param_values, this](const json& j_group, const p_desc::ParameterList& param_list, p_desc::ParameterValueOptListList& out_list_list) -> bool
+    {
+        if (!j_group.is_array())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Parameter group is not an array.");
+            return false;
+        }
+
+        const auto& params = param_list.getParameters();
+        if (j_group.size() != params.size())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Parameter group size does not match usecase description.");
+            return false;
+        }
+
+        out_list_list.clear();
+        out_list_list.resize(params.size());
+        for (size_t i = 0; i < params.size(); ++i)
+        {
+            if (!decode_single_param_values(j_group[i], params[i], out_list_list[i]))
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+    
+    json j = json::parse(json_str.data(), json_str.data() + json_str.size(), nullptr, false); // false == non-throwing parse
+    if (j.is_discarded())
+    {
+        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Failed to parse JSON string.");
+        return false;
+    }
+
+    if (!j.contains("program") || !j["program"].is_array())
+    {
+        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: JSON does not contain valid 'program' array.");
+        return false;
+    }
+
+    clearCommands();
+
+    for (const auto& cmd_json : j["program"])
+    {
+        if (!cmd_json.is_object())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Each program entry must be an object.");
+            return false;
+        }
+
+        if (!cmd_json.contains("usecase_identifier") || !cmd_json["usecase_identifier"].is_string())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Program entry missing 'usecase_identifier'.");
+            return false;
+        }
+        std::string usecase_identifier = cmd_json["usecase_identifier"].get<std::string>();
+
+        auto usecase_it = available_usecases_map_.find(usecase_identifier);
+        if (usecase_it == available_usecases_map_.end())
+        {
+            out_missing_usecase_identifier = usecase_identifier;
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Usecase '" + usecase_identifier + "' not found in available usecases. Update usecases first.");
+            return false;
+        }
+        const auto& usecase_ref = usecase_it->second;
+
+        if (!cmd_json.contains("auto_parameters") || !cmd_json.contains("required_parameters") || !cmd_json.contains("advanced_parameters"))
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Program entry missing parameter groups.");
+            return false;
+        }
+
+        p_desc::ParameterValueOptListList auto_values, required_values, advanced_values;
+        if (!decode_param_group(cmd_json["auto_parameters"], usecase_ref.getAutoParameters(), auto_values))
+        {
+            return false;
+        }
+        if (!decode_param_group(cmd_json["required_parameters"], usecase_ref.getRequiredParameters(), required_values))
+        {
+            return false;
+        }
+        if (!decode_param_group(cmd_json["advanced_parameters"], usecase_ref.getAdvancedParameters(), advanced_values))
+        {
+            return false;
+        }
+
+        bool has_command_data_json = false;
+        std::optional<std::string> command_data_json = std::nullopt;
+        bool command_data_json_in_sync = false;
+
+        if (!cmd_json.contains("has_command_data_json") || !cmd_json["has_command_data_json"].is_boolean())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: 'has_command_data_json' missing or not a boolean.");
+            return false;
+        }
+        has_command_data_json = cmd_json["has_command_data_json"].get<bool>();
+        if (has_command_data_json)
+        {
+            if (!cmd_json.contains("command_data_json") || !cmd_json["command_data_json"].is_string())
+            {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: 'command_data_json' missing or not a string while 'has_command_data_json' is true.");
+                return false;
+            }
+            command_data_json = cmd_json["command_data_json"].get<std::string>();
+        }
+        if (!cmd_json.contains("command_data_json_in_sync") || !cmd_json["command_data_json_in_sync"].is_boolean())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: 'command_data_json_in_sync' missing or not a boolean.");
+            return false;
+        }
+        command_data_json_in_sync = cmd_json["command_data_json_in_sync"].get<bool>();
+
+        // Create command with a new ID and insert into list
+        uint64_t command_id = next_command_id_++;
+        existing_commands_list_.push_back(std::move(structs::ExistingCommand(
+            std::move(usecase_identifier),
+            command_id,
+            &available_usecases_map_,
+            std::move(auto_values),
+            std::move(required_values),
+            std::move(advanced_values),
+            std::move(command_data_json),
+            command_data_json_in_sync
+        )));
+        command_id_to_index_map_[command_id] = existing_commands_list_.size() - 1;
+    }
+
+    return true;
 }

@@ -73,7 +73,7 @@ namespace aergo::module::helpers::usecase_tree::structs
         uint64_t getCommandId() const { return command_id_; }
         const p_desc::ParameterValueOptListList& getParameterValues(ParamType type) const;
         const p_desc::ParameterList* getParameters(ParamType type) const; // returns nullptr if usecase_identifier_ not found in available_usecases_map_
-        const std::string& getCommandDataJson() { return command_data_json_; }
+        const std::string& getCommandDataJson() const { return command_data_json_; }
         const bool hasCommandDataJson() const { return has_command_data_json_; }
         const bool isCommandDataJsonInSync() const { return command_data_json_in_sync_; }
         std::optional<p_desc::ParameterValueOpt> getValue(ParamType type, size_t param_index, size_t list_index) const; // returns std::nullopt if value out of range

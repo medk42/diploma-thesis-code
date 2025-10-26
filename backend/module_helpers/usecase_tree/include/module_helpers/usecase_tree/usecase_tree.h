@@ -13,7 +13,6 @@
 #include <set>
 #include <atomic>
 #include <memory>
-#include <thread>
 
 #include "module_common/base_module.h"
 #include "module_common/module_interface_.h"
@@ -45,6 +44,7 @@ namespace aergo::module::helpers::usecase_tree
         bool appendCommand(const std::string& param_identifier); // appends command at the end, returns true if successful; command is specified by usecase parameter identifier
         bool insertCommand(size_t list_index, structs::ExistingCommand command); // inserts command at specified index, returns true if successful
         bool removeCommand(size_t list_index); // removes command at specified index, returns true if successful
+        void clearCommands(); // clears all existing commands
 
         size_t size() const { return existing_commands_list_.size(); } // number of existing commands in the usecase tree, there is no protection that the list won't change while being accessed, ensure external synchronization if needed
         structs::ExistingCommand& operator[](size_t list_index) { return existing_commands_list_.at(list_index); } // get existing command at specified index, throws out_of_range if index invalid; there is no protection that the list won't change while being accessed, ensure external synchronization if needed
@@ -64,7 +64,14 @@ namespace aergo::module::helpers::usecase_tree
         std::optional<ProgramInstance::ProgramState> getProgramState() const; // get current program state, std::nullopt if no program is running
         std::optional<ProgramInstance::ProgramResult> getProgramResult() const; // returns result only when in STOPPED state, std::nullopt otherwise
 
-        void clearCommands(); // clears all existing commands
+        /// @brief serialize usecase tree to JSON string (serializes existing commands WITHOUT command_ids)
+        /// @return JSON string if successful, std::nullopt otherwise
+        std::optional<std::string> toJson() const;
+
+        /// @brief deserialize usecase tree from JSON string, returns true if successful, false otherwise
+        /// @param json_str JSON string to deserialize from
+        /// @param out_missing_usecase_identifier if failure occurs due to missing usecase, contains the identifier of the missing usecase
+        bool fromJson(const std::string& json_str, std::string& out_missing_usecase_identifier); 
 
 
     private:
@@ -88,8 +95,9 @@ namespace aergo::module::helpers::usecase_tree
 
         std::map<uint64_t, std::function<void(ChannelIdentifier, const aergo::module::message::MessageHeader&)>> response_handlers_;
 
-        std::set<uint64_t> pending_modules_for_update_;
-        std::optional<std::function<void()>> pending_update_on_finish_;
+        // If we do not receive an update, we would currently wait forever. Keep in mind for future improvements.
+        std::set<uint64_t> pending_modules_for_update_; // modules from which we are waiting for available usecases during updateAvailableUsecases()
+        std::optional<std::function<void()>> pending_update_on_finish_; // callback to call when pending_modules_for_update_ is empty
 
         std::map<std::string, structs::AvailableUsecase> available_usecases_map_;
         std::vector<structs::ExistingCommand> existing_commands_list_;

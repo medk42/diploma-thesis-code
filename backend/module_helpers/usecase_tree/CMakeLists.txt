@@ -1,5 +1,8 @@
 set(LIB_NAME helpers___usecase_tree)
 
+# add JSON library
+find_package(nlohmann_json CONFIG REQUIRED)
+
 # find all sources
 file(GLOB_RECURSE PROJECT_SOURCES
     CONFIGURE_DEPENDS
@@ -10,6 +13,7 @@ add_library(${LIB_NAME} STATIC ${PROJECT_SOURCES})
 
 target_include_directories(${LIB_NAME} PUBLIC include)
 
+target_link_libraries(${LIB_NAME} PUBLIC nlohmann_json::nlohmann_json)
 target_link_libraries(${LIB_NAME} PUBLIC module_common helpers___usecase_wrapper)
 
 
