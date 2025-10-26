@@ -1,6 +1,9 @@
 #include "module_helpers/parameter_description/parameter_description.h"
 
 #include <limits>
+#include <string_view>
+
+#include "cpp-base64/base64.cpp"
 
 #define PARAM_DESC_VERSION 1
 
@@ -11,24 +14,24 @@ using namespace aergo::module::helpers::parameter_description;
 
 
 
-std::optional<ParameterValue> ParameterDescription::parseDefaultValue() const
+ParameterValueOpt string_conversions::stringToParameterValue(const std::string& str, ParameterType type)
 {
-    if (default_value_.empty())
+    if (str.empty())
     {
         return std::nullopt;
     }
 
     try
     {
-        switch (type_)
+        switch (type)
         {
             case ParameterType::BOOL:
             {
-                if (default_value_ == "1")
+                if (str == "1")
                 {
                     return ParameterValue(true);
                 }
-                else if (default_value_ == "0")
+                else if (str == "0")
                 {
                     return ParameterValue(false);
                 }
@@ -36,43 +39,28 @@ std::optional<ParameterValue> ParameterDescription::parseDefaultValue() const
             }
             case ParameterType::LONG:
             {
-                int64_t value = std::stoll(default_value_);
-                if (limit_min_ && value < min_value_long_)
-                {
-                    value = min_value_long_;
-                }
-                if (limit_max_ && value > max_value_long_)
-                {
-                    value = max_value_long_;
-                }
+                int64_t value = std::stoll(str);
                 return ParameterValue(value);
             }
             case ParameterType::DOUBLE:
             {
-                double value = std::stod(default_value_);
-                if (limit_min_ && value < min_value_double_)
-                {
-                    value = min_value_double_;
-                }
-                if (limit_max_ && value > max_value_double_)
-                {
-                    value = max_value_double_;
-                }
+                double value = std::stod(str);
                 return ParameterValue(value);
             }
             case ParameterType::STRING:
             {
-                return ParameterValue(default_value_);
+                return ParameterValue(str);
             }
             case ParameterType::ENUM:
             {
-                for (size_t i = 0; i < enum_values_.size(); ++i)
-                {
-                    if (enum_values_[i] == default_value_)
-                    {
-                        return ParameterValue(static_cast<int32_t>(i));
-                    }
-                }
+                int32_t index = std::stoi(str);
+                return ParameterValue(index);
+            }
+            case ParameterType::CUSTOM:
+            {
+                std::string decoded = decode(std::string_view(str), false);
+                std::vector<uint8_t> data(decoded.begin(), decoded.end());
+                return ParameterValue(data);
             }
         }
     }
@@ -82,6 +70,128 @@ std::optional<ParameterValue> ParameterDescription::parseDefaultValue() const
     }
 
     return std::nullopt;
+}
+
+
+ParameterValueOpt string_conversions::parseDefaultValue(const ParameterDescription& param_desc)
+{
+    return param_desc.checkValid(
+        string_conversions::stringToParameterValue(param_desc.default_value_, param_desc.type_)
+    );
+}
+
+
+std::optional<std::string> string_conversions::parameterValueToString(const ParameterValue& value)
+{
+    if (std::holds_alternative<bool>(value))
+    {
+        return std::get<bool>(value) ? "1" : "0";
+    }
+    else if (std::holds_alternative<int64_t>(value))
+    {
+        return std::to_string(std::get<int64_t>(value));
+    }
+    else if (std::holds_alternative<double>(value))
+    {
+        return std::to_string(std::get<double>(value));
+    }
+    else if (std::holds_alternative<std::string>(value))
+    {
+        return std::get<std::string>(value);
+    }
+    else if (std::holds_alternative<int32_t>(value))
+    {
+        return std::to_string(std::get<int32_t>(value));
+    }
+    else if (std::holds_alternative<std::vector<uint8_t>>(value))
+    {
+        const auto& data = std::get<std::vector<uint8_t>>(value);
+        return base64_encode(data.data(), data.size(), false);
+    }
+    
+    return std::nullopt;
+}
+
+
+ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) const
+{
+    if (!value)
+    {
+        return std::nullopt;
+    }
+    
+    switch (type_)
+    {
+        case ParameterType::BOOL:
+        {
+            if (!std::holds_alternative<bool>(*value))
+            {
+                return std::nullopt;
+            }
+            break;
+        }
+        case ParameterType::LONG:
+        {
+            if (!std::holds_alternative<int64_t>(*value))
+            {
+                return std::nullopt;
+            }
+            int64_t val = std::get<int64_t>(*value);
+            if (limit_min_ && val < min_value_long_)
+            {
+                return std::nullopt;
+            }
+            if (limit_max_ && val > max_value_long_)
+            {
+                return std::nullopt;
+            }
+            break;
+        }
+        case ParameterType::DOUBLE:
+        {
+            if (!std::holds_alternative<double>(*value))
+            {
+                return std::nullopt;
+            }
+            double val =  std::get<double>(*value);
+            if (limit_min_ && val < min_value_double_)
+            {
+                return std::nullopt;
+            }
+            if (limit_max_ && val > max_value_double_)
+            {
+                return std::nullopt;
+            }
+            break;
+        }
+        case ParameterType::STRING:
+        {
+            if (!std::holds_alternative<std::string>(*value))
+            {
+                return std::nullopt;
+            }
+            break;
+        }
+        case ParameterType::ENUM:
+        {
+            if (!std::holds_alternative<int32_t>(*value))
+            {
+                return std::nullopt;
+            }
+            int32_t index = std::get<int32_t>(*value);
+            if (index < 0 || static_cast<size_t>(index) >= enum_values_.size())
+            {
+                return std::nullopt;
+            }
+            break;
+        }
+        case ParameterType::CUSTOM:
+        {
+            return std::nullopt; // CUSTOM type cannot be default initialized
+        }
+    }
+
+    return value;
 }
 
 
@@ -252,7 +362,7 @@ ParameterValueOptListList ParameterList::buildParameterValues() const
 
         parameter_values[param_index].resize(list_size);
 
-        std::optional<ParameterValue> default_value = param_desc.parseDefaultValue();
+        std::optional<ParameterValue> default_value = string_conversions::parseDefaultValue(param_desc);
         if (default_value.has_value())
         {
             for (size_t list_index = 0; list_index < list_size; ++list_index)

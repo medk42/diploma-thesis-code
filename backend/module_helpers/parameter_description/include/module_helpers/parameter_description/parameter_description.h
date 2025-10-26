@@ -68,8 +68,13 @@ namespace aergo::module::helpers::parameter_description
         std::string default_value_; // default value as a string (for all types, except CUSTOM; for lists, value is used for all entries), for enum it is the enum string value (if empty, first enum value is used)
         
 
-        /// @brief Parse the default value string into ParameterValue. If no default value is set or parsing fails, returns std::nullopt.
-        std::optional<ParameterValue> parseDefaultValue() const;
+        /// @brief Checks if the given ParameterValueOpt is valid for this ParameterDescription.
+        /// Validity is checked for type (ParameterType matches the actual variant type in ParameterValue) 
+        /// and limits (for LONG and DOUBLE types and enum range).
+        /// @param value The ParameterValueOpt to check.
+        /// @return The same ParameterValueOpt if valid, std::nullopt otherwise. 
+        ParameterValueOpt checkValid(ParameterValueOpt value) const;
+
         void toStringStream(std::stringstream& stream);
         static ParameterDescription fromStringStream(std::stringstream& stream);
     };
@@ -90,4 +95,18 @@ namespace aergo::module::helpers::parameter_description
         std::vector<ParameterDescription> parameters_;
         std::string cached_string_;
     };
+
+    
+
+    namespace string_conversions
+    {
+        // Convert string to ParameterDescription based on ParameterType. Returns std::nullopt if conversion fails,
+        // type is unsupported, or for CUSTOM 
+        ParameterValueOpt stringToParameterValue(const std::string& str, ParameterType param_type);
+
+        ParameterValueOpt parseDefaultValue(const ParameterDescription& param_desc);
+
+        // Convert ParameterValue to string. Returns empty string if type is unsupported.
+        std::optional<std::string> parameterValueToString(const ParameterValue& value);
+    }
 }

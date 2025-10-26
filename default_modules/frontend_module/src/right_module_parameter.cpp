@@ -177,22 +177,15 @@ void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
 {
     IParamInput* widget = nullptr;
 
+    ParameterValueOpt value = string_conversions::parseDefaultValue(parameter_description_);
     switch (parameter_description_.type_)
     {
     case ParameterType::LONG:
         {
-            bool parse_ok = false; 
-            int64_t long_value;
-            try {
-                long_value = std::stoll(parameter_description_.default_value_);
-                parse_ok = true;
-            } catch (...) {
-                long_value = 0;
-            }
             parent->addWidget(std::make_unique<Wt::WContainerWidget>())->setStyleClass("grow");  // make sure input is aligned right
             widget = parent->addWidget(
                 std::make_unique<NumericLineEdit<int64_t>>(
-                    parse_ok && !parameter_description_.default_value_.empty(), long_value,
+                    value.has_value(), value ? std::get<int64_t>(*value) : 0,
                     parameter_description_.limit_min_, parameter_description_.min_value_long_,
                     parameter_description_.limit_max_, parameter_description_.max_value_long_
                 )
@@ -201,14 +194,8 @@ void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
         break;
     case ParameterType::DOUBLE:
         {
-            bool parse_ok = false;
-            double double_value;
-            try {
-                double_value = std::stod(parameter_description_.default_value_);
-                parse_ok = true;
-            } catch (...) {
-                double_value = 0.0;
-            }
+            double double_value = value ? std::get<double>(*value) : 0.0;
+            
             if (parameter_description_.as_slider_)
             {
                 double min = parameter_description_.limit_min_ ? parameter_description_.min_value_double_ : 0.0;
@@ -227,7 +214,7 @@ void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
                 parent->addWidget(std::make_unique<Wt::WContainerWidget>())->setStyleClass("grow");  // make sure input is aligned right
                 widget = parent->addWidget(
                     std::make_unique<NumericLineEdit<double>>(
-                        parse_ok && !parameter_description_.default_value_.empty(), double_value,
+                        value.has_value(), double_value,
                         parameter_description_.limit_min_, parameter_description_.min_value_double_,
                         parameter_description_.limit_max_, parameter_description_.max_value_double_
                     )
@@ -237,12 +224,7 @@ void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
         break;
     case ParameterType::BOOL:
         {
-            bool bool_value = false;
-            if (!parameter_description_.default_value_.empty())
-            {
-                if (parameter_description_.default_value_ == "1" || parameter_description_.default_value_ == "true" || parameter_description_.default_value_ == "TRUE")
-                    bool_value = true;
-            }
+            bool bool_value = value ? std::get<bool>(*value) : false;
         
             parent->addWidget(std::make_unique<Wt::WContainerWidget>())->setStyleClass("grow");  // make sure input is aligned right
             widget = parent->addWidget(std::make_unique<ToggleCheckbox>(bool_value));
@@ -252,7 +234,7 @@ void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
     case ParameterType::STRING:
         {
             parent->addWidget(std::make_unique<Wt::WContainerWidget>())->setStyleClass("grow");  // make sure input is aligned right
-            widget = parent->addWidget(std::make_unique<TextLineEdit>(parameter_description_.default_value_));
+            widget = parent->addWidget(std::make_unique<TextLineEdit>(value ? std::get<std::string>(*value) : ""));
         }
         break;
     
@@ -261,7 +243,7 @@ void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
             parent->addWidget(std::make_unique<Wt::WContainerWidget>())->setStyleClass("grow");  // make sure input is aligned right
             widget = parent->addWidget(std::make_unique<EnumSelect>(
                 parameter_description_.enum_values_,
-                parameter_description_.default_value_.empty() ? std::nullopt : std::optional<std::string>(parameter_description_.default_value_),
+                value ? std::optional<std::string>(parameter_description_.enum_values_[std::get<int32_t>(*value)]) : std::nullopt,
                 "Select..."
             ));
         }

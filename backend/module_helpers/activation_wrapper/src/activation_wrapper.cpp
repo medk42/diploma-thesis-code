@@ -251,19 +251,17 @@ bool ActivationWrapper::initializeDefaultParameters()
         parameter_values_[i].resize(list_size); // CUSTOM will only be resized, not set to anything
         for (uint16_t j = 0; j < list_size; ++j)
         {
+            ParameterValueOpt default_value = string_conversions::parseDefaultValue(param);
             switch (param.type_)
             {
                 case ParameterType::BOOL:
                 {
-                    if (param.default_value_ == "1")
+                    if (default_value)
                     {
+                        bool bvalue = std::get<bool>(*default_value);
                         parameter_values_[i][j].resize(1);
-                        parameter_values_[i][j][0] = 1;
-                    }
-                    else if (param.default_value_ == "0" || param.default_value_.empty())
-                    {
-                        parameter_values_[i][j].resize(1);
-                        parameter_values_[i][j][0] = 0;
+                        parameter_values_[i][j][0] = bvalue ? 1 : 0;
+                        break;
                     }
                     else
                     {
@@ -274,27 +272,12 @@ bool ActivationWrapper::initializeDefaultParameters()
                 }
                 case ParameterType::LONG:
                 {
-                    int64_t value = 0;
-                    if (!param.default_value_.empty())
+                    if (!default_value)
                     {
-                        try
-                        {
-                            value = std::stoll(param.default_value_);
-                        }
-                        catch (...)
-                        {
-                            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid default LONG parameter value.");
-                            return false;
-                        }
+                        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid default LONG parameter value.");
+                        return false;
                     }
-                    if (param.limit_min_ && value < param.min_value_long_)
-                    {
-                        value = param.min_value_long_;
-                    }
-                    if (param.limit_max_ && value > param.max_value_long_)
-                    {
-                        value = param.max_value_long_;
-                    }
+                    int64_t value = std::get<int64_t>(*default_value);
 
                     parameter_values_[i][j].resize(sizeof(int64_t));
                     memcpy(&parameter_values_[i][j][0], &value, sizeof(int64_t));
@@ -302,27 +285,12 @@ bool ActivationWrapper::initializeDefaultParameters()
                 }
                 case ParameterType::DOUBLE:
                 {
-                    double dvalue = 0;
-                    if (!param.default_value_.empty())
+                    if (!default_value)
                     {
-                        try
-                        {
-                            dvalue = std::stod(param.default_value_);
-                        }
-                        catch (...)
-                        {
-                            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid default DOUBLE parameter value.");
-                            return false;
-                        }
+                        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid default DOUBLE parameter value.");
+                        return false;
                     }
-                    if (param.limit_min_ && dvalue < param.min_value_double_)
-                    {
-                        dvalue = param.min_value_double_;
-                    }
-                    if (param.limit_max_ && dvalue > param.max_value_double_)
-                    {
-                        dvalue = param.max_value_double_;
-                    }
+                    double dvalue = std::get<double>(*default_value);
 
                     parameter_values_[i][j].resize(sizeof(double));
                     memcpy(&parameter_values_[i][j][0], &dvalue, sizeof(double));
@@ -330,42 +298,28 @@ bool ActivationWrapper::initializeDefaultParameters()
                 }
                 case ParameterType::STRING:
                 {
-                    parameter_values_[i][j].resize(param.default_value_.size());
-                    memcpy(&parameter_values_[i][j][0], param.default_value_.data(), param.default_value_.size());
+                    if (!default_value)
+                    {
+                        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid default STRING parameter value.");
+                        return false;
+                    }
+                    const std::string& strvalue = std::get<std::string>(*default_value);
+                    parameter_values_[i][j].resize(strvalue.size());
+                    memcpy(&parameter_values_[i][j][0], strvalue.data(), strvalue.size());
                     break;
                 }
                     
                 case ParameterType::ENUM:
                 {
-                    size_t enum_id = 0;
-                    bool found = false;
-                    if (param.default_value_.empty() && param.enum_values_.size() > 0)
-                    {
-                        found = true;
-                    }
-                    else
-                    {
-                        for (; enum_id < param.enum_values_.size(); ++enum_id)
-                        {
-                            if (param.enum_values_[enum_id] == param.default_value_)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-
-                    if (found)
-                    {
-                        parameter_values_[i][j].resize(sizeof(size_t));
-                        memcpy(&parameter_values_[i][j][0], &enum_id, sizeof(size_t));
-                    }
-                    else
+                    if (!default_value)
                     {
                         base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Invalid default ENUM parameter value.");
                         return false;
                     }
+
+                    size_t enum_id = static_cast<size_t>(std::get<int32_t>(*default_value));
+                    parameter_values_[i][j].resize(sizeof(size_t));
+                    memcpy(&parameter_values_[i][j][0], &enum_id, sizeof(size_t));
 
                     break;
                 }

@@ -323,7 +323,7 @@ bool UsecaseWrapper::validateParameterList(const aergo::module::ModuleInfo* modu
         {
             return false;
         }
-        if (default_values_required && !param.parseDefaultValue().has_value())
+        if (default_values_required && !p_desc::string_conversions::parseDefaultValue(param).has_value())
         {
             return false;
         }
