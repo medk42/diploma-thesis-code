@@ -54,12 +54,18 @@ namespace aergo::module::helpers::usecase_tree
         
         bool readCustomValue(size_t list_index, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void()>> on_value_ready_callback = std::nullopt);
 
-        bool start(bool simulate); // starts all commands in the usecase tree, returns true if start request was accepted (all commands valid), false otherwise (invalid commands, no commands, already running, etc.)
+        /// @brief starts all commands in the usecase tree, returns true if start request was accepted (all commands valid), 
+        /// false otherwise (invalid commands, no commands, already running, etc.).
+        /// Makes a copy of the current commands, so commands can be modified after calling start().
+        bool start(bool simulate);
         void stop(); // stop as soon as possible (latest when current command finishes)
         void pause(); // pause after current command finishes
         void resume(); // resume from paused state
         std::optional<ProgramInstance::ProgramState> getProgramState() const; // get current program state, std::nullopt if no program is running
         std::optional<ProgramInstance::ProgramResult> getProgramResult() const; // returns result only when in STOPPED state, std::nullopt otherwise
+
+        void clearCommands(); // clears all existing commands
+
 
     private:
         void processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void()>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message);

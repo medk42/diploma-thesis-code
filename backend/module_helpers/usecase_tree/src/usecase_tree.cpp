@@ -740,3 +740,12 @@ std::optional<ProgramInstance::ProgramResult> UsecaseTree::getProgramResult() co
 
     return std::nullopt;
 }
+
+
+void UsecaseTree::clearCommands()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    existing_commands_list_.clear();
+    command_id_to_index_map_.clear();
+}
