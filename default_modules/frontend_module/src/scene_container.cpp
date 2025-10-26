@@ -75,7 +75,8 @@ using namespace aergo::module::helpers::visualization_3d_interface;
 
 
 
-SceneSocket::SceneSocket()
+SceneSocket::SceneSocket(aergo::module::BaseModule* base_module)
+: base_module_(base_module)
 {
     setTakesUpdateLock(false);
     startWorkers();
@@ -128,17 +129,39 @@ std::unique_ptr<Wt::WWebSocketConnection> SceneSocket::handleConnect(const Wt::H
     auto c = std::make_unique<Wt::WWebSocketConnection>(this, Wt::WServer::instance()->ioService());
     c->setTakesUpdateLock(false);
 
+    c->done().connect([this](const Wt::AsioWrapper::error_code& ec) {
+        std::lock_guard<std::mutex> lk(m_);
+        sending_ = false;
+        if (!ec)
+        {
+            cv_.notify_one();
+        }
+        else
+        {
+            conn_ = nullptr;
+            base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket: WebSocket connection closed: " + ec.message());
+        }
+    });
+
+    c->closed().connect([this](Wt::AsioWrapper::error_code ec, const std::string& reason) {
+        std::lock_guard<std::mutex> lk(m_);
+        sending_ = false;
+        conn_ = nullptr;
+        if (!ec)
+        {
+            base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocket: WebSocket connection closed" + (reason.empty() ? std::string() : (": " + reason)));
+        }
+        else
+        {
+            base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket: WebSocket connection closed with error: " + ec.message() + (reason.empty() ? std::string() : (", reason: " + reason)));
+        }
+    });
+
     {
         std::lock_guard<std::mutex> lk(m_);
         conn_ = c.get();
         cv_.notify_one(); // wake up send worker, we might have queued messages
     }
-    
-    c->done().connect([this](const Wt::AsioWrapper::error_code& ec) {
-        std::lock_guard<std::mutex> lk(m_);
-        sending_ = false;
-        cv_.notify_one();
-    });
     
     return c;
 }
@@ -193,7 +216,7 @@ SceneContainer::SceneContainer(aergo::module::BaseModule* base_module, uint8_t f
     setId("scene-container");
     setStyleClass("scene-container");
 
-    socket_ = std::make_unique<SceneSocket>();
+    socket_ = std::make_unique<SceneSocket>(base_module_);
 
     auto *app = Wt::WApplication::instance();
     app->doJavaScript("window.sceneSocketURL = " + Wt::WString(socket_->url()).jsStringLiteral() + ";"); // make URL available to JS before loading the script (if script is not yet loaded)

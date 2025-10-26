@@ -29,7 +29,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     class SceneSocket : public Wt::WWebSocketResource
     {
     public:
-        SceneSocket();
+        SceneSocket(aergo::module::BaseModule* base_module);
         ~SceneSocket() override;
 
         /// @brief Thread-safe, non-blocking. Returns number of queued messages (if >1, messages are not being sent fast enough).
@@ -41,6 +41,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
     private:
         void startWorkers();
+
+        aergo::module::BaseModule* base_module_{nullptr};
 
         std::mutex m_;
         std::condition_variable cv_;
