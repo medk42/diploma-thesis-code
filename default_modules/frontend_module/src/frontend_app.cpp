@@ -1,9 +1,11 @@
 #include "webapp/frontend_app.h"
 #include "webapp/ui/helper/reusable_dialog.h"
 #include "module_helpers/activation_wrapper/message_types.h"
+#include "module_common/serialization_helper.h"
 
 
 #include <map>
+#include <algorithm>
 
 
 #include <libzippp/libzippp.h>
@@ -551,21 +553,23 @@ void FrontendApp::refreshRunningModules()
     // then add new modules
     if (frontend_state_->known_running_modules_.size() < core_->getRunningModulesCount())
     {
-        aergo::module::message::SharedDataBlob activation_channels = core_->getExistingResponseChannelsByName(aergo::module::helpers::activation_wrapper::message_types::activation_response_producer.channel_type_identifier_);
+        aergo::module::message::SharedDataBlob activation_channels_blob = core_->getExistingResponseChannelsByName(aergo::module::helpers::activation_wrapper::message_types::activation_response_producer.channel_type_identifier_);
         std::map<uint64_t, uint32_t> activation_channels_map; // map of producer module index to producer channel id
-        if (activation_channels.valid() && activation_channels.size() >= sizeof(uint64_t))
+        if (activation_channels_blob.valid() && activation_channels_blob.data() != nullptr)
         {
-            uint64_t channel_count;
-            memcpy(&channel_count, activation_channels.data(), sizeof(uint64_t));
-            aergo::module::ChannelIdentifier* channels = reinterpret_cast<aergo::module::ChannelIdentifier*>(activation_channels.data() + sizeof(uint64_t));
-
-            if (activation_channels.size() == sizeof(uint64_t) + channel_count * sizeof(aergo::module::ChannelIdentifier))
+            aergo::module::deserialize::des::BufferReader deserialize(activation_channels_blob.data(), activation_channels_blob.size());
+            std::vector<ChannelIdentifier> existing_channels;
+            if (!deserialize::readExistingChannels(deserialize, existing_channels))
             {
-                for (uint64_t i = 0; i < channel_count; ++i)
-                {
-                    activation_channels_map[channels[i].producer_module_id_] = channels[i].producer_channel_id_;
-                }
+                base_module_->log(logging::LogType::ERROR, "UsecaseTree::getAllUsecaseResponseChannels: failed to deserialize activation channels blob");
             }
+            std::for_each(existing_channels.begin(), existing_channels.end(), [&activation_channels_map](ChannelIdentifier ch) {
+                activation_channels_map[ch.producer_module_id_] = ch.producer_channel_id_;
+            });
+        }
+        else
+        {
+            base_module_->log(logging::LogType::ERROR, "UsecaseTree::getAllUsecaseResponseChannels: no existing activation channels blob");
         }
 
         for (uint64_t i = frontend_state_->known_running_modules_.size(); i < core_->getRunningModulesCount(); ++i)

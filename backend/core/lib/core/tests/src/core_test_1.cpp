@@ -5,6 +5,7 @@
 
 #include "module_common/module_common.h"
 #include "module_common/dll_module_wrapper.h"
+#include "module_common/serialization_helper.h"
 
 #include <algorithm>
 
@@ -1958,16 +1959,16 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
                     aergo::module::message::SharedDataBlob channels_blob = core.getExistingPublishChannelsByName(type.c_str());
 
                     REQUIRE(channels_blob.valid());
-                    REQUIRE(channels_blob.size() == sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels_vec.size());
 
-                    const uint8_t* data_ptr = channels_blob.data();
-                    const uint64_t* data_as_uint64 = reinterpret_cast<const uint64_t*>(data_ptr);
-                    REQUIRE(data_as_uint64[0] == channels_vec.size());
+                    aergo::module::deserialize::des::BufferReader reader(channels_blob.data(), channels_blob.size());
 
-                    const aergo::module::ChannelIdentifier* ids = reinterpret_cast<const aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
+                    std::vector<aergo::module::ChannelIdentifier> deserialized_channels;
+                    REQUIRE(aergo::module::deserialize::readExistingChannels(reader, deserialized_channels) == true);
+
+                    REQUIRE(deserialized_channels.size() == channels_vec.size());
                     for (size_t i = 0; i < channels_vec.size(); ++i)
                     {
-                        REQUIRE(ids[i] == channels_vec[i]);
+                        REQUIRE(deserialized_channels[i] == channels_vec[i]);
                     }
                 }
             }
@@ -1984,16 +1985,16 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
                     aergo::module::message::SharedDataBlob channels_blob = core.getExistingResponseChannelsByName(type.c_str());
 
                     REQUIRE(channels_blob.valid());
-                    REQUIRE(channels_blob.size() == sizeof(uint64_t) + sizeof(aergo::module::ChannelIdentifier) * channels_vec.size());
 
-                    const uint8_t* data_ptr = channels_blob.data();
-                    const uint64_t* data_as_uint64 = reinterpret_cast<const uint64_t*>(data_ptr);
-                    REQUIRE(data_as_uint64[0] == channels_vec.size());
+                    aergo::module::deserialize::des::BufferReader reader(channels_blob.data(), channels_blob.size());
 
-                    const aergo::module::ChannelIdentifier* ids = reinterpret_cast<const aergo::module::ChannelIdentifier*>(data_as_uint64 + 1);
+                    std::vector<aergo::module::ChannelIdentifier> deserialized_channels;
+                    REQUIRE(aergo::module::deserialize::readExistingChannels(reader, deserialized_channels) == true);
+
+                    REQUIRE(deserialized_channels.size() == channels_vec.size());
                     for (size_t i = 0; i < channels_vec.size(); ++i)
                     {
-                        REQUIRE(ids[i] == channels_vec[i]);
+                        REQUIRE(deserialized_channels[i] == channels_vec[i]);
                     }
                 }
             }
