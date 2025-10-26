@@ -187,7 +187,11 @@ ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) cons
         }
         case ParameterType::CUSTOM:
         {
-            return std::nullopt; // CUSTOM type cannot be default initialized
+            if (!std::holds_alternative<std::vector<uint8_t>>(*value))
+            {
+                return std::nullopt;
+            }
+            break;
         }
     }
 
