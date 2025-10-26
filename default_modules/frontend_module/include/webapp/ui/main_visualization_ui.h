@@ -3,6 +3,7 @@
 
 #include "webapp/ui/helper/camera_container.h"
 #include "webapp/ui/helper/scene_container.h"
+#include "webapp/ui/helper/program_tree.h"
 
 
 #include "module_common/base_module.h"
@@ -28,6 +29,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui
     private:
         helper::CameraContainer* camera_container_{ nullptr };
         helper::SceneContainer* scene_container_{ nullptr };
+        helper::ProgramTree* program_tree_{ nullptr };
 
         Wt::Signal<> onSetupClicked_; // setup button clicked
 

@@ -743,3 +743,110 @@ body {
     overflow: hidden;
 }
 
+.program-tree {
+    width: 400px;
+    height: 100%;
+    border-left: 1px solid #212833;
+    display: flex;
+    flex-direction: column;
+}
+
+.program-tree-container {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    height: 40%;
+    padding: 10px;
+}
+
+.program-tree-parameters-container {
+    padding-top: 10px;
+    border-top: 1px solid #212833;
+    display: flex;
+    flex: 1 1 auto;
+}
+
+.program-tree-parameters {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.program-tree-parameter-section {
+    display: flex;
+    flex: 1 1 auto;
+}
+
+.program-tree-list {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+
+.program-tree-available-commands {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+
+    border-left: 1px solid #212833;
+    padding-left: 10px;
+}
+
+.program-list-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #7a8493;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+}
+
+
+.program-list-commands {
+    overflow-y: auto;
+}
+
+
+.program-command {
+    display: grid;
+    width: 150px;
+    height: 50px;
+    cursor: pointer;
+    border-radius: 12px;
+    border: 1px solid #1b222c;
+    background: #0f141a;
+    margin: 10px;
+    font-weight: 600;
+    font-size: 17px;
+    place-items: center;
+    transition: background .15s, border-color .15s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.program-command.selected {
+    border-color: #4f8cff;
+    box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.15) inset;
+    background: #141b25;
+}
+
+
+.tab-selector {
+    display: flex;
+}
+
+.tab-selector-tab {
+    flex: 1;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    background-color: #12181e;
+    transition: background .15s, border-color .15s;
+    color: #86929f;
+    font-weight: 400;
+    font-size: 16px;
+    letter-spacing: 1px;
+}
+
+.tab-selector-tab.tab-selector-tab-selected {
+    background-color: #1b2431;
+    color: #aeb8c3;
+}

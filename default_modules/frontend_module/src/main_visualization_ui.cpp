@@ -30,6 +30,7 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
     content_container->setStyleClass("main-content-container");
 
     scene_container_ = content_container->addWidget(std::make_unique<helper::SceneContainer>(base_module, 16 /* ~60fps */));
+    program_tree_ = content_container->addWidget(std::make_unique<helper::ProgramTree>());
     camera_container_ = content_container->addWidget(std::make_unique<helper::CameraContainer>());
 
     auto register_id_complex = scene_container_->createObjectDescription(
