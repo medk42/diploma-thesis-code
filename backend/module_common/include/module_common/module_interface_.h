@@ -161,6 +161,22 @@ namespace aergo::module
 
         struct MessageHeader
         {
+            template <typename ByteT>
+            static MessageHeader Message(std::span<const ByteT> bytes)
+            {
+                static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+                return MessageHeader
+                { // TODO const_cast is not nice, but would require changes in many places - maybe fix later
+                    .data_ = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(bytes.data())),
+                    .data_len_ = static_cast<uint64_t>(bytes.size()),
+                    .blobs_ = nullptr,
+                    .blob_count_ = 0,
+                    .id_ = 0,
+                    .timestamp_ns_ = 0,
+                    .success_ = true
+                };
+            }
+
             template <typename T>
             static MessageHeader Message(T* data)
             {
