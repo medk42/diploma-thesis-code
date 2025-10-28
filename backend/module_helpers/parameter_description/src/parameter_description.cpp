@@ -3,7 +3,7 @@
 #include <limits>
 #include <string_view>
 
-#include "cpp-base64/base64.cpp"
+#include "websocketpp/base64.hpp"
 
 #define PARAM_DESC_VERSION 1
 
@@ -58,7 +58,7 @@ ParameterValueOpt string_conversions::stringToParameterValue(const std::string& 
             }
             case ParameterType::CUSTOM:
             {
-                std::string decoded = decode(std::string_view(str), false);
+                std::string decoded = websocketpp::base64_decode(str);
                 std::vector<uint8_t> data(decoded.begin(), decoded.end());
                 return ParameterValue(data);
             }
@@ -112,7 +112,7 @@ std::optional<std::string> string_conversions::parameterValueToString(const Para
     else if (std::holds_alternative<std::vector<uint8_t>>(value))
     {
         const auto& data = std::get<std::vector<uint8_t>>(value);
-        return base64_encode(data.data(), data.size(), false);
+        return websocketpp::base64_encode(reinterpret_cast<unsigned char const *>(data.data()), data.size());
     }
     
     return std::nullopt;

@@ -13,7 +13,6 @@
     "wt",
     "libharu",
     "nlohmann-json",
-    "libzippp",
-    "cpp-base64"
+    "libzippp"
   ]
 }

@@ -137,7 +137,7 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase1::runProgram(
 
     for (int64_t i = 0; i < repetitions; ++i)
     {
-        log(logging::LogType::INFO, message_prefix + " Running iteration " + std::to_string(i + 1) + "/" + std::to_string(repetitions) + ":");
+        log(logging::LogType::INFO, message_prefix + "Running iteration " + std::to_string(i + 1) + "/" + std::to_string(repetitions) + ":");
         for (size_t j = 0; j < pen_poses_1.size(); ++j)
         {
             log(logging::LogType::INFO, message_prefix + "   Pen Pose 1 - " + std::to_string(j + 1) + ": " + pen_poses_1[j]);
@@ -149,7 +149,7 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase1::runProgram(
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
     }
 
-    log(logging::LogType::INFO, message_prefix + " Program completed.");
+    log(logging::LogType::INFO, message_prefix + "Program completed.");
 
     return std::expected<void, uw::helper::ErrorInfo>{};
 }
