@@ -61,13 +61,13 @@ Wt::WContainerWidget* ProgramTreeParameters::setupSection(command_param_type sec
         single_param->onShowDescription().connect([this](const std::string& title, const std::string& description) {
             onShowDescriptionClicked_.emit(title, description);
         });
-        single_param->onValueAdded().connect([this, section_type, param_id](size_t list_index, const p_desc::ParameterValueOpt& value) {
+        single_param->onValueAdded().connect([this, section_type, param_id](size_t list_index, const value_opt_t& value) {
             onValueAdded_.emit(section_type, param_id, list_index, value);
         });
         single_param->onValueRemoved().connect([this, section_type, param_id](size_t list_index) {
             onValueRemoved_.emit(section_type, param_id, list_index);
         });
-        single_param->onValueChanged().connect([this, section_type, param_id](size_t list_index, const p_desc::ParameterValue& value) {
+        single_param->onValueChanged().connect([this, section_type, param_id](size_t list_index, const value_t& value) {
             onValueChanged_.emit(section_type, param_id, list_index, value);
         });
 
