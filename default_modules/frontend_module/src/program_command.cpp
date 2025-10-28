@@ -2,12 +2,31 @@
 
 using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
 
-ProgramCommand::ProgramCommand(const std::string& command_name)
+ProgramCommand::ProgramCommand(const std::string& command_name, Status status)
 {
-    setStyleClass("program-command");
+    setStatus(status);
     setText(command_name);
 
     clicked().connect([this]() {
         onClick_.emit();
     });
+}
+
+
+void ProgramCommand::setStatus(Status status)
+{
+    status_ = status;
+
+    if (status == Status::Normal)
+    {
+        setStyleClass("program-command");
+    }
+    else if (status == Status::Warning)
+    {
+        setStyleClass("program-command program-command-warning");
+    }
+    else if (status == Status::Invalid)
+    {
+        setStyleClass("program-command program-command-invalid");
+    }
 }

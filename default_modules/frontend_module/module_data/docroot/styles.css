@@ -295,6 +295,7 @@ body {
     border-top: 1px solid #212833;
     display: flex;
     justify-content: space-between;
+    align-items: center;
 }
 
 .button-container {
@@ -779,6 +780,8 @@ body {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
+    flex-direction: column;
+    overflow-y: auto;
 }
 
 .program-tree-list {
@@ -797,12 +800,16 @@ body {
     padding-left: 10px;
 }
 
-.program-list-title {
+.light-gray-text {
     font-size: 15px;
     font-weight: 700;
     color: #7a8493;
-    margin-bottom: 10px;
     letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.program-list-title {
+    margin-bottom: 10px;
 }
 
 
@@ -827,15 +834,31 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
+.program-command.program-command-invalid {
+    background-color: #450000;
+    border-color: #850000;
+}
+
+.program-command.program-command-warning {
+    background-color: #695600;
+    border-color: #937d00;
+}
+
 .program-command.selected {
+    
     border-color: #4f8cff;
     box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.15) inset;
     background: #141b25;
 }
 
+.program-command.program-command-warning.selected {
+    background-color: #8d7300;
+    border-color: #f7d200;
+}
 
-.parameter-list {
-    overflow-y: auto;
+.program-command.program-command-invalid.selected {
+    background-color: #670000;
+    border-color: #dd0000;
 }
 
 
@@ -860,4 +883,21 @@ body {
 .tab-selector-tab.tab-selector-tab-selected {
     background-color: #1b2431;
     color: #aeb8c3;
+}
+
+.checkbox-label {
+    padding: 0 10px;
+}
+
+.input-checkbox.input-checkbox-inline {
+    margin: 0;
+}
+
+.parameter-section-title {
+    padding: 5px 10px;
+}
+
+.parameter-section-spacer
+{
+    padding-top: 20px;
 }

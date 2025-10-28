@@ -8,8 +8,12 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     class ProgramCommand : public Wt::WText
     {   
     public:
-        ProgramCommand(const std::string& command_name);
+        enum class Status { Normal, Warning, Invalid };
 
+        ProgramCommand(const std::string& command_name, Status status = Status::Normal);
+
+        void setStatus(Status status);
+        Status getStatus() const { return status_; }
         Wt::Signal<>& onClick() { return onClick_; }
         void setSelected(bool selected)
         {
@@ -20,6 +24,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         }
 
     private:
+        Status status_;
+
         Wt::Signal<> onClick_;
     };
 }

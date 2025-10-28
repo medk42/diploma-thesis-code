@@ -14,8 +14,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     public:
         ProgramList(std::string title, std::string style_class, bool selectable);
 
-        void addCommand(const std::string& command_name, bool selected = false);
-        void insertCommand(size_t index, const std::string& command_name, bool selected = false);
+        void addCommand(const std::string& command_name, ProgramCommand::Status command_status, bool selected = false);
+        void insertCommand(size_t index, const std::string& command_name, ProgramCommand::Status command_status, bool selected = false);
         void clearCommands();
         void setCommandSelected(size_t index);
         void removeCommand(size_t index);

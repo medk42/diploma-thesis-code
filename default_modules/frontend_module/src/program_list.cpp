@@ -10,27 +10,23 @@ ProgramList::ProgramList(std::string title, std::string style_class, bool select
     setStyleClass(style_class);
 
     auto title_widget = addWidget(std::make_unique<Wt::WText>(title));
-    title_widget->setStyleClass("program-list-title");
+    title_widget->setStyleClass("light-gray-text program-list-title");
 
     command_container_ = addWidget(std::make_unique<Wt::WContainerWidget>());
     command_container_->setStyleClass("program-list-commands");
 }
 
 
-void ProgramList::addCommand(const std::string& command_name, bool selected)
+void ProgramList::addCommand(const std::string& command_name, ProgramCommand::Status command_status, bool selected)
 {
-    insertCommand(command_list_.size(), command_name, selected);
+    insertCommand(command_list_.size(), command_name, command_status, selected);
 }
 
 
-void ProgramList::insertCommand(size_t index, const std::string& command_name, bool selected)
+void ProgramList::insertCommand(size_t index, const std::string& command_name, ProgramCommand::Status command_status, bool selected)
 {
     index = std::min(index, command_list_.size());
-    auto program_command = command_container_->insertWidget(index, std::make_unique<ProgramCommand>(command_name));
-    if (selectable_)
-    {
-        program_command->setSelected(selected);
-    }
+    auto program_command = command_container_->insertWidget(index, std::make_unique<ProgramCommand>(command_name, command_status));
     
     command_list_.insert(command_list_.begin() + index, program_command);
     program_command->onClick().connect([this, program_command]() {

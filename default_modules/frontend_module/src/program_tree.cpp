@@ -1,5 +1,6 @@
 #include "webapp/ui/helper/program_tree.h"
 #include "webapp/ui/helper/program_tree_parameters.h"
+#include "webapp/ui/helper/program_command.h"
 
 #include "webapp/ui/helper/program_tree_dummy_params.h"
 
@@ -26,14 +27,14 @@ ProgramTree::ProgramTree()
         )
     );
 
-    program_list->addCommand("WELD");
-    program_list->addCommand("P & P");
-    program_list->addCommand("MOVE L");
-    program_list->addCommand("MOVE J");
-    program_list->addCommand("MOVE J");
+    program_list->addCommand("WELD", ProgramCommand::Status::Normal);
+    program_list->addCommand("P & P", ProgramCommand::Status::Warning);
+    program_list->addCommand("MOVE L", ProgramCommand::Status::Normal);
+    program_list->addCommand("MOVE J", ProgramCommand::Status::Invalid);
+    program_list->addCommand("MOVE J", ProgramCommand::Status::Normal);
 
-    available_command_list->addCommand("CUT");
-    available_command_list->addCommand("DRILL");
-    available_command_list->addCommand("GRIND");
-    available_command_list->addCommand("PAINT");
+    available_command_list->addCommand("CUT", ProgramCommand::Status::Normal);
+    available_command_list->addCommand("DRILL", ProgramCommand::Status::Normal);
+    available_command_list->addCommand("GRIND", ProgramCommand::Status::Normal);
+    available_command_list->addCommand("PAINT", ProgramCommand::Status::Normal);
 }  
