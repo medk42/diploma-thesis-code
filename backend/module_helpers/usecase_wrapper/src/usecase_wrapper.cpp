@@ -593,6 +593,16 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
         );
     }
 
+    if (!validateParameterValues(auto_parameters_, auto_parameter_values_) ||
+        !validateParameterValues(manual_parameters_, required_parameter_values_) ||
+        !validateParameterValues(advanced_parameters_, advanced_parameter_values_))
+    {
+        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: handleCreateCommand received invalid parameter values.");
+        return ResponseData::createResponse(
+            message_types::Response{ .result_ = message_types::Result::FAIL }
+        );
+    }
+
     nlohmann::json command_data_json;
     auto res = usecase_module_ref_->createCommandFromParameters(
         auto_parameters_,
@@ -649,6 +659,44 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
         std::span(reinterpret_cast<const uint8_t*>(command_data_json_str.data()), command_data_json_str.size()),
         dynamic_allocator_.get()
     );
+}
+
+
+bool UsecaseWrapper::validateParameterValues(const p_desc::ParameterList& param_desc_list, const std::vector<std::vector<helper::ParameterTypeValue>>& param_values) const
+{
+    const auto& parameters = param_desc_list.getParameters();
+    if (parameters.size() != param_values.size())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < parameters.size(); ++i)
+    {
+        const auto& param_desc = parameters[i];
+        const auto& values = param_values[i];
+
+        if (param_desc.as_list_)
+        {
+            if (values.size() < param_desc.list_size_min_ || (param_desc.list_size_max_ != 0 && values.size() > param_desc.list_size_max_))
+            {
+                return false; // list size out of bounds
+            }
+        }
+        else if (values.size() != 1)
+        {
+            return false; // expected single value
+        }
+
+        for (const auto& value : values)
+        {
+            if (!param_desc.checkValid(value.value_))
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 

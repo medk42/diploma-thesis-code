@@ -48,6 +48,7 @@ namespace aergo::module::helpers::usecase_wrapper
         /// @param default_values_required true if default values are required, false otherwise (default values may be provided or not)
         /// @return true if parameter list is valid, false otherwise
         bool validateParameterList(const aergo::module::ModuleInfo* module_info, const p_desc::ParameterList& params, bool only_custom_allowed, bool default_values_required) const;
+        bool validateParameterValues(const p_desc::ParameterList& param_desc_list, const std::vector<std::vector<helper::ParameterTypeValue>>& param_values) const;
 
         aergo::module::ResponseData processUsecaseRequest(message::MessageHeader message) noexcept;
         aergo::module::ResponseData handleReadCommandParameters() noexcept;
