@@ -352,7 +352,10 @@
                 const ws = new WebSocket(url);
                 ws.binaryType = "arraybuffer";
 
-                ws.onopen = () => console.log("SceneSocket open:", url);
+                ws.onopen = () => {
+                    console.log("SceneSocket open:", url);
+                    ws.send("STARTED");
+                }
                 ws.onmessage = ev => {
                     if (ev.data instanceof ArrayBuffer) {
                         decodeCommandBuffer(ev.data);

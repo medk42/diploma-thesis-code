@@ -75,31 +75,56 @@ using namespace aergo::module::helpers::visualization_3d_interface;
 
 
 
+SceneSocketConnection::SceneSocketConnection(Wt::WWebSocketResource* resource, Wt::AsioWrapper::asio::io_service& ioService, aergo::module::BaseModule* base_module)
+: Wt::WWebSocketConnection(resource, ioService), base_module_(base_module)
+{
+    base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocketConnection created");
+}
+
+
+SceneSocketConnection::~SceneSocketConnection()
+{
+    base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocketConnection destroyed");
+}
+
+
+void SceneSocketConnection::handleMessage(const std::string& text)
+{
+    base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocketConnection received text message: " + text);
+    message_received_signal_.emit(text);
+}
+
+
+void SceneSocketConnection::handleMessage(const std::vector<char>& data)
+{
+    // For now, we do not handle binary messages
+    base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocketConnection received unexpected binary message of size " + std::to_string(data.size()));
+}
+
+
 SceneSocket::SceneSocket(aergo::module::BaseModule* base_module)
 : base_module_(base_module)
 {
     setTakesUpdateLock(false);
-    startWorkers();
 }
 
 
 
 SceneSocket::~SceneSocket()
 {
-    running_ = false;
-    cv_.notify_one();
-    if (send_worker_.joinable())
-    {
-        send_worker_.join();
-    }
-
     shutdown();
 }
 
 
 
-size_t SceneSocket::sendCommandBuffer(const CommandBuffer& cmd_buf)
+bool SceneSocket::sendCommandBuffer(const CommandBuffer& cmd_buf)
 {
+    std::lock_guard<std::mutex> lk(m_);
+    if (!can_send_ || conn_ == nullptr)
+    {
+        return false; // not connected or not ready to send
+    }
+
     std::vector<char> command_frame;
 
     uint32_t magic = 0x314E4353u; // 'SCN1' LE
@@ -116,37 +141,48 @@ size_t SceneSocket::sendCommandBuffer(const CommandBuffer& cmd_buf)
     serialization::pushObjectCommands(command_frame, cmd_buf.objects_);
     serialization::pushTrajectoryCommands(command_frame, cmd_buf.trajectories_);
 
-    std::lock_guard<std::mutex> lk(m_);
-    q_.emplace_back(std::move(command_frame));
-    cv_.notify_one();
-    return q_.size();
+    conn_->sendMessage(command_frame);
+
+    return true;
 }
 
 
 
 std::unique_ptr<Wt::WWebSocketConnection> SceneSocket::handleConnect(const Wt::Http::Request &req)
 {
-    auto c = std::make_unique<Wt::WWebSocketConnection>(this, Wt::WServer::instance()->ioService());
-    c->setTakesUpdateLock(false);
+    auto c = std::make_unique<SceneSocketConnection>(this, Wt::WServer::instance()->ioService(), base_module_);
+
+    std::lock_guard<std::mutex> lk(m_);
+
+    if (!before_first_connection_)
+    {
+        base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket: Additional WebSocket connection attempt. Only one connection is supported.");
+        return std::move(c);
+    }
+    before_first_connection_ = false;
+
+    conn_ = c.get();
+    can_send_ = false; // will be set to true after we receive a message from the client
 
     c->done().connect([this](const Wt::AsioWrapper::error_code& ec) {
         std::lock_guard<std::mutex> lk(m_);
-        sending_ = false;
+
         if (!ec)
         {
-            cv_.notify_one();
+            can_send_ = true;
         }
         else
         {
             conn_ = nullptr;
+            can_send_ = false;
             base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket: WebSocket connection closed: " + ec.message());
         }
     });
 
     c->closed().connect([this](Wt::AsioWrapper::error_code ec, const std::string& reason) {
         std::lock_guard<std::mutex> lk(m_);
-        sending_ = false;
         conn_ = nullptr;
+        can_send_ = false;
         if (!ec)
         {
             base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocket: WebSocket connection closed" + (reason.empty() ? std::string() : (": " + reason)));
@@ -156,56 +192,17 @@ std::unique_ptr<Wt::WWebSocketConnection> SceneSocket::handleConnect(const Wt::H
             base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket: WebSocket connection closed with error: " + ec.message() + (reason.empty() ? std::string() : (", reason: " + reason)));
         }
     });
-
-    {
-        std::lock_guard<std::mutex> lk(m_);
-        conn_ = c.get();
-        cv_.notify_one(); // wake up send worker, we might have queued messages
-    }
     
-    return c;
-}
-
-
-
-void SceneSocket::startWorkers()
-{
-    if (running_)
-    {
-        return;
-    }
-    running_ = true;
-
-    send_worker_ = std::thread([this]() {
-        std::unique_lock<std::mutex> lk(m_);
-        while (running_) {
-            cv_.wait(lk, [this] { return (!sending_ && !q_.empty() && conn_) || !running_; });
-            if (!running_) 
-            {
-                break;
-            }
-            if (sending_ || !conn_ || q_.empty())
-            {
-                continue;
-            }
-
-            sending_ = true;
-            auto& frame = q_.front();
-
-            // lk.unlock();
-            bool queued = conn_->sendMessage(frame);
-            // lk.lock();
-
-            if (queued)
-            {
-                q_.pop_front();
-            }
-            else
-            {
-                sending_ = false;
-            }
+    c->messageReceivedSignal().connect([this](const std::string& msg) {
+        std::lock_guard<std::mutex> lk(m_);
+        if (!can_send_)
+        {
+            can_send_ = true;
+            base_module_->log(aergo::module::logging::LogType::INFO, "SceneSocket: WebSocket connection established and ready to send messages.");
         }
     });
+    
+    return c;
 }
 
 
@@ -254,16 +251,16 @@ void SceneContainer::updateWorker()
                 //     (cmd_buf.grid_commanded_ ? (cmd_buf.grid_enabled_ ? "enabling" : "disabling") : "no grid command")
                 // );
 
-                size_t queued = socket_->sendCommandBuffer(cmd_buf);
-                if (queued == 0)
+                if (socket_->sendCommandBuffer(cmd_buf))
                 {
-                    base_module_->log(aergo::module::logging::LogType::ERROR, "SceneSocket::sendCommandBuffer() failed (invalid commands)");
+                    // sent successfully, clear the coalescer buffer
+                    cmd_coalescer_.clearBuffer();
                 }
-                else if (queued > 1)
+                else
                 {
-                    base_module_->log(aergo::module::logging::LogType::WARNING, "WebSocket send queue has " + std::to_string(queued) + " messages queued (not sending fast enough?)");
+                    // could not send (not connected), try again later
+                    base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket::sendCommandBuffer(): could not send command buffer, not connected");
                 }
-                cmd_coalescer_.clearBuffer();
             }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(frame_sleep_millis_));

@@ -13,6 +13,7 @@
 #include <Wt/WWebSocketResource.h>
 #include <Wt/WWebSocketConnection.h>
 #include <Wt/WServer.h>
+#include <Wt/WSignal.h>
 
 #include <deque>
 #include <unordered_map>
@@ -26,34 +27,44 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 {
     namespace vis3d = aergo::module::helpers::visualization_3d_interface;
 
+    class SceneSocketConnection : public Wt::WWebSocketConnection
+    {
+    public:
+        SceneSocketConnection(Wt::WWebSocketResource* resource, Wt::AsioWrapper::asio::io_service& ioService, aergo::module::BaseModule* base_module);
+        ~SceneSocketConnection() override;
+
+        void handleMessage(const std::string& text) override;
+        void handleMessage(const std::vector<char>& data) override;
+
+        Wt::Signal<const std::string&>& messageReceivedSignal() { return message_received_signal_; }
+
+    private:
+        aergo::module::BaseModule* base_module_{nullptr};
+
+        Wt::Signal<const std::string&> message_received_signal_;
+    };
+
     class SceneSocket : public Wt::WWebSocketResource
     {
     public:
         SceneSocket(aergo::module::BaseModule* base_module);
         ~SceneSocket() override;
 
-        /// @brief Thread-safe, non-blocking. Returns number of queued messages (if >1, messages are not being sent fast enough).
-        /// Returns 0 on failure (commands invalid).
-        size_t sendCommandBuffer(const vis3d::CommandBuffer& cmd_buf);
+        /// @brief Send command buffer to the connected client.
+        /// @return true if sent, false if not connected or not ready to send (try later).
+        bool sendCommandBuffer(const vis3d::CommandBuffer& cmd_buf);
 
     protected:
         std::unique_ptr<Wt::WWebSocketConnection> handleConnect(const Wt::Http::Request &req) override;
 
     private:
-        void startWorkers();
-
         aergo::module::BaseModule* base_module_{nullptr};
 
         std::mutex m_;
-        std::condition_variable cv_;
+        bool can_send_{false};
+        bool before_first_connection_{true};
         Wt::WWebSocketConnection* conn_{nullptr};
-        
-        bool sending_{false};
-        std::deque<std::vector<char>> q_;
         uint64_t seq_{0};
-
-        std::atomic<bool> running_{false};
-        std::thread send_worker_;
     };
 
 
