@@ -13,10 +13,30 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
 
     auto top_bar = addWidget(std::make_unique<helper::TopBar>(
         "Aergo",
-        std::vector<helper::ButtonDescription> {
-            {"Setup", helper::ButtonStyle::Secondary, true}
+        std::vector<std::vector<helper::ButtonDescription>>{
+            std::vector<helper::ButtonDescription> {
+                {"Setup", helper::ButtonStyle::Secondary, true}
+            }
         },
-        std::vector<helper::ButtonDescription> {}
+        std::vector<std::vector<helper::ButtonDescription>>{
+            std::vector<helper::ButtonDescription> {
+                {"New", helper::ButtonStyle::Secondary, true},
+                {"Save", helper::ButtonStyle::Secondary, true},
+                {"Load", helper::ButtonStyle::Secondary, true}
+            },
+            std::vector<helper::ButtonDescription> {
+                {"Cut", helper::ButtonStyle::Secondary, true},
+                {"Copy", helper::ButtonStyle::Secondary, true},
+                {"Paste", helper::ButtonStyle::Secondary, true}
+            },
+            std::vector<helper::ButtonDescription> {
+                {"Start", helper::ButtonStyle::Primary, false},
+                {"Simulate", helper::ButtonStyle::Secondary, false},
+                {"Stop", helper::ButtonStyle::Danger, false},
+                {"Pause", helper::ButtonStyle::Secondary, false},
+                {"Resume", helper::ButtonStyle::Secondary, false}
+            }
+        }
     ));
 
     top_bar->onButtonClicked().connect([this](size_t index){

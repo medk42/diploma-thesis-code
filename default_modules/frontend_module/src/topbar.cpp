@@ -2,7 +2,7 @@
 
 using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
 
-TopBar::TopBar(const std::string& title, std::vector<ButtonDescription> left_buttons, std::vector<ButtonDescription> right_buttons)
+TopBar::TopBar(const std::string& title, std::vector<std::vector<ButtonDescription>> left_buttons, std::vector<std::vector<ButtonDescription>> right_buttons)
 {
     setStyleClass("top-bar");
 
@@ -15,36 +15,61 @@ TopBar::TopBar(const std::string& title, std::vector<ButtonDescription> left_but
     auto left_button_container = button_container->addWidget(std::make_unique<Wt::WContainerWidget>());
     left_button_container->setStyleClass("top-bar-buttons-left");
 
-    for (size_t i = 0; i < left_buttons.size(); ++i)
-    {
-        const auto& desc = left_buttons[i];
-        auto button = left_button_container->addWidget(std::make_unique<Button>(
-            desc.text_, 
-            desc.style_, 
-            desc.enabled_
-        ));
+    size_t button_index = 0;
 
-        size_t callback_index = i;
-        button->clicked().connect([this, callback_index]() {
-            onButtonClicked_.emit(callback_index);
-        });
+    for (size_t outer = 0 ; outer < left_buttons.size(); ++outer)
+    {
+        if (outer > 0)
+        {
+            // add spacer between button groups
+            auto spacer = left_button_container->addWidget(std::make_unique<Wt::WContainerWidget>());
+            spacer->setStyleClass("top-bar-button-group-spacer");
+        }
+
+        for (size_t i = 0; i < left_buttons[outer].size(); ++i)
+        {
+            const auto& desc = left_buttons[outer][i];
+            auto button = left_button_container->addWidget(std::make_unique<Button>(
+                desc.text_, 
+                desc.style_, 
+                desc.enabled_
+            ));
+
+            button->clicked().connect([this, button_index]() {
+                onButtonClicked_.emit(button_index);
+            });
+            ++button_index;
+            buttons_.push_back(button);
+        }
     }
+    
 
     auto right_button_container = button_container->addWidget(std::make_unique<Wt::WContainerWidget>());
     right_button_container->setStyleClass("top-bar-buttons-right");
 
-    for (size_t i = 0; i < right_buttons.size(); ++i)
+    for (size_t outer = 0 ; outer < right_buttons.size(); ++outer)
     {
-        const auto& desc = right_buttons[i];
-        auto button = right_button_container->addWidget(std::make_unique<Button>(
-            desc.text_, 
-            desc.style_, 
-            desc.enabled_
-        ));
+        if (outer > 0)
+        {
+            // add spacer between button groups
+            auto spacer = right_button_container->addWidget(std::make_unique<Wt::WContainerWidget>());
+            spacer->setStyleClass("top-bar-button-group-spacer");
+        }
 
-        size_t callback_index = left_buttons.size() + i;
-        button->clicked().connect([this, callback_index]() {
-            onButtonClicked_.emit(callback_index);
-        });
+        for (size_t i = 0; i < right_buttons[outer].size(); ++i)
+        {
+            const auto& desc = right_buttons[outer][i];
+            auto button = right_button_container->addWidget(std::make_unique<Button>(
+                desc.text_, 
+                desc.style_, 
+                desc.enabled_
+            ));
+
+            button->clicked().connect([this, button_index]() {
+                onButtonClicked_.emit(button_index);
+            });
+            ++button_index;
+            buttons_.push_back(button);
+        }
     }
 }

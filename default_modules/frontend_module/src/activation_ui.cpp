@@ -11,12 +11,16 @@ ActivationUi::ActivationUi()
 
     auto top_bar = addWidget(std::make_unique<helper::TopBar>(
         "Setup Modules",
-        std::vector<helper::ButtonDescription> {
-            {"Save", helper::ButtonStyle::Secondary, true},
-            {"Load", helper::ButtonStyle::Secondary, true}
+        std::vector<std::vector<helper::ButtonDescription>>{
+            std::vector<helper::ButtonDescription> {
+                {"Save", helper::ButtonStyle::Secondary, true},
+                {"Load", helper::ButtonStyle::Secondary, true}
+            }
         },
-        std::vector<helper::ButtonDescription> {
-            {"Close", helper::ButtonStyle::Danger, true}
+        std::vector<std::vector<helper::ButtonDescription>>{
+            std::vector<helper::ButtonDescription> {
+                {"Close", helper::ButtonStyle::Danger, true}
+            }
         }
     ));
 

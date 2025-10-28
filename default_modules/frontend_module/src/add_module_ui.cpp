@@ -16,9 +16,11 @@ AddModuleUi::AddModuleUi(const std::vector<const aergo::module::ModuleInfo*>& av
 
     auto top_bar = addWidget(std::make_unique<helper::TopBar>(
         "Add Module",
-        std::vector<helper::ButtonDescription> {},
-        std::vector<helper::ButtonDescription> {
-            {"Close", helper::ButtonStyle::Danger, true}
+        std::vector<std::vector<helper::ButtonDescription>>{},
+        std::vector<std::vector<helper::ButtonDescription>>{
+            std::vector<helper::ButtonDescription> {
+                {"Close", helper::ButtonStyle::Danger, true}
+            }
         }
     ));
 

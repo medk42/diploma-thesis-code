@@ -901,3 +901,8 @@ body {
 {
     padding-top: 20px;
 }
+
+.top-bar-button-group-spacer {
+    width: 1px;
+    background-color: #242a33;
+}
