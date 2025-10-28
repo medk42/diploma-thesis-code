@@ -24,6 +24,8 @@ namespace aergo::module::helpers::usecase_wrapper
         virtual uint64_t sendRequestFromUsecase(uint32_t request_consumer_id) = 0;
 
         /// @brief Create a command from provided parameter values. Command is represented as a string in JSON format.
+        /// This method's caller (UsecaseWrapper) is responsible for validating that parameter values match the parameter descriptions (no need to validate again here).
+        /// Every parameter value contains the expected type, value and list sized limits and enum index are also validated.
         /// @param auto_parameters parameters that are set from the input Consumer channels (subscribe/request) - only CUSTOM type allowed (value or list of values)
         /// @param required_parameters parameters that are required to be set by the user before activation - any non-CUSTOM type allowed (value or list of values)
         /// @param advanced_parameters parameters that are optional to set by the user before activation - any non-CUSTOM type allowed, need to have default value (value or list of values)
