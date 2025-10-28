@@ -38,7 +38,7 @@ namespace aergo::module::helpers::usecase_tree
 
         /// @brief Update the list of available usecases from the connected modules
         /// @return true on success, false on failure (failed to read available usecases, etc.)
-        bool updateAvailableUsecases(std::optional<std::function<void()>> on_finish = std::nullopt);
+        bool updateAvailableUsecases(std::optional<std::function<void(const std::map<std::string, structs::AvailableUsecase>&)>> on_finish = std::nullopt);
         const std::map<std::string, structs::AvailableUsecase>& getAvailableUsecases() const; // there is no protection that the map won't change while being accessed, ensure external synchronization if needed
 
         bool appendCommand(const std::string& param_identifier); // appends command at the end, returns true if successful; command is specified by usecase parameter identifier
@@ -52,7 +52,7 @@ namespace aergo::module::helpers::usecase_tree
         // send request to generate command data JSON for command at specified index, returns true if request was sent, false if wrong list_index or parameters invalid
         bool generateCommandDataJson(size_t list_index, std::optional<std::function<void(bool, uw::helper::ErrorInfo)>> on_finish = std::nullopt);
         
-        bool readCustomValue(size_t list_index, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void()>> on_value_ready_callback = std::nullopt);
+        bool readCustomValue(size_t list_index, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback = std::nullopt);
 
         /// @brief starts all commands in the usecase tree, returns true if start request was accepted (all commands valid), 
         /// false otherwise (invalid commands, no commands, already running, etc.).
@@ -75,7 +75,7 @@ namespace aergo::module::helpers::usecase_tree
 
 
     private:
-        void processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void()>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message);
+        void processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message);
 
         /// @brief Send request and wait for response synchronously (blocking).
         /// @param target_channel 
@@ -97,7 +97,7 @@ namespace aergo::module::helpers::usecase_tree
 
         // If we do not receive an update, we would currently wait forever. Keep in mind for future improvements.
         std::set<uint64_t> pending_modules_for_update_; // modules from which we are waiting for available usecases during updateAvailableUsecases()
-        std::optional<std::function<void()>> pending_update_on_finish_; // callback to call when pending_modules_for_update_ is empty
+        std::optional<std::function<void(const std::map<std::string, structs::AvailableUsecase>&)>> pending_update_on_finish_; // callback to call when pending_modules_for_update_ is empty
 
         std::map<std::string, structs::AvailableUsecase> available_usecases_map_;
         std::vector<structs::ExistingCommand> existing_commands_list_;

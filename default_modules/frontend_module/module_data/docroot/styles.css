@@ -744,11 +744,12 @@ body {
 }
 
 .program-tree {
-    width: 400px;
+    width: 550px;
     height: 100%;
     border-left: 1px solid #212833;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .program-tree-container {
@@ -763,17 +764,21 @@ body {
     border-top: 1px solid #212833;
     display: flex;
     flex: 1 1 auto;
+    min-height: 0;
 }
 
 .program-tree-parameters {
     display: flex;
     flex-direction: column;
     width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .program-tree-parameter-section {
     display: flex;
     flex: 1 1 auto;
+    min-height: 0;
 }
 
 .program-tree-list {
@@ -829,20 +834,26 @@ body {
 }
 
 
+.parameter-list {
+    overflow-y: auto;
+}
+
+
 .tab-selector {
     display: flex;
+    flex: 0 0 60px;
 }
 
 .tab-selector-tab {
     flex: 1;
-    height: 40px;
+    height: 60px;
     display: grid;
     place-items: center;
     background-color: #12181e;
     transition: background .15s, border-color .15s;
     color: #86929f;
-    font-weight: 400;
-    font-size: 16px;
+    font-weight: 600;
+    font-size: 20px;
     letter-spacing: 1px;
 }
 

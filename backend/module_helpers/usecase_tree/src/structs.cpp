@@ -146,6 +146,24 @@ bool ExistingCommand::addValue(ParamType type, size_t param_index, const p_desc:
 }
 
 
+bool ExistingCommand::resetValue(ParamType type, size_t param_index, size_t list_index)
+{
+    if (type != ParamType::AUTO)
+    {
+        return false; // reset to nullopt only supported for CUSTOM type
+    }
+
+    auto& param_values = getParameterValues(type);
+    if (param_index >= param_values.size() || list_index >= param_values[param_index].size())
+    {
+        return false;
+    }
+    param_values[param_index][list_index] = std::nullopt;
+
+    return true;
+}
+
+
 bool ExistingCommand::removeValue(ParamType type, size_t param_index, size_t list_index)
 {
     auto parameters = getParameters(type);

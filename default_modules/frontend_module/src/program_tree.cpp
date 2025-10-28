@@ -1,6 +1,8 @@
 #include "webapp/ui/helper/program_tree.h"
 #include "webapp/ui/helper/program_tree_parameters.h"
 
+#include "webapp/ui/helper/program_tree_dummy_params.h"
+
 using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
 
 ProgramTree::ProgramTree()
@@ -16,7 +18,13 @@ ProgramTree::ProgramTree()
     auto parameters_container = addWidget(std::make_unique<Wt::WContainerWidget>());
     parameters_container->setStyleClass("program-tree-parameters-container");
 
-    auto parameters = parameters_container->addWidget(std::make_unique<ProgramTreeParameters>());
+    auto [dummy_auto, dummy_required, dummy_advanced] = generateParams();
+
+    auto parameters = parameters_container->addWidget(
+        std::make_unique<ProgramTreeParameters>(
+            dummy_auto, dummy_required, dummy_advanced
+        )
+    );
 
     program_list->addCommand("WELD");
     program_list->addCommand("P & P");
