@@ -2,6 +2,7 @@
 
 #include "module_common/base_module.h"
 #include "module_helpers/usecase_wrapper/usecase_module_interface.h"
+#include "module_helpers/usecase_wrapper/serialization_helper.h"
 
 #include <expected>
 #include <optional>
@@ -15,6 +16,8 @@ namespace aergo::module::helpers::base_usecase
 {
     namespace message_types = aergo::module::helpers::usecase_wrapper::message_types;
     namespace usecase_wrapper_helper = aergo::module::helpers::usecase_wrapper::helper;
+    namespace uw = aergo::module::helpers::usecase_wrapper;
+    namespace p_desc = aergo::module::helpers::parameter_description;
 
     /// @brief Base class for usecase modules, provides common functionality.
     /// It implements the IUsecaseModule interface, providing functionality to
@@ -44,8 +47,12 @@ namespace aergo::module::helpers::base_usecase
 
         ~BaseUsecase() noexcept override;
 
+        virtual uint64_t sendRequestFromUsecase(uint32_t request_consumer_id) override { return 0; } // implement for usecases that do not need to send requests
+
         virtual void processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override {} // ignore messages
         virtual aergo::module::ResponseData processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override { return aergo::module::ResponseData::createFailure(); } // ignore requests
+        virtual void processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override {} // ignore responses
+        virtual aergo::module::IModule::IngressDecision onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept override { return aergo::module::IModule::IngressDecision::DROP; } // UsecaseWrapper will accept required messages, drop all here
         virtual bool valid() noexcept override { return true; } // always valid
         virtual void* query_capability(const std::type_info& id) noexcept override;
         virtual bool threadStart(uint32_t timeout_ms) noexcept override { return true; } // threads are started only on programStart() call
@@ -80,6 +87,34 @@ namespace aergo::module::helpers::base_usecase
         /// @param command_json Parameters for the command in JSON format.
         /// @return {} if command completed successfully, std::unexpected(ErrorInfo) otherwise
         virtual std::expected<void, usecase_wrapper_helper::ErrorInfo> runProgram(const nlohmann::json& command_json, bool simulated) = 0;
+
+        template<typename Thead>
+        static inline bool readMessageDataAs(const p_desc::ParameterValue& param_value, Thead& out_data)
+        {
+            static_assert(std::is_trivially_copyable_v<Thead>, "readMessageDataAs requires trivially copyable type");
+
+            if (!std::holds_alternative<std::vector<uint8_t>>(param_value))
+            {
+                return false;
+            }
+
+            const auto& data = std::get<std::vector<uint8_t>>(param_value);
+            uw::deserialize::des::BufferReader reader(data.data(), data.size());
+
+            uw::deserialize::MessageData msg_data;
+            if (!uw::deserialize::readMessage(reader, msg_data))
+            {
+                return false;
+            }
+
+            aergo::module::message::MessageHeader header = aergo::module::message::MessageHeader::Message(std::span<const uint8_t>(msg_data.data_));
+            if (!header.readAs<Thead>(out_data))
+            {
+                return false;
+            }
+
+            return true;
+        }
 
     private:
         struct UsecaseStatus;
