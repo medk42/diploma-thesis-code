@@ -72,8 +72,8 @@ namespace aergo::module::helpers::parameter_description
         /// Validity is checked for type (ParameterType matches the actual variant type in ParameterValue) 
         /// and limits (for LONG and DOUBLE types and enum range).
         /// @param value The ParameterValueOpt to check.
-        /// @return The same ParameterValueOpt if valid, std::nullopt otherwise. 
-        ParameterValueOpt checkValid(ParameterValueOpt value) const;
+        /// @return true if valid, false otherwise.
+        bool checkValid(const ParameterValueOpt& value) const;
 
         void toStringStream(std::stringstream& stream);
         static ParameterDescription fromStringStream(std::stringstream& stream);

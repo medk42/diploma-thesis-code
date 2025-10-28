@@ -75,9 +75,15 @@ ParameterValueOpt string_conversions::stringToParameterValue(const std::string& 
 
 ParameterValueOpt string_conversions::parseDefaultValue(const ParameterDescription& param_desc)
 {
-    return param_desc.checkValid(
-        string_conversions::stringToParameterValue(param_desc.default_value_, param_desc.type_)
-    );
+    auto value = string_conversions::stringToParameterValue(param_desc.default_value_, param_desc.type_);
+    if (param_desc.checkValid(value))
+    {
+        return value;
+    }
+    else
+    {
+        return std::nullopt;
+    }
 }
 
 
@@ -113,11 +119,11 @@ std::optional<std::string> string_conversions::parameterValueToString(const Para
 }
 
 
-ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) const
+bool ParameterDescription::checkValid(const ParameterValueOpt& value) const
 {
     if (!value)
     {
-        return std::nullopt;
+        return false;
     }
     
     switch (type_)
@@ -126,7 +132,7 @@ ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) cons
         {
             if (!std::holds_alternative<bool>(*value))
             {
-                return std::nullopt;
+                return false;
             }
             break;
         }
@@ -134,16 +140,16 @@ ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) cons
         {
             if (!std::holds_alternative<int64_t>(*value))
             {
-                return std::nullopt;
+                return false;
             }
             int64_t val = std::get<int64_t>(*value);
             if (limit_min_ && val < min_value_long_)
             {
-                return std::nullopt;
+                return false;
             }
             if (limit_max_ && val > max_value_long_)
             {
-                return std::nullopt;
+                return false;
             }
             break;
         }
@@ -151,16 +157,16 @@ ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) cons
         {
             if (!std::holds_alternative<double>(*value))
             {
-                return std::nullopt;
+                return false;
             }
             double val =  std::get<double>(*value);
             if (limit_min_ && val < min_value_double_)
             {
-                return std::nullopt;
+                return false;
             }
             if (limit_max_ && val > max_value_double_)
             {
-                return std::nullopt;
+                return false;
             }
             break;
         }
@@ -168,7 +174,7 @@ ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) cons
         {
             if (!std::holds_alternative<std::string>(*value))
             {
-                return std::nullopt;
+                return false;
             }
             break;
         }
@@ -176,12 +182,12 @@ ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) cons
         {
             if (!std::holds_alternative<int32_t>(*value))
             {
-                return std::nullopt;
+                return false;
             }
             int32_t index = std::get<int32_t>(*value);
             if (index < 0 || static_cast<size_t>(index) >= enum_values_.size())
             {
-                return std::nullopt;
+                return false;
             }
             break;
         }
@@ -189,13 +195,13 @@ ParameterValueOpt ParameterDescription::checkValid(ParameterValueOpt value) cons
         {
             if (!std::holds_alternative<std::vector<uint8_t>>(*value))
             {
-                return std::nullopt;
+                return false;
             }
             break;
         }
     }
 
-    return value;
+    return true;
 }
 
 
