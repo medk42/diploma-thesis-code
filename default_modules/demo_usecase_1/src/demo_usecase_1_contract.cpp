@@ -3,6 +3,7 @@
 #include "message_structure.h"
 #include "module_helpers/usecase_wrapper/usecase_wrapper.h"
 #include "module_common/dll_module_wrapper.h"
+#include "module_helpers/usecase_wrapper/message_types.h"
 
 #define LOCAL_MODULE_API_VERSION 2
 
@@ -24,14 +25,18 @@ static constexpr communication_channel::Consumer subscribe_consumers[] = {
     }
 };
 
+static constexpr communication_channel::Producer response_producers[] = {
+    aergo::module::helpers::usecase_wrapper::message_types::usecase_response_producer
+};
+
 static constexpr ModuleInfo module_info = {
     .module_type_identifier_ = "demo_usecase_1",
-    .display_name_ = "Demo Usecase 1 Module",
+    .display_name_ = "Demo Usecase 1",
     .display_description_ = "Demo usecase module 1 that demonstrates usecase wrapper functionality.",
     .publish_producers_ = nullptr,
     .publish_producer_count_ = 0,
-    .response_producers_ = nullptr,
-    .response_producer_count_ = 0,
+    .response_producers_ = response_producers,
+    .response_producer_count_ = std::size(response_producers),
     .subscribe_consumers_ = subscribe_consumers,
     .subscribe_consumer_count_ = std::size(subscribe_consumers),
     .request_consumers_ = nullptr,
