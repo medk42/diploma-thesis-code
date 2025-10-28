@@ -88,10 +88,10 @@ namespace aergo::module::helpers::base_usecase
         /// @return {} if command completed successfully, std::unexpected(ErrorInfo) otherwise
         virtual std::expected<void, usecase_wrapper_helper::ErrorInfo> runProgram(const nlohmann::json& command_json, bool simulated) = 0;
 
-        template<typename Thead>
-        static inline bool readMessageDataAs(const p_desc::ParameterValue& param_value, Thead& out_data)
+        template<typename T>
+        static inline bool readMessageDataAs(const p_desc::ParameterValue& param_value, T& out_data, std::vector<std::vector<uint8_t>>* out_blobs = nullptr) noexcept
         {
-            static_assert(std::is_trivially_copyable_v<Thead>, "readMessageDataAs requires trivially copyable type");
+            static_assert(std::is_trivially_copyable_v<T>, "readMessageDataAs requires trivially copyable type");
 
             if (!std::holds_alternative<std::vector<uint8_t>>(param_value))
             {
@@ -108,9 +108,14 @@ namespace aergo::module::helpers::base_usecase
             }
 
             aergo::module::message::MessageHeader header = aergo::module::message::MessageHeader::Message(std::span<const uint8_t>(msg_data.data_));
-            if (!header.readAs<Thead>(out_data))
+            if (!header.readAs<T>(out_data))
             {
                 return false;
+            }
+
+            if (out_blobs != nullptr)
+            {
+                *out_blobs = std::move(msg_data.blobs_);
             }
 
             return true;
