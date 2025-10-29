@@ -259,7 +259,7 @@ void SceneContainer::updateWorker()
                 else
                 {
                     // could not send (not connected), try again later
-                    base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket::sendCommandBuffer(): could not send command buffer, not connected");
+                    // base_module_->log(aergo::module::logging::LogType::WARNING, "SceneSocket::sendCommandBuffer(): could not send command buffer, not connected");
                 }
             }
         }

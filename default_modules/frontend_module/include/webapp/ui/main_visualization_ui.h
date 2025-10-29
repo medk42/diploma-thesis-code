@@ -18,7 +18,10 @@ namespace aergo::default_modules::frontend_module::webapp::ui
     class MainVisualizationUi : public Wt::WContainerWidget
     {
     public:
-        MainVisualizationUi(aergo::module::BaseModule* base_module);
+        MainVisualizationUi(aergo::module::BaseModule* base_module, helper::ProgramTreeState& program_state_unsafe, std::function<void(std::function<void()>)> with_frontend_state_lock);
+
+        void reloadAvailableUsecases() { program_tree_->reloadAvailableUsecases(); } // reload available usecases in program tree
+        void onProgramTreeButtonClicked(helper::ProgramTreeButtons button) { program_tree_->onButtonClicked(button); } // handle program tree button click
 
         void updateFrame(std::vector<uint8_t>&& jpeg_data) { camera_container_->updateFrame(std::move(jpeg_data)); } // update camera frame
         

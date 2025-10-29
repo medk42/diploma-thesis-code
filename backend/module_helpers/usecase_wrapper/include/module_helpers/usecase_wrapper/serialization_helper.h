@@ -214,12 +214,16 @@ namespace aergo::module::helpers::usecase_wrapper
         
         
         /// @brief Read a string from buffer [u64 str_len][str_len * u8 str]
-        inline bool readString(des::BufferReader& reader, std::string& out_str)
+        inline bool readString(des::BufferReader& reader, std::string& out_str, size_t max_str_len = 16 * 1024 * 1024)
         {
             uint64_t str_len = 0;
             if (!reader.read<uint64_t>(str_len))
             {
                 return false; // failed to read str_len
+            }
+            if (str_len > max_str_len)
+            {
+                return false; // str_len exceeds maximum allowed length
             }
             if (str_len > 0)
             {

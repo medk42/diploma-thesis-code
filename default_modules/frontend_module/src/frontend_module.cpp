@@ -49,6 +49,13 @@ FrontendModule::FrontendModule(const char* data_path, ICore* core, InputChannelM
         return;
     }
 
+    frontend_state_.program_tree_state_.usecase_tree_ = std::make_unique<helpers::usecase_tree::UsecaseTree>(this);
+    if (!frontend_state_.program_tree_state_.usecase_tree_->valid())
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to initialize usecase tree.");
+        return;
+    }
+
     valid_ = true;
 }
 
@@ -77,6 +84,10 @@ IModule::IngressDecision FrontendModule::onIngress(ProcessingType kind, uint32_t
             return IngressDecision::ACCEPT; // accept all, responses will be dropped automatically if queue is full
         }
         if (local_channel_id == frontend_state_.scene_visualization_handler_->getSceneRequestChannelId()) // accept visualization responses
+        {
+            return IngressDecision::ACCEPT; // accept all, responses will be dropped automatically if queue is full
+        }
+        if (local_channel_id == frontend_state_.program_tree_state_.usecase_tree_->getUsecaseRequestChannelId()) // accept usecase tree responses
         {
             return IngressDecision::ACCEPT; // accept all, responses will be dropped automatically if queue is full
         }
@@ -259,6 +270,50 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
     {
         std::lock_guard lock(frontend_state_.mutex_);
         frontend_state_.scene_visualization_handler_->processVisualizationResponse(request_consumer_id, source_channel, message);
+    }
+    else if (request_consumer_id == frontend_state_.program_tree_state_.usecase_tree_->getUsecaseRequestChannelId())
+    {
+        std::lock_guard lock(frontend_state_.mutex_);
+        if (w_server_)
+        {
+            std::vector<uint8_t> message_copy;
+            if (message.data_ && message.data_len_ > 0)
+            {
+                message_copy.resize(message.data_len_);
+                std::memcpy(message_copy.data(), message.data_, message.data_len_);
+            }
+            std::vector<aergo::module::message::SharedDataBlob> blobs_copy;
+            if (message.blobs_)
+            {
+                for (size_t i = 0; i < message.blob_count_; ++i)
+                {
+                    blobs_copy.push_back(message.blobs_[i]); // blob is just a lightweight reference, can be copied directly
+                }
+            }
+            
+            uint64_t message_id = message.id_; // capture message ID for logging inside lambda if needed
+            uint64_t timestamp_ns = message.timestamp_ns_; // capture timestamp for logging inside lambda if needed
+            bool success = message.success_; // capture success flag for logging inside lambda if needed
+
+            // Process the response in the Wt server thread - with frontend_state_ lock and UI lock held
+            w_server_->post(frontend_state_.active_app_->sessionId(), [this, source_channel, message_copy, blobs_copy, message_id, timestamp_ns, success]() {
+                std::lock_guard lock(frontend_state_.mutex_);
+
+                frontend_state_.program_tree_state_.usecase_tree_->handleResponse(
+                    source_channel,
+                    message::MessageHeader
+                    {
+                        .data_ = message_copy.empty() ? nullptr : const_cast<uint8_t*>(message_copy.data()),
+                        .data_len_ = static_cast<uint64_t>(message_copy.size()),
+                        .blobs_ = blobs_copy.empty() ? nullptr : const_cast<aergo::module::message::SharedDataBlob*>(blobs_copy.data()),
+                        .blob_count_ = static_cast<uint64_t>(blobs_copy.size()),
+                        .id_ = message_id,
+                        .timestamp_ns_ = timestamp_ns,
+                        .success_ = success
+                    }
+                );
+            });
+        }
     }
 }
 

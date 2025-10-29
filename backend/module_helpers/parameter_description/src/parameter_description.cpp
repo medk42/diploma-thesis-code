@@ -282,7 +282,10 @@ ParameterDescription ParameterDescription::fromStringStream(std::stringstream& s
     CHECKED_READ(stream >> default_value_length)
     description.default_value_.resize(default_value_length);
     stream >> std::ws; // eat whitespace
-    CHECKED_READ(stream.read(&description.default_value_[0], default_value_length))
+    if (default_value_length > 0)
+    {
+        CHECKED_READ(stream.read(&description.default_value_[0], default_value_length))
+    }
 
     return description;
 }

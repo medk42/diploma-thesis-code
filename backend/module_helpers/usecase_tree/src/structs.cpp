@@ -5,6 +5,7 @@ using namespace aergo::module::helpers::usecase_tree::structs;
 
 ExistingCommand::ExistingCommand(
     std::string usecase_identifier, 
+    std::string usecase_name,
     uint64_t command_id, 
     const std::map<std::string, AvailableUsecase>* available_usecases_map,
     p_desc::ParameterValueOptListList&& auto_parameter_values, 
@@ -13,6 +14,7 @@ ExistingCommand::ExistingCommand(
     std::optional<std::string> command_data_json,
     bool command_data_json_in_sync)
     : usecase_identifier_(std::move(usecase_identifier)),
+      usecase_name_(std::move(usecase_name)),
       command_id_(command_id),
       available_usecases_map_(available_usecases_map),
       auto_parameter_values_(std::move(auto_parameter_values)),

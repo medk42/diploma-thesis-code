@@ -12,6 +12,9 @@
 #include <thread>
 #include <span>
 #include <cstdint>
+#include <optional>
+
+#undef ERROR // yay for windows.h
 
 namespace aergo::module::helpers::usecase_tree
 {

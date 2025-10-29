@@ -6,6 +6,7 @@
 
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_helpers/visualization_3d_interface/message_types.h"
+#include "module_helpers/usecase_wrapper/message_types.h"
 
 
 #define MODULE_API_VERSION 2
@@ -19,7 +20,8 @@ using namespace aergo::module;
 
 static constexpr communication_channel::Consumer web_visualization_module_request_consumers[] = {
     aergo::module::helpers::activation_wrapper::message_types::activation_request_consumer,
-    aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_request_consumer
+    aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_request_consumer,
+    aergo::module::helpers::usecase_wrapper::message_types::usecase_request_consumer
 };
 
 static constexpr communication_channel::Consumer web_visualization_module_subscribe_consumers[] = {

@@ -6,7 +6,11 @@
 
 using namespace aergo::default_modules::frontend_module::webapp::ui;
 
-MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
+MainVisualizationUi::MainVisualizationUi(
+    aergo::module::BaseModule* base_module, 
+    helper::ProgramTreeState& program_state_unsafe, 
+    std::function<void(std::function<void()>)> with_frontend_state_lock
+)
 : base_module_(base_module)
 {
     setStyleClass("main-visualization-ui");
@@ -50,7 +54,11 @@ MainVisualizationUi::MainVisualizationUi(aergo::module::BaseModule* base_module)
     content_container->setStyleClass("main-content-container");
 
     scene_container_ = content_container->addWidget(std::make_unique<helper::SceneContainer>(base_module, 16 /* ~60fps */));
-    program_tree_ = content_container->addWidget(std::make_unique<helper::ProgramTree>());
+    program_tree_ = content_container->addWidget(std::make_unique<helper::ProgramTree>(
+        base_module_,
+        program_state_unsafe,
+        with_frontend_state_lock
+    ));
     camera_container_ = content_container->addWidget(std::make_unique<helper::CameraContainer>());
 
     auto register_id_complex = scene_container_->createObjectDescription(

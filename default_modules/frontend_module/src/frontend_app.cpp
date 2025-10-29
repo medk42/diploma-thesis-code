@@ -107,7 +107,14 @@ void FrontendApp::setupUi()
     // order of add widgets here must match enum FrontendScreen
     add_module_ui_ = main_container_->addWidget(std::make_unique<ui::AddModuleUi>(frontend_state_->available_modules_));
     activation_ui_ = main_container_->addWidget(std::make_unique<ui::ActivationUi>());
-    main_visualization_ui_ = main_container_->addWidget(std::make_unique<ui::MainVisualizationUi>(base_module_));
+    main_visualization_ui_ = main_container_->addWidget(std::make_unique<ui::MainVisualizationUi>(
+        base_module_,
+        frontend_state_->program_tree_state_,
+        [this](std::function<void()> func) { // function to access frontend_state_ with lock
+            std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+            func();
+        }
+    ));
 
     update_timer_ = root()->addChild(std::make_unique<Wt::WTimer>());
     update_timer_->setInterval(std::chrono::milliseconds(200));
@@ -234,6 +241,7 @@ void FrontendApp::setupCallbacks()
         std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
         frontend_state_->current_screen_ = webapp::FrontendScreen::MAIN_VISUALIZATION;
         main_container_->setCurrentIndex((int)frontend_state_->current_screen_);
+        main_visualization_ui_->reloadAvailableUsecases(); // reload available usecases in program tree because they might have changed (module created/destroyed)
     });
 
 

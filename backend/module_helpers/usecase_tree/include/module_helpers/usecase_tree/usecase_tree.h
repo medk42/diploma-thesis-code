@@ -37,8 +37,9 @@ namespace aergo::module::helpers::usecase_tree
         void handleResponse(ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message);
 
         /// @brief Update the list of available usecases from the connected modules
+        /// On finish, the optional callback is called with success flag and the updated map of available usecases
         /// @return true on success, false on failure (failed to read available usecases, etc.)
-        bool updateAvailableUsecases(std::optional<std::function<void(const std::map<std::string, structs::AvailableUsecase>&)>> on_finish = std::nullopt);
+        bool updateAvailableUsecases(std::optional<std::function<void(bool, const std::map<std::string, structs::AvailableUsecase>&)>> on_finish = std::nullopt);
         const std::map<std::string, structs::AvailableUsecase>& getAvailableUsecases() const; // there is no protection that the map won't change while being accessed, ensure external synchronization if needed
 
         bool appendCommand(const std::string& param_identifier); // appends command at the end, returns true if successful; command is specified by usecase parameter identifier
@@ -97,7 +98,7 @@ namespace aergo::module::helpers::usecase_tree
 
         // If we do not receive an update, we would currently wait forever. Keep in mind for future improvements.
         std::set<uint64_t> pending_modules_for_update_; // modules from which we are waiting for available usecases during updateAvailableUsecases()
-        std::optional<std::function<void(const std::map<std::string, structs::AvailableUsecase>&)>> pending_update_on_finish_; // callback to call when pending_modules_for_update_ is empty
+        std::optional<std::function<void(bool, const std::map<std::string, structs::AvailableUsecase>&)>> pending_update_on_finish_; // callback to call when pending_modules_for_update_ is empty
 
         std::map<std::string, structs::AvailableUsecase> available_usecases_map_;
         std::vector<structs::ExistingCommand> existing_commands_list_;

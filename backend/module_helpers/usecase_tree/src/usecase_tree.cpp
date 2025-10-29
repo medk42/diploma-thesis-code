@@ -60,7 +60,7 @@ void UsecaseTree::handleResponse(ChannelIdentifier source_channel, const aergo::
 }
 
 
-bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(const std::map<std::string, structs::AvailableUsecase>&)>> on_finish)
+bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool, const std::map<std::string, structs::AvailableUsecase>&)>> on_finish)
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -88,6 +88,18 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(const
         return false;
     }
 
+    available_usecases_map_.clear();
+
+    if (existing_channels.size() == 0)
+    {
+        // no usecase response channels found
+        if (on_finish.has_value())
+        {
+            (*on_finish)(true, available_usecases_map_);
+        }
+        return true;
+    }
+
     pending_update_on_finish_ = on_finish;
 
     for (const auto& channel : existing_channels)
@@ -107,20 +119,52 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(const
 
             pending_modules_for_update_.erase(source_channel.producer_module_id_);
 
+            if (!response_message.success_)
+            {
+                pending_modules_for_update_.clear();
+                auto on_finish_callback = pending_update_on_finish_.value();
+                pending_update_on_finish_ = std::nullopt;
+                on_finish_callback(false, available_usecases_map_);
+
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Module " + std::to_string(source_channel.producer_module_id_) + " reported failure in response.");
+                return;
+            }
+
             uw::message_types::Response response;
             if (!response_message.readAs(response))
             {
+                pending_modules_for_update_.clear();
+                auto on_finish_callback = pending_update_on_finish_.value();
+                pending_update_on_finish_ = std::nullopt;
+                on_finish_callback(false, available_usecases_map_);
+
                 base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Failed to read response from module " + std::to_string(source_channel.producer_module_id_));    
                 return;
             }
 
             if (response.result_ != uw::message_types::Result::SUCCESS)
             {
+                pending_modules_for_update_.clear();
+                auto on_finish_callback = pending_update_on_finish_.value();
+                pending_update_on_finish_ = std::nullopt;
+                on_finish_callback(false, available_usecases_map_);
+
                 base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Module " + std::to_string(source_channel.producer_module_id_) + " reported failure in response.");
                 return;
             }
 
-            aergo::module::helpers::usecase_wrapper::deserialize::des::BufferReader reader(response_message.data_, response_message.data_len_);
+            if (response_message.blob_count_ != 1 || response_message.blobs_ == nullptr)
+            {
+                pending_modules_for_update_.clear();
+                auto on_finish_callback = pending_update_on_finish_.value();
+                pending_update_on_finish_ = std::nullopt;
+                on_finish_callback(false, available_usecases_map_);
+
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Invalid blobs in response from module " + std::to_string(source_channel.producer_module_id_));
+                return;
+            }
+
+            aergo::module::helpers::usecase_wrapper::deserialize::des::BufferReader reader(response_message.blobs_[0].data(), response_message.blobs_[0].size());
 
             std::string param_identifier, param_name, param_desc;
             aergo::module::helpers::parameter_description::ParameterList auto_parameters, required_parameters, advanced_parameters;
@@ -135,6 +179,11 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(const
                 advanced_parameters
             ))
             {
+                pending_modules_for_update_.clear();
+                auto on_finish_callback = pending_update_on_finish_.value();
+                pending_update_on_finish_ = std::nullopt;
+                on_finish_callback(false, available_usecases_map_);
+
                 base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Failed to read usecase parameters from module " + std::to_string(source_channel.producer_module_id_));
                 return;
             }
@@ -159,7 +208,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(const
             {
                 auto on_finish_callback = pending_update_on_finish_.value();
                 pending_update_on_finish_ = std::nullopt;
-                on_finish_callback(available_usecases_map_);
+                on_finish_callback(true, available_usecases_map_);
             }
         };
 
@@ -193,6 +242,7 @@ bool UsecaseTree::appendCommand(const std::string& param_identifier)
     uint64_t command_id = next_command_id_++;
     existing_commands_list_.push_back(std::move(structs::ExistingCommand(
         param_identifier,
+        available_usecase.getUsecaseName(),
         command_id,
         &available_usecases_map_,
         std::move(available_usecase.getAutoParameters().buildParameterValues()),
@@ -835,6 +885,7 @@ std::optional<std::string> UsecaseTree::toJson() const
 
         json single_command_json;
         single_command_json["usecase_identifier"] = command.getUsecaseIdentifier();
+        single_command_json["usecase_name"] = command.getUsecaseName();
         
         auto auto_values_json_opt = encode_value_opt_list_list(command.getParameterValues(structs::ExistingCommand::ParamType::AUTO), usecase_ref->getAutoParameters());
         if (!auto_values_json_opt.has_value())
@@ -1026,6 +1077,13 @@ bool UsecaseTree::fromJson(const std::string& json_str, std::string& out_missing
         }
         std::string usecase_identifier = cmd_json["usecase_identifier"].get<std::string>();
 
+        if (!cmd_json.contains("usecase_name") || !cmd_json["usecase_name"].is_string())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Program entry missing 'usecase_name'.");
+            return false;
+        }
+        std::string usecase_name = cmd_json["usecase_name"].get<std::string>();
+
         auto usecase_it = available_usecases_map_.find(usecase_identifier);
         if (usecase_it == available_usecases_map_.end())
         {
@@ -1085,6 +1143,7 @@ bool UsecaseTree::fromJson(const std::string& json_str, std::string& out_missing
         uint64_t command_id = next_command_id_++;
         existing_commands_list_.push_back(std::move(structs::ExistingCommand(
             std::move(usecase_identifier),
+            std::move(usecase_name),
             command_id,
             &available_usecases_map_,
             std::move(auto_values),
