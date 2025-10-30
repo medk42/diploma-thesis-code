@@ -280,13 +280,12 @@ aergo::module::ResponseData VisualizationHelper::processVisualizationRequest(aer
         return { .success_ = false };
     }
 
-    if (message.data_ == nullptr || message.data_len_ != sizeof(ReqType))
+    ReqType req_type;
+    if (!message.readAs<ReqType>(req_type))
     {
         base_module_->log(aergo::module::logging::LogType::WARNING, "VisualizationHelper: Received invalid request (bad data).");
         return { .success_ = false };
     }
-
-    ReqType req_type = *reinterpret_cast<ReqType*>(message.data_);
 
     // Prepare response data based on request type
     std::vector<char> blob_data;

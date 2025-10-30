@@ -7,6 +7,7 @@
 #include <tuple>
 #include <span>
 #include <span>
+#include <cstring>
 
 namespace aergo::module
 {
@@ -180,7 +181,8 @@ namespace aergo::module
             template <typename T>
             static MessageHeader Message(T* data)
             {
-                static_assert(std::is_pod<T>::value, "Only POD types are supported in MessageHeader::Message");
+                static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
+                static_assert(std::is_standard_layout_v<T>, "T must be standard-layout");
                 return MessageHeader
                 {
                     .data_ = reinterpret_cast<uint8_t*>(data),
@@ -196,7 +198,8 @@ namespace aergo::module
             template <typename T>
             static MessageHeader Message(T* data, SharedDataBlob* blobs, uint64_t blob_count = 1)
             {
-                static_assert(std::is_pod<T>::value, "Only POD types are supported in MessageHeader::Message");
+                static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
+                static_assert(std::is_standard_layout_v<T>, "T must be standard-layout");
                 return MessageHeader
                 {
                     .data_ = reinterpret_cast<uint8_t*>(data),
@@ -226,7 +229,8 @@ namespace aergo::module
             template<typename T>
             bool readAs(T& out_data) const
             {
-                static_assert(std::is_pod<T>::value, "Only POD types are supported in MessageHeader::Message");
+                static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
+                static_assert(std::is_standard_layout_v<T>, "T must be standard-layout");
 
                 if (!success_ || data_len_ != sizeof(T) || data_ == nullptr)
                 {

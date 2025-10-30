@@ -335,12 +335,12 @@ bool UsecaseWrapper::validateParameterList(const aergo::module::ModuleInfo* modu
 
 aergo::module::ResponseData UsecaseWrapper::processUsecaseRequest(message::MessageHeader message) noexcept
 {
-    if (message.data_ == nullptr || message.data_len_ != sizeof(message_types::Request))
+    message_types::Request request;
+    if (!message.readAs<message_types::Request>(request))
     {
-        return ResponseData::createFailure(); // invalid message
+        return ResponseData::createFailure(); // unsuccessful, or invalid message
     }
-
-    auto& request = *reinterpret_cast<message_types::Request*>(message.data_);
+    
     if ((request.req_type_ == message_types::ReqType::CREATE_COMMAND ||
          request.req_type_ == message_types::ReqType::PROGRAM_READ_VISUALIZATION ||
          request.req_type_ == message_types::ReqType::PROGRAM_START_REAL ||

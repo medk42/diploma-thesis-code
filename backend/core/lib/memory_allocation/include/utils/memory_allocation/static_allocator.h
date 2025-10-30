@@ -10,6 +10,7 @@
 #include <set>
 #include <optional>
 #include <mutex>
+#include <condition_variable>
 
 
 namespace aergo::core::memory_allocation
@@ -54,5 +55,6 @@ namespace aergo::core::memory_allocation
         std::set<std::size_t> allocated_memory_slots_; // for checking pointer validity in addOwnerImpl / removeOwnerImpl
 
         std::mutex mutex_;
+        std::condition_variable cv_;
     };
 }

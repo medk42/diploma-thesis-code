@@ -18,7 +18,7 @@
 
 namespace aergo::module::helpers::activation_wrapper::message_types
 {
-    enum class ReqType
+    enum class ReqType : uint8_t
     {
         READ_ACTIVATION_PARAMETERS,  // get activation parameters from the module as a string
         ACTIVATE,                    // attempt to activate the module
@@ -41,14 +41,14 @@ namespace aergo::module::helpers::activation_wrapper::message_types
         CANCEL_TASK
     };
 
-    enum class Result
+    enum class Result : uint8_t
     {
         SUCCESS,                        // successfully performed request
         FAIL,                           // failed to perform request
         RUNNING,                        // action was started and is running, in progress (check status / cancel with ID running_action_id_)
     };
 
-    enum class ProgressType
+    enum class ProgressType : uint8_t
     {
         NONE, INT, DOUBLE
     };

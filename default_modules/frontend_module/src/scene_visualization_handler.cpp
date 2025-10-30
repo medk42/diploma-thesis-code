@@ -53,14 +53,12 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
         return;
     }
 
-    if (message.data_ == nullptr || message.data_len_ != sizeof(vis3d::ReqType))
+    vis3d::ReqType req_type;
+    if (!message.readAs<vis3d::ReqType>(req_type))
     {
         base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received response with invalid data");
         return;
     }
-
-
-    vis3d::ReqType req_type = *reinterpret_cast<vis3d::ReqType*>(message.data_);
 
     if (message.blob_count_ != 1 || message.blobs_ == nullptr || !message.blobs_[0].valid())
     {
@@ -243,13 +241,12 @@ void SceneVisualizationHandler::processMessage(uint32_t subscribe_consumer_id, C
         return; // not our channel
     }
 
-    if (message.data_ == nullptr || message.data_len_ != sizeof(vis3d::PubType))
+    vis3d::PubType pub_type;
+    if (!message.readAs<vis3d::PubType>(pub_type))
     {
         base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processMessage: received message with invalid data");
         return;
     }
-
-    vis3d::PubType pub_type = *reinterpret_cast<vis3d::PubType*>(message.data_);
 
     if (pub_type == vis3d::PubType::ANNOUNCE)
     {

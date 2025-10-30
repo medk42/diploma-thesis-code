@@ -40,12 +40,7 @@ StaticAllocator::~StaticAllocator()
     destruction_started_ = true;
 
     // wait until all allocated slots are freed
-    while (!allocated_memory_slots_.empty())
-    {
-        lock.unlock();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        lock.lock();
-    }
+    cv_.wait(lock, [this]() { return allocated_memory_slots_.empty(); });
 }
 
 
@@ -132,6 +127,10 @@ void StaticAllocator::removeOwnerImpl(aergo::module::ISharedData* data)
         {
             free_memory_slot_ids_.push_back(data_core->id());
             allocated_memory_slots_.erase((std::size_t)data);
+            if (destruction_started_ && allocated_memory_slots_.empty())
+            {
+                cv_.notify_all();
+            }
         }
     }
     else if (!data)

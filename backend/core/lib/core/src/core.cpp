@@ -10,6 +10,7 @@
 #include <cstring>
 #include <algorithm>
 #include <cstddef>
+#include <span>
 
 using namespace aergo::core;
 using json = nlohmann::json;
@@ -1421,14 +1422,9 @@ aergo::module::message::SharedDataBlob Core::getExistingPublishChannelsByName(co
 
     std::vector<std::byte> buffer;
     aergo::module::serialize::pushExistingChannels(buffer, channels);
-    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(buffer.size());
-    if (!blob.valid() || blob.size() != buffer.size())
-    {
-        return aergo::module::message::SharedDataBlob(); // return invalid blob
-    }
-    std::memcpy(blob.data(), buffer.data(), buffer.size());
 
-    return blob;
+    // returns a copy of the data in SharedDataBlob or an invalid blob on failure
+    return core_dynamic_allocator_->allocateFromData(std::span<const std::byte>(buffer.data(), buffer.size()));
 }
 
 
@@ -1439,14 +1435,9 @@ aergo::module::message::SharedDataBlob Core::getExistingResponseChannelsByName(c
     
     std::vector<std::byte> buffer;
     aergo::module::serialize::pushExistingChannels(buffer, channels);
-    aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(buffer.size());
-    if (!blob.valid() || blob.size() != buffer.size())
-    {
-        return aergo::module::message::SharedDataBlob(); // return invalid blob
-    }
-    std::memcpy(blob.data(), buffer.data(), buffer.size());
 
-    return blob;
+    // returns a copy of the data in SharedDataBlob or an invalid blob on failure
+    return core_dynamic_allocator_->allocateFromData(std::span<const std::byte>(buffer.data(), buffer.size()));
 }
 
 
@@ -1870,7 +1861,7 @@ bool Core::load(const uint8_t* data, uint64_t size) noexcept
         size_t loaded_module_id = it->second;
 
         
-        auto load_mappings = [manual_created_module, instance_name_to_running_id, instance_name, this](const auto& json_array, std::vector<std::vector<aergo::module::ChannelIdentifier>>& out_mappings) -> bool
+        auto load_mappings = [manual_created_module, instance_name_to_running_id, instance_name, this](const json& json_array, std::vector<std::vector<aergo::module::ChannelIdentifier>>& out_mappings) -> bool
         {
             for (const auto& subscribe_channel : json_array)
             {

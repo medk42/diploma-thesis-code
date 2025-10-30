@@ -251,19 +251,30 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
     if (request_consumer_id == activation_request_channel_id_)
     {
         std::lock_guard lock(frontend_state_.mutex_);
-        webapp::ActivationResponse resp {
-            .running_module_index_ = source_channel.producer_module_id_,
-            .success_ = message.success_ && message.data_ && message.data_len_ == sizeof(aergo::module::helpers::activation_wrapper::message_types::Response),
-        };
-        if (resp.success_)
+
+        helpers::activation_wrapper::message_types::Response response;
+        if (message.readAs<helpers::activation_wrapper::message_types::Response>(response))
         {
-            resp.response_ = *reinterpret_cast<aergo::module::helpers::activation_wrapper::message_types::Response*>(message.data_);
+            std::vector<uint8_t> data_blob;
             if (message.blob_count_ > 0 && message.blobs_ && message.blobs_[0].valid())
             {
-                resp.data_blob_.resize(message.blobs_[0].size());
-                std::memcpy(resp.data_blob_.data(), message.blobs_[0].data(), message.blobs_[0].size());
+                data_blob.resize(message.blobs_[0].size());
+                std::memcpy(data_blob.data(), message.blobs_[0].data(), message.blobs_[0].size());
             }
-            frontend_state_.pending_activation_responses_.push_back(std::move(resp));
+
+            frontend_state_.pending_activation_responses_.push_back(std::move(webapp::ActivationResponse{
+                .running_module_index_ = source_channel.producer_module_id_,
+                .success_ = true,
+                .response_ = response,
+                .data_blob_ = std::move(data_blob)
+            }));
+        }
+        else
+        {
+            frontend_state_.pending_activation_responses_.push_back(std::move(webapp::ActivationResponse{
+                .running_module_index_ = source_channel.producer_module_id_,
+                .success_ = false,
+            }));
         }
     }
     else if (request_consumer_id == frontend_state_.scene_visualization_handler_->getSceneRequestChannelId())

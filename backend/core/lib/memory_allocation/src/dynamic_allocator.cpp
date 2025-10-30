@@ -26,12 +26,7 @@ DynamicAllocator::~DynamicAllocator()
     destruction_started_ = true;
 
     // wait until all allocated slots are freed
-    while (!allocated_data_.empty())
-    {
-        lock.unlock();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        lock.lock();
-    }
+    cv_.wait(lock, [this]() { return allocated_data_.empty(); });
 }
 
 
@@ -138,6 +133,10 @@ void DynamicAllocator::removeOwnerImpl(aergo::module::ISharedData* data)
             {
                 allocated_data_.erase(it);
                 allocated_memory_slots_.erase((std::size_t)data);
+                if (destruction_started_ && allocated_data_.empty())
+                {
+                    cv_.notify_all();
+                }
             }
         }
         else

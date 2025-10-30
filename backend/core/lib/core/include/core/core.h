@@ -5,6 +5,7 @@
 
 #include <map>
 #include <shared_mutex>
+#include <mutex>
 
 namespace aergo::core
 {

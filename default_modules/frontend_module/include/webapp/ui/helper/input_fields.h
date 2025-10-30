@@ -20,6 +20,7 @@
 #include <optional>
 #include <vector>
 #include <string>
+#include <cmath>
 
 namespace aergo::default_modules::frontend_module::webapp::ui::helper
 {

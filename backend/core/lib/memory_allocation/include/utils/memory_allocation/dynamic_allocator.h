@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <condition_variable>
 
 
 namespace aergo::core::memory_allocation
@@ -40,5 +41,6 @@ namespace aergo::core::memory_allocation
         bool destruction_started_{false};
 
         std::mutex mutex_;
+        std::condition_variable cv_;
     };
 }
