@@ -11,7 +11,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -23,7 +23,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -35,7 +35,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -47,7 +47,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -60,7 +60,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -72,7 +72,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -84,7 +84,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -96,7 +96,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/demos/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -108,7 +108,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/binaries",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         },
         {
@@ -120,7 +120,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build-core-windows/backend/core/lib/core/tests/",
             "environment": [],
-            "externalConsole": true,
+            "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
         }
     ]
