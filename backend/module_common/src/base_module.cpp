@@ -60,6 +60,7 @@ void BaseModule::log(logging::LogType type, std::string message)
 void BaseModule::sendMessage(uint32_t publish_producer_id, message::MessageHeader message)
 {
     message.timestamp_ns_ = nowNs();
+    message.success_ = true; // only response to request can have success flag false
     
     core_->sendMessage(
         {
@@ -93,6 +94,7 @@ uint64_t BaseModule::sendRequest(uint32_t request_consumer_id, ChannelIdentifier
 {
     message.id_ = request_id_++;
     message.timestamp_ns_ = nowNs();
+    message.success_ = true; // only response to request can have success flag false
 
     core_->sendRequest(
         {
