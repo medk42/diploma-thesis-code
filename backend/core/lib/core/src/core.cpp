@@ -82,6 +82,10 @@ void Core::loadModules(const char* modules_dir, const char* data_dir)
 
         
         std::string module_filename = module_path.stem().string();
+        if (module_path.extension() == ".so" && module_filename.starts_with("lib"))
+        {
+            module_filename = module_filename.substr(3); // remove "lib" prefix for .so files
+        }
         
         std::filesystem::path data_path = std::filesystem::path(data_dir) / module_filename;
 
