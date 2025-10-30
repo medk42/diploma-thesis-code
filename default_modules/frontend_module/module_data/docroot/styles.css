@@ -852,8 +852,8 @@ body {
 }
 
 .program-command.program-command-warning.selected {
-    background-color: #8d7300;
-    border-color: #f7d200;
+    background-color: #c5a100;
+    border-color: #ffdb12;
 }
 
 .program-command.program-command-invalid.selected {

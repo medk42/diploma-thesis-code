@@ -21,7 +21,6 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         MainVisualizationUi(aergo::module::BaseModule* base_module, helper::ProgramTreeState& program_state_unsafe, std::function<void(std::function<void()>)> with_frontend_state_lock);
 
         void reloadAvailableUsecases() { program_tree_->reloadAvailableUsecases(); } // reload available usecases in program tree
-        void onProgramTreeButtonClicked(helper::ProgramTreeButtons button) { program_tree_->onButtonClicked(button); } // handle program tree button click
 
         void updateFrame(std::vector<uint8_t>&& jpeg_data) { camera_container_->updateFrame(std::move(jpeg_data)); } // update camera frame
         
@@ -30,6 +29,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         helper::SceneContainer* getSceneContainer() { return scene_container_; }
 
     private:
+        void programTreeButtonClicked(size_t index);
+
         helper::CameraContainer* camera_container_{ nullptr };
         helper::SceneContainer* scene_container_{ nullptr };
         helper::ProgramTree* program_tree_{ nullptr };

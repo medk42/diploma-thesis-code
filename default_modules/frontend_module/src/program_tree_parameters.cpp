@@ -24,25 +24,35 @@ ProgramTreeParameters::ProgramTreeParameters(
     auto action_bar = addWidget(std::make_unique<Wt::WContainerWidget>());
     action_bar->setStyleClass("action-bar");
     
-    auto checkbox_container = action_bar->addWidget(std::make_unique<Wt::WContainerWidget>());
-    auto checkbox_label = checkbox_container->addWidget(std::make_unique<Wt::WText>("ADVANCED"));
-    checkbox_label->setStyleClass("light-gray-text checkbox-label");
-    auto checkbox = checkbox_container->addWidget(std::make_unique<ToggleCheckbox>());
-    checkbox->addStyleClass("input-checkbox-inline");
+    if (advanced_parameters_section)
+    {
+        auto checkbox_container = action_bar->addWidget(std::make_unique<Wt::WContainerWidget>());
+        auto checkbox_label = checkbox_container->addWidget(std::make_unique<Wt::WText>("ADVANCED"));
+        checkbox_label->setStyleClass("light-gray-text checkbox-label");
+        auto checkbox = checkbox_container->addWidget(std::make_unique<ToggleCheckbox>());
+        checkbox->addStyleClass("input-checkbox-inline");
+        advanced_parameters_section->setHidden(true);
+        checkbox->clicked().connect([advanced_parameters_section, checkbox]() {
+            bool is_checked = checkbox->isChecked();
+            advanced_parameters_section->setHidden(!is_checked);
+        });
+    }
+    else
+    {
+        action_bar->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty spacer to align confirm button to right
+    }
 
     action_bar->addWidget(std::make_unique<Button>("Confirm", ButtonStyle::Primary));
-
-
-    advanced_parameters_section->setHidden(true);
-    checkbox->clicked().connect([advanced_parameters_section, checkbox]() {
-        bool is_checked = checkbox->isChecked();
-        advanced_parameters_section->setHidden(!is_checked);
-    });
 }
 
 
 Wt::WContainerWidget* ProgramTreeParameters::setupSection(command_param_type section_type, Wt::WContainerWidget* section_container, const std::vector<p_desc::ParameterDescription>& parameters, const std::string& section_title, bool top_padding)
-{    
+{
+    if (parameters.empty()) // do not create section if no parameters
+    {
+        return nullptr;
+    }
+
     auto section = section_container->addWidget(std::make_unique<Wt::WContainerWidget>());
     section->setStyleClass("parameter-list");
 

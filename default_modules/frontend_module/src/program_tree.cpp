@@ -2,8 +2,6 @@
 #include "webapp/ui/helper/program_tree_parameters.h"
 #include "webapp/ui/helper/program_command.h"
 
-#include "webapp/ui/helper/program_tree_dummy_params.h"
-
 #include <ranges>
 
 using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
@@ -23,32 +21,42 @@ ProgramTree::ProgramTree(aergo::module::BaseModule* base_module, ProgramTreeStat
     existing_usecases_list_ = program_container->addWidget(std::make_unique<ProgramList>("PROGRAM", "program-tree-list", true));
     available_usecases_list_ = program_container->addWidget(std::make_unique<ProgramList>("AVAILABLE", "program-tree-available-commands", false));
 
+    parameters_container_ = addWidget(std::make_unique<Wt::WStackedWidget>());
+    parameters_container_->setStyleClass("program-tree-parameters-container");
+
+    parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for New Program
+
     reloadAvailableUsecases();
     setupCallbacks();
-
-    auto parameters_container = addWidget(std::make_unique<Wt::WContainerWidget>());
-    parameters_container->setStyleClass("program-tree-parameters-container");
-
-
-
-    // Dummy parameters for demonstration
-    auto [dummy_auto, dummy_required, dummy_advanced] = generateParams();
-
-    auto parameters = parameters_container->addWidget(
-        std::make_unique<ProgramTreeParameters>(
-            dummy_auto, dummy_required, dummy_advanced
-        )
-    );
 } 
 
 
 void ProgramTree::reloadAvailableUsecases() // called with UI and frontend_state_ locks held
 {
+    auto updating_note_dialog = showPopupDialog(
+            std::move(std::make_unique<ReusableDialog>(
+            "Updating Usecase List", 
+            "Please wait while the list of available and existing usecases is being updated from connected modules...", 
+            std::vector<ButtonDescription>{}
+        )),
+        false, // this pop-up is not dismissed on button click
+        false  // this pop-up is not dismissed on background click
+    );
+
     base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::reloadAvailableUsecases: Reloading available usecases...");
-    bool success = program_state_unsafe_.usecase_tree_->updateAvailableUsecases([this](bool success, const std::map<std::string, structs::AvailableUsecase>& available_usecases) {
+    bool success = program_state_unsafe_.usecase_tree_->updateAvailableUsecases([this, updating_note_dialog](bool success, const std::map<std::string, structs::AvailableUsecase>& available_usecases) {
+        if (popup_dialog_ == updating_note_dialog)
+        {
+            closePopupDialog();
+        }
+
         available_usecases_list_->clearCommands();
         available_usecase_ids_.clear();
         existing_usecases_list_->clearCommands();
+
+        parameters_container_->clear();
+        parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for New Program
+        parameters_container_->setCurrentIndex(0); // show empty page after reload
 
         if (!success)
         {
@@ -101,28 +109,145 @@ void ProgramTree::setupCallbacks()
             }
             const auto& new_command = (*program_state_unsafe_.usecase_tree_)[program_state_unsafe_.usecase_tree_->size() - 1];
             addExistingUsecase(new_command);
+            parameters_container_->setCurrentIndex(parameters_container_->count() - 1); // show parameters of newly added usecase
         });
+    });
+
+    existing_usecases_list_->onCommandClicked().connect([this](size_t index) {
+        if (index + 1 >= parameters_container_->count()) // +1 because child 0 is empty
+        {
+            displayErrorPopup("Failed to show usecase parameters: internal error.");
+            base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupCallbacks: existing_usecases_list_ index out of range.");
+            return;
+        }
+        parameters_container_->setCurrentIndex(index + 1); // +1 because child 0 is empty
     });
 }
 
 
 void ProgramTree::addExistingUsecase(const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase)
 {
-    if (existing_usecase.getUsecaseReference() == nullptr)
+    // TODO this all does NOT work for insert!
+
+    auto usecase_ref = existing_usecase.getUsecaseReference();
+    if (usecase_ref == nullptr)
     {
         existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Invalid);
-        // TODO hide parameters
+        parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for invalid usecase
     }
     else if (!existing_usecase.hasCommandDataJson() || !existing_usecase.isCommandDataJsonInSync())
     {
         existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Warning);
+
+        auto params = parameters_container_->addWidget(std::make_unique<ProgramTreeParameters>(
+            usecase_ref->getAutoParameters().getParameters(),
+            usecase_ref->getRequiredParameters().getParameters(),
+            usecase_ref->getAdvancedParameters().getParameters()
+        ));
+        params->onShowDescription().connect([this](const std::string& title, const std::string& description) {
+            showParameterDescriptionPopup(title, description);
+        });
+
         // TODO show parameters + enable CREATE button if all filled
         // TODO re-build parameters UI
     }
     else
     {
         existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Normal);
+
+        auto params = parameters_container_->addWidget(std::make_unique<ProgramTreeParameters>(
+            usecase_ref->getAutoParameters().getParameters(),
+            usecase_ref->getRequiredParameters().getParameters(),
+            usecase_ref->getAdvancedParameters().getParameters()
+        )); 
+        params->onShowDescription().connect([this](const std::string& title, const std::string& description) {
+            showParameterDescriptionPopup(title, description);
+        });
+
+        // TODO set all values too!
         // TODO show parameters + disable CREATE button (already created and in sync)
         // TODO re-build parameters UI
+    }
+}
+
+
+void ProgramTree::onButtonClicked(ProgramTreeButtons button)
+{
+    if (button == ProgramTreeButtons::NewProgram)
+    {
+        parameters_container_->setCurrentIndex(0); // show dummy parameters for demonstration
+    }
+    if (button == ProgramTreeButtons::LoadProgram)
+    {
+        parameters_container_->setCurrentIndex(1); // show dummy parameters for demonstration
+    }
+
+    switch (button)
+    {
+    case ProgramTreeButtons::NewProgram:
+        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onButtonClicked: NewProgram button clicked.");
+        // TODO implement
+        break;
+    case ProgramTreeButtons::SaveProgram:
+        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onButtonClicked: SaveProgram button clicked.");
+        // TODO implement
+        break;
+    case ProgramTreeButtons::LoadProgram:
+        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onButtonClicked: LoadProgram button clicked.");
+        // TODO implement
+        break;
+    default:
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onButtonClicked: Unhandled button clicked.");
+        break;
+    }
+}
+
+
+ReusableDialog* ProgramTree::displayErrorPopup(const std::string& message)
+{
+    return showPopupDialog(std::move(std::make_unique<ReusableDialog>("Error", message, std::vector<ButtonDescription>{
+        ButtonDescription{"OK", ButtonStyle::Primary, true}
+    })));
+}
+
+
+ReusableDialog* ProgramTree::showParameterDescriptionPopup(const std::string& title, const std::string& description)
+{
+    return showPopupDialog(std::move(std::make_unique<ReusableDialog>(title, description, std::vector<ButtonDescription>{
+        ButtonDescription{"Close", ButtonStyle::Secondary, true}
+    })));
+}
+
+
+ReusableDialog* ProgramTree::showPopupDialog(std::unique_ptr<ReusableDialog> dialog, bool dismiss_on_button_click, bool dismiss_on_background_click)
+{
+    closePopupDialog();
+
+    popup_dialog_ = addWidget(std::move(dialog));
+
+    if (dismiss_on_background_click)
+    {
+        popup_dialog_->onBackgroundClicked().connect([this]() {
+            closePopupDialog();
+        });
+    }
+    
+    if (dismiss_on_button_click)
+    {
+        popup_dialog_->onButtonClicked().connect([this](size_t button_id) {
+            closePopupDialog();
+        });
+    }
+
+    return popup_dialog_;
+}
+
+
+void ProgramTree::closePopupDialog()
+{
+    if (popup_dialog_ != nullptr)
+    {
+        removeWidget(popup_dialog_);
+        popup_dialog_ = nullptr;
     }
 }
