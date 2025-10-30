@@ -12,6 +12,11 @@ if(POLICY CMP0177)
   cmake_policy(SET CMP0177 NEW)
 endif()
 
+# Position independent code for all targets
+if (UNIX AND NOT APPLE)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 # What to build (controlled by presets)
 option(AERGO_BUILD_BACKEND "Build backend" ON)
 option(AERGO_BUILD_DEFAULT_MODULES "Build default modules" ON)
