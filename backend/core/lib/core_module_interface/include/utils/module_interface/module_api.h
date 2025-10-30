@@ -20,8 +20,28 @@
 #else
   #include <dlfcn.h>
   using ModuleLibrary_LibHandle = void*;
-  inline ModuleLibrary_LibHandle ModuleLibrary_openLib(const char* p){ return dlopen(p,RTLD_LAZY); }
-  inline void*   ModuleLibrary_getSym (ModuleLibrary_LibHandle h, const char* s){ return dlsym(h,s); }
+  inline ModuleLibrary_LibHandle ModuleLibrary_openLib(const char* p)
+  { 
+    dlerror(); // clear existing errors
+    auto h = dlopen(p,RTLD_NOW | RTLD_LOCAL);
+    if (!h)
+    {
+        const char* err = dlerror();
+        fprintf(stderr, "ModuleLibrary_openLib: dlopen failed for %s: %s\n", p, err ? err : "unknown error");
+    }
+    return h;
+  }
+  inline void*   ModuleLibrary_getSym (ModuleLibrary_LibHandle h, const char* s)
+  { 
+    dlerror(); // clear existing errors
+    void* sym = dlsym(h, s);
+    if (!sym)
+    {
+        const char* err = dlerror();
+        fprintf(stderr, "ModuleLibrary_getSym: dlsym failed for %s: %s\n", s, err ? err : "unknown error");
+    }
+    return sym;
+  }
   inline void    ModuleLibrary_closeLib(ModuleLibrary_LibHandle h){ dlclose(h); }
 #endif
 
