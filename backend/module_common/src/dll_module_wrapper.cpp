@@ -11,12 +11,18 @@ using namespace aergo::module::dll;
 DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger)
 : module_(std::move(module)), core_(core), module_id_(module_id), logger_(logger)
 {
-    if (module_ == nullptr || !module_->valid() || module_info_ == nullptr)
+    if (module_ == nullptr || !module_->valid())
     {
         throw std::invalid_argument("DllModuleWrapper: Invalid constructor parameters.");
     }
 
     module_info_ = module_->getModuleInfo();
+
+    if (module_info_ == nullptr)
+    {
+        throw std::invalid_argument("DllModuleWrapper: ModuleInfo is nullptr.");
+    }
+
     metrics_ = std::make_unique<Metrics>(module_info_);
 
     messages_channel_count_ = module_info_->subscribe_consumer_count_;

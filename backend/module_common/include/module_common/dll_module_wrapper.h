@@ -121,7 +121,7 @@ namespace aergo::module::dll
 
 
         std::unique_ptr<aergo::module::IModule> module_;
-        const aergo::module::ModuleInfo* module_info_;
+        const aergo::module::ModuleInfo* module_info_{nullptr};
         const aergo::module::logging::ILogger* logger_;
         aergo::module::ICore* core_;
         uint64_t module_id_;
