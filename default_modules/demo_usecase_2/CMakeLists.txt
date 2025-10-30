@@ -35,5 +35,4 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
 )
 
 
-cmake_policy(SET CMP0177 NEW)
 install(TARGETS "${MODULE_NAME}" DESTINATION ${CMAKE_SOURCE_DIR}/binaries/modules)

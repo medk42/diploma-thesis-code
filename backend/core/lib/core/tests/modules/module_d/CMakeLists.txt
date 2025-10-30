@@ -24,5 +24,4 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
 )
 
 
-cmake_policy(SET CMP0177 NEW)
 install(TARGETS "${MODULE_NAME}" DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../binaries/tests/test_core_1)

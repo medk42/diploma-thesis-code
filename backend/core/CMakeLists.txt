@@ -20,6 +20,5 @@ set_target_properties(core PROPERTIES
     VISIBILITY_INLINES_HIDDEN 1
 )
 
-cmake_policy(SET CMP0177 NEW)
 install(TARGETS core DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries)
 install(TARGETS core DESTINATION ${PROJECT_SOURCE_DIR}/binaries)

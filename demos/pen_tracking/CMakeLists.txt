@@ -65,7 +65,6 @@ target_include_directories(ble_test PRIVATE include ../pen_calib/include)
 target_include_directories(pen_visualization_test PRIVATE include ../pen_calib/include)
 target_include_directories(pen_drawing_test PRIVATE include ../pen_calib/include)
 
-cmake_policy(SET CMP0177 NEW)
 install(
     DIRECTORY ${CMAKE_BINARY_DIR}/demos/pen_tracking/Debug/ 
     DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries/pen_tracking

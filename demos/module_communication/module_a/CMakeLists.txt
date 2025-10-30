@@ -18,5 +18,4 @@ set_target_properties(demo_module_a PROPERTIES
     VISIBILITY_INLINES_HIDDEN 1
 )
 
-cmake_policy(SET CMP0177 NEW)
 install(TARGETS demo_module_a DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../../binaries/demo_modules)

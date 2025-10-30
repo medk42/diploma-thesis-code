@@ -17,7 +17,6 @@ target_include_directories(pen_calib PRIVATE include)
 # Link against OpenCV (already found by the root CMakeLists.txt)
 target_link_libraries(pen_calib opencv_world Ceres::ceres)
 
-cmake_policy(SET CMP0177 NEW)
 install(
     DIRECTORY ${CMAKE_BINARY_DIR}/demos/pen_calib/Debug/ 
     DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../binaries/pen_calib

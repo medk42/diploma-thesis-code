@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# CMake policies
+if(POLICY CMP0177)
+  cmake_policy(SET CMP0177 NEW)
+endif()
+
 # What to build (controlled by presets)
 option(AERGO_BUILD_BACKEND "Build backend" ON)
 option(AERGO_BUILD_DEFAULT_MODULES "Build default modules" ON)
