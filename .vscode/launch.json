@@ -112,6 +112,18 @@
             "preLaunchTask": "Project: Build and Install"
         },
         {
+            "name": "core (linux, gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/binaries/core",
+            "args": ["modules", "data"],
+            "cwd": "${workspaceFolder}/binaries",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [ { "text": "-enable-pretty-printing" } ],
+            "preLaunchTask": "Project: Build and Install"
+        },
+        {
             "name": "core_test_1",
             "type": "cppvsdbg",
             "request": "launch",
