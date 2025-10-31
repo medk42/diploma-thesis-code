@@ -4,6 +4,7 @@ using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
 
 ProgramCommand::ProgramCommand(const std::string& command_name, Status status)
 {
+    setStyleClass("program-command");
     setStatus(status);
     setText(command_name);
 
@@ -17,16 +18,15 @@ void ProgramCommand::setStatus(Status status)
 {
     status_ = status;
 
-    if (status == Status::Normal)
+    removeStyleClass("program-command-warning");
+    removeStyleClass("program-command-invalid");
+
+    if (status == Status::Warning)
     {
-        setStyleClass("program-command");
-    }
-    else if (status == Status::Warning)
-    {
-        setStyleClass("program-command program-command-warning");
+        addStyleClass("program-command-warning");
     }
     else if (status == Status::Invalid)
     {
-        setStyleClass("program-command program-command-invalid");
+        addStyleClass("program-command-invalid");
     }
 }
