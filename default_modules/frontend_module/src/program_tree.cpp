@@ -1,8 +1,8 @@
 #include "webapp/ui/helper/program_tree.h"
-#include "webapp/ui/helper/program_tree_parameters.h"
 #include "webapp/ui/helper/program_command.h"
 
 #include <ranges>
+#include <sstream>
 
 using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
 using namespace aergo::module;
@@ -28,6 +28,16 @@ ProgramTree::ProgramTree(aergo::module::BaseModule* base_module, ProgramTreeStat
 
     reloadAvailableUsecases();
     setupCallbacks();
+
+    if (program_state_unsafe.reading_custom_value_)
+    {
+        showReadCustomValueDialog();
+    }
+
+    if (program_state_unsafe.generating_command_data_json_)
+    {
+        showGenerateCommandDataPopup();
+    }
 } 
 
 
@@ -50,9 +60,11 @@ void ProgramTree::reloadAvailableUsecases() // called with UI and frontend_state
             closePopupDialog();
         }
 
+        // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
         available_usecases_list_->clearCommands();
         available_usecase_ids_.clear();
         existing_usecases_list_->clearCommands();
+        existing_usecase_parameter_widgets_.clear();
 
         parameters_container_->clear();
         parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for New Program
@@ -109,6 +121,7 @@ void ProgramTree::setupCallbacks()
             }
             const auto& new_command = (*program_state_unsafe_.usecase_tree_)[program_state_unsafe_.usecase_tree_->size() - 1];
             addExistingUsecase(new_command);
+            existing_usecases_list_->setCommandSelected(existing_usecases_list_->commandCount() - 1); // show newly added usecase
             parameters_container_->setCurrentIndex(parameters_container_->count() - 1); // show parameters of newly added usecase
         });
     });
@@ -130,43 +143,374 @@ void ProgramTree::addExistingUsecase(const aergo::module::helpers::usecase_tree:
     // TODO this all does NOT work for insert!
 
     auto usecase_ref = existing_usecase.getUsecaseReference();
-    if (usecase_ref == nullptr)
+    if (!usecase_ref)
     {
+        // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
         existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Invalid);
         parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for invalid usecase
+        existing_usecase_parameter_widgets_.push_back(nullptr);
     }
-    else if (!existing_usecase.hasCommandDataJson() || !existing_usecase.isCommandDataJsonInSync())
+    else
     {
+        // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
         existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Warning);
-
         auto params = parameters_container_->addWidget(std::make_unique<ProgramTreeParameters>(
             usecase_ref->getAutoParameters().getParameters(),
             usecase_ref->getRequiredParameters().getParameters(),
             usecase_ref->getAdvancedParameters().getParameters()
         ));
-        params->onShowDescription().connect([this](const std::string& title, const std::string& description) {
-            showParameterDescriptionPopup(title, description);
-        });
+        existing_usecase_parameter_widgets_.push_back(params);
 
-        // TODO show parameters + enable CREATE button if all filled
-        // TODO re-build parameters UI
+        setupParameterContainer(params, existing_usecase, existing_usecases_list_->count() - 1);
+    }
+}
+
+
+void ProgramTree::setupParameterContainer(
+    ProgramTreeParameters* parameter_container, 
+    const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, 
+    size_t existing_usecase_index
+)
+{
+    parameter_container->onShowDescription().connect([this](const std::string& title, const std::string& description) {
+        showParameterDescriptionPopup(title, description);
+    });
+
+    reloadCommandValues(parameter_container, existing_usecase, existing_usecase_index);
+
+    setupOnValueAddedCallback(parameter_container);
+    setupOnValueRemovedCallback(parameter_container);
+    setupOnValueChangedCallback(parameter_container);
+
+    setupConfirmCallback(parameter_container);
+}
+
+
+void ProgramTree::setupOnValueAddedCallback(ProgramTreeParameters* parameter_container)
+{
+    parameter_container->onValueAdded().connect([this, parameter_container](
+        ProgramTreeParameters::ParameterIndex param_index,
+        value_opt_t value_opt,
+        bool is_custom
+    ) {
+        with_frontend_state_lock_([this, parameter_container, param_index, &value_opt, is_custom]() { // here we hold both UI and frontend_state_ locks
+            auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
+            auto existing_usecase = existingUsecaseFromIndex(existing_usecase_index_opt);
+            if (existing_usecase == nullptr) // if not nullptr, existing_usecase_index_opt is valid too
+            {
+                displayErrorPopup("Failed to add parameter value: internal error.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseFromParametersWidget returned nullptr.");
+                return;
+            }
+
+            p_desc::ParameterValueOpt converted_value_opt;
+            if (is_custom)
+            {
+                parameter_container->setValue(param_index.param_type, param_index.param_index, param_index.list_index, std::nullopt); // we expect new CUSTOM value to be always empty
+                converted_value_opt = std::nullopt;
+            }
+            else
+            {
+                converted_value_opt = convertToParameterValueOpt(value_opt);   
+            }
+            if (!existing_usecase->addValue(param_index.param_type, param_index.param_index, converted_value_opt))
+            {
+                displayErrorPopup("Failed to add parameter value. Please try again.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to add parameter value to ExistingCommand.");
+                reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                return;
+            }
+            else
+            {
+                updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+            }
+        });
+    });
+}
+
+
+void ProgramTree::setupOnValueRemovedCallback(ProgramTreeParameters* parameter_container)
+{
+    parameter_container->onValueRemoved().connect([this, parameter_container](ProgramTreeParameters::ParameterIndex param_index) {
+        with_frontend_state_lock_([this, parameter_container, param_index]() { // here we hold both UI and frontend_state_ locks
+            auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
+            auto existing_usecase = existingUsecaseFromIndex(existing_usecase_index_opt);
+            if (existing_usecase == nullptr) // if not nullptr, existing_usecase_index_opt is valid too
+            {
+                displayErrorPopup("Failed to remove parameter value: internal error.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseFromParametersWidget returned nullptr.");
+                return;
+            }
+
+            if (!existing_usecase->removeValue(param_index.param_type, param_index.param_index, param_index.list_index))
+            {
+                displayErrorPopup("Failed to remove parameter value. Please try again.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to remove parameter value from ExistingCommand.");
+                reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                return;
+            }
+            else
+            {
+                updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+            }
+        });
+    });
+}
+
+
+void ProgramTree::setupOnValueChangedCallback(ProgramTreeParameters* parameter_container)
+{
+    parameter_container->onValueChanged().connect([this, parameter_container](
+        ProgramTreeParameters::ParameterIndex param_index,
+        value_t value,
+        bool is_custom
+    ) {
+        with_frontend_state_lock_([this, parameter_container, param_index, &value, is_custom]() { // here we hold both UI and frontend_state_ locks
+            auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
+            auto existing_usecase = existingUsecaseFromIndex(existing_usecase_index_opt);
+            if (existing_usecase == nullptr) // if not nullptr, existing_usecase_index_opt is valid too
+            {
+                displayErrorPopup("Failed to change parameter value: internal error.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseFromParametersWidget returned nullptr.");
+                return;
+            }
+
+            if (is_custom)
+            {
+                bool load_requested = std::get<bool>(value);
+                base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::setupParameterContainer: CUSTOM parameter value change requested, load_requested = " + std::string(load_requested ? "true" : "false") + ".");
+                if (load_requested) // load CUSTOM value requested
+                {
+                    if (program_state_unsafe_.reading_custom_value_)
+                    {
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Another custom value read is already in progress.");
+                        return;
+                    }
+
+                    if (program_state_unsafe_.usecase_tree_->readCustomValue(
+                        *existing_usecase_index_opt, 
+                        param_index.param_index, 
+                        param_index.list_index, 
+                        program_state_unsafe_.cancel_reading_custom_value_, 
+                        [this, parameter_container](bool read_success) { // we already hold both UI and frontend_state_unsafe_ lock here (readCustomValue callback is called from UsecaseTree::handleResponse that is called on UI thread from FrontendModule::processResponse with frontend_state_ lock held)
+                            program_state_unsafe_.reading_custom_value_ = false;
+                            program_state_unsafe_.cancel_reading_custom_value_ = false;
+                            closeReadCustomValueDialog();
+
+                            if (!read_success)
+                            {
+                                displayErrorPopup("Failed to read CUSTOM parameter value. Please try again.");
+                                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to read CUSTOM parameter value.");
+                            }
+
+                            auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
+                            auto existing_usecase = existingUsecaseFromIndex(existing_usecase_index_opt);
+
+                            if (existing_usecase == nullptr) // if not nullptr, existing_usecase_index_opt is valid too
+                            {
+                                displayErrorPopup("Failed to update parameter value: internal error.");
+                                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseFromParametersWidget returned nullptr.");
+                                return;
+                            }
+
+                            reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                        }
+                    ))
+                    {
+                        program_state_unsafe_.reading_custom_value_ = true;
+                        program_state_unsafe_.cancel_reading_custom_value_ = false;
+                        showReadCustomValueDialog();
+                    }
+                    else
+                    {
+                        displayErrorPopup("Failed to initiate CUSTOM parameter value read. Please try again.");
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to initiate readCustomValue.");
+                    }
+                }
+                else // remove CUSTOM value requested
+                {
+                    if (!existing_usecase->resetValue(param_index.param_type, param_index.param_index, param_index.list_index))
+                    {
+                        displayErrorPopup("Failed to reset parameter value. Please try again.");
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to reset parameter value in ExistingCommand.");
+                        reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                        return;
+                    }
+                    else
+                    {
+                        parameter_container->setValue(param_index.param_type, param_index.param_index, param_index.list_index, std::nullopt); // show that we removed the CUSTOM value
+                        updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                    }
+                }
+            }
+            else
+            {
+                if (!existing_usecase->setValue(param_index.param_type, param_index.param_index, param_index.list_index, *convertToParameterValueOpt(value)))
+                {
+                    displayErrorPopup("Failed to change parameter value. Please try again.");
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to set parameter value in ExistingCommand.");
+                    reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                    return;
+                }
+                else
+                {
+                    updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                }   
+            }
+            
+        });
+    });
+}
+
+
+void ProgramTree::setupConfirmCallback(ProgramTreeParameters* parameter_container)
+{
+    parameter_container->confirmClicked().connect([this, parameter_container]() {
+        with_frontend_state_lock_([this, parameter_container]() { // here we hold both UI and frontend_state_ locks
+            auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
+            if (!existing_usecase_index_opt)
+            {
+                displayErrorPopup("Failed to confirm parameter values: internal error.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseIndexFromParametersWidget returned std::nullopt.");
+                return;
+            }
+
+            if (program_state_unsafe_.usecase_tree_->generateCommandDataJson(*existing_usecase_index_opt, [this, parameter_container](bool success, uw::helper::ErrorInfo error_info) {
+                program_state_unsafe_.generating_command_data_json_ = false;
+                closeGenerateCommandDataPopup();
+                if (success)
+                {
+                    auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
+                    auto existing_usecase = existingUsecaseFromIndex(existing_usecase_index_opt);
+                    if (existing_usecase == nullptr) // if not nullptr, existing_usecase_index_opt is valid too
+                    {
+                        displayErrorPopup("Failed to update command status: internal error.");
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseFromParametersWidget returned nullptr.");
+                        return;
+                    }
+
+                    // this should disable the confirm button and update the command status to Normal
+                    updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                }
+                else // error, confirm and command will stay the same, but we show error message
+                {
+                    if (error_info.has_details_)
+                    {
+                        std::stringstream ss;
+                        ss << (error_info.is_exception_ ? "EXCEPTION" : "ERROR") << " " << error_info.error_code_ << ": " << error_info.error_message_;
+                        displayErrorPopup(ss.str(), "Command Creation Failed");
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: generateCommandDataJson failed: " + ss.str());
+                    }
+                    else
+                    {
+                        displayErrorPopup("Unspecified error.", "Command Creation Failed");
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: generateCommandDataJson failed: Unknown error.");
+                    }
+                }
+            }))
+            {
+                program_state_unsafe_.generating_command_data_json_ = true;
+                showGenerateCommandDataPopup();
+            }
+            else // failed to start generation
+            {
+                displayErrorPopup("Failed to initiate command data JSON generation. Please try again.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to initiate generateCommandDataJson.");
+                return;
+            }
+        });
+    });
+}
+
+
+void ProgramTree::reloadCommandValues(ProgramTreeParameters* parameter_widget, const ut::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index)
+{
+    parameter_widget->setAllValues(
+        existing_usecase.getParameterValues(structs::ExistingCommand::ParamType::AUTO),
+        existing_usecase.getParameterValues(structs::ExistingCommand::ParamType::REQUIRED),
+        existing_usecase.getParameterValues(structs::ExistingCommand::ParamType::ADVANCED)
+    );
+
+    updateCommandStatus(parameter_widget, existing_usecase, existing_usecase_index);
+}
+
+
+void ProgramTree::updateCommandStatus(ProgramTreeParameters* parameter_widget, const ut::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index)
+{
+    bool command_ready = existing_usecase.hasCommandDataJson() && existing_usecase.isCommandDataJsonInSync();
+
+    if (command_ready)
+    {
+        parameter_widget->setConfirmEnable(false); // command data already exists and is in sync
+        existing_usecases_list_->setCommandStatus(existing_usecase_index, ProgramCommand::Status::Normal);
     }
     else
     {
-        existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Normal);
+        parameter_widget->setConfirmEnable(parameter_widget->areAllValuesSet());
+        existing_usecases_list_->setCommandStatus(existing_usecase_index, ProgramCommand::Status::Warning);
+    }
+}
 
-        auto params = parameters_container_->addWidget(std::make_unique<ProgramTreeParameters>(
-            usecase_ref->getAutoParameters().getParameters(),
-            usecase_ref->getRequiredParameters().getParameters(),
-            usecase_ref->getAdvancedParameters().getParameters()
-        )); 
-        params->onShowDescription().connect([this](const std::string& title, const std::string& description) {
-            showParameterDescriptionPopup(title, description);
-        });
 
-        // TODO set all values too!
-        // TODO show parameters + disable CREATE button (already created and in sync)
-        // TODO re-build parameters UI
+std::optional<size_t> ProgramTree::existingUsecaseIndexFromParametersWidget(ProgramTreeParameters* parameter_widget) const
+{
+    auto it = std::find(existing_usecase_parameter_widgets_.begin(), existing_usecase_parameter_widgets_.end(), parameter_widget);
+    if (it == existing_usecase_parameter_widgets_.end())
+    {
+        return std::nullopt;
+    }
+    return std::distance(existing_usecase_parameter_widgets_.begin(), it);
+}
+
+
+ut::structs::ExistingCommand* ProgramTree::existingUsecaseFromIndex(std::optional<size_t> index_opt) const
+{
+    if (!index_opt)
+    {
+        return nullptr;
+    }
+
+    size_t index = *index_opt;
+    if (index >= program_state_unsafe_.usecase_tree_->size())
+    {
+        return nullptr;
+    }
+    return &(*program_state_unsafe_.usecase_tree_)[index];
+}
+
+
+p_desc::ParameterValueOpt ProgramTree::convertToParameterValueOpt(const value_opt_t& value_opt) const
+{
+    if (!value_opt.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const auto& value = *value_opt;
+    if (std::holds_alternative<bool>(value))
+    {
+        return p_desc::ParameterValueOpt{ p_desc::ParameterValue{ std::get<bool>(value) } };
+    }
+    else if (std::holds_alternative<int64_t>(value))
+    {
+        return p_desc::ParameterValueOpt{ p_desc::ParameterValue{ std::get<int64_t>(value) } };
+    }
+    else if (std::holds_alternative<double>(value))
+    {
+        return p_desc::ParameterValueOpt{ p_desc::ParameterValue{ std::get<double>(value) } };
+    }
+    else if (std::holds_alternative<std::string>(value))
+    {
+        return p_desc::ParameterValueOpt{ p_desc::ParameterValue{ std::get<std::string>(value) } };
+    }
+    else if (std::holds_alternative<int>(value))
+    {
+        return p_desc::ParameterValueOpt{ p_desc::ParameterValue{ std::get<int>(value) } };
+    }
+    else
+    {
+        // CUSTOM type not handled here
+        return std::nullopt;
     }
 }
 
@@ -203,9 +547,9 @@ void ProgramTree::onButtonClicked(ProgramTreeButtons button)
 }
 
 
-ReusableDialog* ProgramTree::displayErrorPopup(const std::string& message)
+ReusableDialog* ProgramTree::displayErrorPopup(const std::string& message, const std::string& title)
 {
-    return showPopupDialog(std::move(std::make_unique<ReusableDialog>("Error", message, std::vector<ButtonDescription>{
+    return showPopupDialog(std::move(std::make_unique<ReusableDialog>(title, message, std::vector<ButtonDescription>{
         ButtonDescription{"OK", ButtonStyle::Primary, true}
     })));
 }
@@ -249,5 +593,67 @@ void ProgramTree::closePopupDialog()
     {
         removeWidget(popup_dialog_);
         popup_dialog_ = nullptr;
+    }
+}
+
+
+void ProgramTree::showReadCustomValueDialog()
+{
+    if (read_custom_value_dialog_ != nullptr)
+    {
+        return; // already shown
+    }
+
+    read_custom_value_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+        "Reading Custom Value", 
+        "Please wait while the custom parameter value is being read from the connected module...", 
+        std::vector<ButtonDescription>{
+            ButtonDescription{ "Cancel", ButtonStyle::Danger, true }
+        }
+    ));
+
+    read_custom_value_dialog_->onButtonClicked().connect([this](size_t button_id) {
+        // Cancel button clicked
+        with_frontend_state_lock_([this]() { // here we hold both UI and frontend_state_ locks
+            if (program_state_unsafe_.reading_custom_value_)
+            {
+                program_state_unsafe_.cancel_reading_custom_value_ = true;
+            }
+        });
+    });
+}
+
+
+void ProgramTree::closeReadCustomValueDialog()
+{
+    if (read_custom_value_dialog_ != nullptr)
+    {
+        removeWidget(read_custom_value_dialog_);
+        read_custom_value_dialog_ = nullptr;
+    }
+}
+
+
+void ProgramTree::showGenerateCommandDataPopup()
+{
+    if (generate_command_data_json_dialog_ != nullptr)
+    {
+        return; // already shown
+    }
+
+    generate_command_data_json_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+        "Generating Command Data JSON", 
+        "Please wait while the command data JSON is being generated...", 
+        std::vector<ButtonDescription>{}
+    ));
+}
+
+
+void ProgramTree::closeGenerateCommandDataPopup()
+{
+    if (generate_command_data_json_dialog_ != nullptr)
+    {
+        removeWidget(generate_command_data_json_dialog_);
+        generate_command_data_json_dialog_ = nullptr;
     }
 }
