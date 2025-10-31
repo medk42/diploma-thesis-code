@@ -34,7 +34,7 @@ namespace aergo::module::helpers::usecase_tree
 
         bool valid() const { return valid_; }
         uint32_t getUsecaseRequestChannelId() const { return usecase_request_channel_id_; }
-        void handleResponse(ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message);
+        void handleResponse(ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference);
 
         /// @brief Update the list of available usecases from the connected modules
         /// On finish, the optional callback is called with success flag and the updated map of available usecases
@@ -76,7 +76,7 @@ namespace aergo::module::helpers::usecase_tree
 
 
     private:
-        void processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message);
+        void processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference);
 
         /// @brief Send request and wait for response synchronously (blocking).
         /// @param target_channel 
@@ -94,7 +94,7 @@ namespace aergo::module::helpers::usecase_tree
         bool valid_;
         mutable std::mutex mutex_;
 
-        std::map<uint64_t, std::function<void(ChannelIdentifier, const aergo::module::message::MessageHeader&)>> response_handlers_;
+        std::map<uint64_t, std::function<void(ChannelIdentifier, const aergo::module::message::MessageHeader&, std::unique_lock<std::mutex>&)>> response_handlers_;
 
         // If we do not receive an update, we would currently wait forever. Keep in mind for future improvements.
         std::set<uint64_t> pending_modules_for_update_; // modules from which we are waiting for available usecases during updateAvailableUsecases()
