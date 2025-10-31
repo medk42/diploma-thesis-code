@@ -117,12 +117,13 @@ bool ExistingCommand::setValue(ParamType type, size_t param_index, size_t list_i
         return false;
     }
     param_values[param_index][list_index] = value;
+    command_data_json_in_sync_ = false;
 
     return true;
 }
 
 
-bool ExistingCommand::addValue(ParamType type, size_t param_index, const p_desc::ParameterValue& value)
+bool ExistingCommand::addValue(ParamType type, size_t param_index, const p_desc::ParameterValueOpt& value)
 {
     auto parameters = getParameters(type);
     if (parameters == nullptr)
@@ -143,6 +144,7 @@ bool ExistingCommand::addValue(ParamType type, size_t param_index, const p_desc:
     }
 
     param_values[param_index].push_back(value);
+    command_data_json_in_sync_ = false;
 
     return true;
 }
@@ -161,6 +163,7 @@ bool ExistingCommand::resetValue(ParamType type, size_t param_index, size_t list
         return false;
     }
     param_values[param_index][list_index] = std::nullopt;
+    command_data_json_in_sync_ = false;
 
     return true;
 }
@@ -187,6 +190,7 @@ bool ExistingCommand::removeValue(ParamType type, size_t param_index, size_t lis
     }
 
     param_values[param_index].erase(param_values[param_index].begin() + list_index);
+    command_data_json_in_sync_ = false;
 
     return true;
 }

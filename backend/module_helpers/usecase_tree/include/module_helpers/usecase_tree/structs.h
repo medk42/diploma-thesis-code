@@ -91,7 +91,7 @@ namespace aergo::module::helpers::usecase_tree::structs
         }
 
         bool setValue(ParamType type, size_t param_index, size_t list_index, const p_desc::ParameterValue& value);
-        bool addValue(ParamType type, size_t param_index, const p_desc::ParameterValue& value);
+        bool addValue(ParamType type, size_t param_index, const p_desc::ParameterValueOpt& value);
         bool resetValue(ParamType type, size_t param_index, size_t list_index); // only for AUTO parameters (CUSTOM parameter type)
         bool removeValue(ParamType type, size_t param_index, size_t list_index);
 
