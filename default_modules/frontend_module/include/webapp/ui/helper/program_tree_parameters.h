@@ -20,6 +20,13 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     class ProgramTreeParameters : public Wt::WContainerWidget
     {
     public:
+        struct ParameterIndex
+        {
+            command_param_type param_type;
+            size_t param_index;
+            size_t list_index;
+        };
+
         ProgramTreeParameters(
             const std::vector<p_desc::ParameterDescription>& auto_parameters,
             const std::vector<p_desc::ParameterDescription>& required_parameters,
@@ -30,23 +37,26 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         bool isConfirmEnabled() const { return confirm_button_->isEnabled(); }
         Wt::Signal<>& confirmClicked() { return confirm_button_->clicked(); }
 
-        bool setAllValues(const std::vector<std::vector<value_opt_t>>& auto_values,
-                          const std::vector<std::vector<value_opt_t>>& required_values,
-                          const std::vector<std::vector<value_opt_t>>& advanced_values);
+        bool setAllValues(const std::vector<std::vector<p_desc::ParameterValueOpt>>& auto_values,
+                          const std::vector<std::vector<p_desc::ParameterValueOpt>>& required_values,
+                          const std::vector<std::vector<p_desc::ParameterValueOpt>>& advanced_values);
+
+        bool areAllValuesSet() const;
 
         // returns true if set (successful), false if not (invalid index or value not valid for parameter)
         // mainly for use with ExistingCommand - if ExistingCommand does not accept the value from the signal, 
         // this is called to reset the parameter widget value as well
-        bool setValue(command_param_type param_type, size_t param_index, size_t list_index, const value_opt_t& value);
+        bool setValue(command_param_type param_type, size_t param_index, size_t list_index, const p_desc::ParameterValueOpt& value);
 
         Wt::Signal<const std::string&, const std::string&>& onShowDescription() { return onShowDescriptionClicked_; } // parameter title and description
-        Wt::Signal<command_param_type, size_t, size_t, value_opt_t>& onValueAdded() { return onValueAdded_; } // parameter list type, param index, list index, optionally value (if exists)
-        Wt::Signal<command_param_type, size_t, size_t>& onValueRemoved() { return onValueRemoved_; } // parameter list type, param index, list index
-        Wt::Signal<command_param_type, size_t, size_t, value_t>& onValueChanged() { return onValueChanged_; } // parameter list type, param index, list index, value
+        Wt::Signal<ParameterIndex, value_opt_t, bool>& onValueAdded() { return onValueAdded_; } // parameter list type, param index, list index, optionally value (if exists), is_custom (value does not differentiate bool and custom)
+        Wt::Signal<ParameterIndex>& onValueRemoved() { return onValueRemoved_; } // parameter list type, param index, list index
+        Wt::Signal<ParameterIndex, value_t, bool>& onValueChanged() { return onValueChanged_; } // parameter list type, param index, list index, value, is_custom (value does not differentiate bool and custom)
     
 
     private:
         Wt::WContainerWidget* setupSection(command_param_type section_type, Wt::WContainerWidget* section_container, const std::vector<p_desc::ParameterDescription>& parameters, const std::string& section_title, bool top_padding);
+        static value_t convertFromParameterValue(const p_desc::ParameterValue& param_value_opt);
 
         Button* confirm_button_ = nullptr;
 
@@ -55,8 +65,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         std::vector<RightModuleParameter*> advanced_parameters_;
 
         Wt::Signal<const std::string&, const std::string&> onShowDescriptionClicked_; // parameter title and description
-        Wt::Signal<command_param_type, size_t, size_t, value_opt_t> onValueAdded_; // parameter list type, param index, optionally value (if exists)
-        Wt::Signal<command_param_type, size_t, size_t> onValueRemoved_; // parameter list type, param index, list index
-        Wt::Signal<command_param_type, size_t, size_t, value_t> onValueChanged_; // parameter list type, param index, list index, value
+        Wt::Signal<ParameterIndex, value_opt_t, bool> onValueAdded_; // parameter list type, param index, optionally value (if exists), is_custom (value does not differentiate bool and custom)
+        Wt::Signal<ParameterIndex> onValueRemoved_; // parameter list type, param index, list index
+        Wt::Signal<ParameterIndex, value_t, bool> onValueChanged_; // parameter list type, param index, list index, value, is_custom (value does not differentiate bool and custom)
     };
 }
