@@ -161,7 +161,7 @@ void ProgramTree::addExistingUsecase(const aergo::module::helpers::usecase_tree:
         ));
         existing_usecase_parameter_widgets_.push_back(params);
 
-        setupParameterContainer(params, existing_usecase, existing_usecases_list_->count() - 1);
+        setupParameterContainer(params, existing_usecase, existing_usecases_list_->commandCount() - 1);
     }
 }
 
