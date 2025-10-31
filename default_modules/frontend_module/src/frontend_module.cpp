@@ -308,7 +308,7 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
 
             // Process the response in the Wt server thread - with frontend_state_ lock and UI lock held
             w_server_->post(frontend_state_.active_app_->sessionId(), [this, source_channel, message_copy, blobs_copy, message_id, timestamp_ns, success]() {
-                std::lock_guard lock(frontend_state_.mutex_);
+                std::unique_lock<std::mutex> lock(frontend_state_.mutex_);
 
                 frontend_state_.program_tree_state_.usecase_tree_->handleResponse(
                     source_channel,
@@ -321,7 +321,8 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
                         .id_ = message_id,
                         .timestamp_ns_ = timestamp_ns,
                         .success_ = success
-                    }
+                    },
+                    lock
                 );
             });
         }
