@@ -824,8 +824,8 @@ body {
     height: 50px;
     cursor: pointer;
     border-radius: 12px;
-    border: 1px solid #1b222c;
-    background: #0f141a;
+    border: 1px solid #6b90c5;
+    background: #2b4e91;
     margin: 10px;
     font-weight: 600;
     font-size: 17px;
@@ -846,9 +846,9 @@ body {
 
 .program-command.selected {
     
-    border-color: #4f8cff;
+    border-color: #b4ceff;
     box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.15) inset;
-    background: #141b25;
+    background: #6f93c7;
 }
 
 .program-command.program-command-warning.selected {
