@@ -293,11 +293,12 @@ void ProgramTree::setupOnValueChangedCallback(ProgramTreeParameters* parameter_c
                         param_index.list_index, 
                         program_state_unsafe_.cancel_reading_custom_value_, 
                         [this, parameter_container](bool read_success) { // we already hold both UI and frontend_state_unsafe_ lock here (readCustomValue callback is called from UsecaseTree::handleResponse that is called on UI thread from FrontendModule::processResponse with frontend_state_ lock held)
+                            bool was_canceled = program_state_unsafe_.cancel_reading_custom_value_;
                             program_state_unsafe_.reading_custom_value_ = false;
                             program_state_unsafe_.cancel_reading_custom_value_ = false;
                             closeReadCustomValueDialog();
 
-                            if (!read_success)
+                            if (!read_success && !was_canceled)
                             {
                                 displayErrorPopup("Failed to read CUSTOM parameter value. Please try again.");
                                 base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to read CUSTOM parameter value.");
