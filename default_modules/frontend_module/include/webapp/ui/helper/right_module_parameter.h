@@ -41,7 +41,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
     private:
         void addListItemWidget(Wt::WContainerWidget* parent);
-        void addParameterWidget(Wt::WContainerWidget* parent);
+        IParamInput* addParameterWidget(Wt::WContainerWidget* parent);
         void updateListButtonsVisibility();
 
         aergo::module::helpers::parameter_description::ParameterDescription parameter_description_;

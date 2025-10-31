@@ -150,7 +150,7 @@ void RightModuleParameter::addListItemWidget(Wt::WContainerWidget* parent)
 {
     auto param_wrap = list_container_->addWidget(std::make_unique<Wt::WContainerWidget>());
     param_wrap->setStyleClass("list-item");
-    addParameterWidget(param_wrap);
+    IParamInput* widget = addParameterWidget(param_wrap);
 
     auto remove_text = param_wrap->addNew<Wt::WText>("✕");
     remove_text->setStyleClass("list-item-remove");
@@ -169,11 +169,16 @@ void RightModuleParameter::addListItemWidget(Wt::WContainerWidget* parent)
         }
     });
     list_item_remove_texts_.push_back(remove_text);
+
+    if (widget)
+    {
+        onValueAdded_.emit(parameter_widgets_.size() - 1, widget->value());
+    }
 }
 
 
 
-void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
+IParamInput* RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
 {
     IParamInput* widget = nullptr;
 
@@ -269,7 +274,7 @@ void RightModuleParameter::addParameterWidget(Wt::WContainerWidget* parent)
                 onValueChanged_.emit(index, new_value);
             }
         });
-
-        onValueAdded_.emit(parameter_widgets_.size() - 1, widget->value());
     }
+
+    return widget;
 }
