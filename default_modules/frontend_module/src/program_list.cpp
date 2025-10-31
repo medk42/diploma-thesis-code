@@ -69,6 +69,14 @@ void ProgramList::setCommandSelected(size_t index)
 }
 
 
+void ProgramList::setCommandStatus(size_t index, ProgramCommand::Status status)
+{
+    if (index >= command_list_.size()) return;
+
+    command_list_[index]->setStatus(status);
+}
+
+
 void ProgramList::removeCommand(size_t index)
 {
     if (index >= command_list_.size()) return;
