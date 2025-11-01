@@ -21,7 +21,7 @@ namespace aergo::module::dll
         /// @brief module must be non-nullptr and valid (check IModule::valid()), module_info must be non-nullptr.
         DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger);
 
-        ~DllModuleWrapper() override = default;
+        ~DllModuleWrapper() override;
 
         /// @brief Start the worker threads.
         /// @param timeout_ms Wait up to "timeout_ms" milliseconds for the threads to start.

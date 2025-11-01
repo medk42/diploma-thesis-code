@@ -87,6 +87,31 @@ DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> modul
 
 
 
+DllModuleWrapper::~DllModuleWrapper()
+{
+    stop_threads_ = true;
+    prioritized_worker_cv_.notify_all();
+    regular_worker_cv_.notify_all();
+
+    for (auto& thread : prioritized_worker_threads_)
+    {
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
+
+    for (auto& thread : regular_worker_threads_)
+    {
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
+}
+
+
+
 bool DllModuleWrapper::threadStart(uint32_t timeout_ms) noexcept
 {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -194,6 +219,7 @@ bool DllModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
     }
     else
     {
+        logger_->log(logging::LogType::WARNING, "DllModuleWrapper: Failed to stop all worker threads within timeout.");
         return false;
     }
 }

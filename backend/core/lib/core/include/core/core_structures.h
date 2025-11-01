@@ -53,6 +53,7 @@ namespace aergo::core::structures
         aergo::core::ModuleLoader::ModulePtr module_;
         ModuleLogger logger_;
         ModuleLoaderData* module_loader_data_;
+        bool destruction_in_progress_{false};
         
         std::vector<std::vector<aergo::module::ChannelIdentifier>> mapping_subscribe_;  // for visualization
         std::vector<std::vector<aergo::module::ChannelIdentifier>> mapping_request_;    // for visualization

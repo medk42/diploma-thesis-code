@@ -664,9 +664,20 @@ Core::RemoveResult Core::removeModuleImpl(uint64_t id, bool recursive, std::uniq
         // remove the module first, before removing mappings (otherwise module may still try to send messages)
         if (running_modules_[module_id] != nullptr)
         {
+            running_modules_[module_id]->destruction_in_progress_ = true;
             // TODO may be a race condition here
             external_lock.unlock(); // we need to unlock here, because module may be stuck on core_mutex_ lock
             bool res = running_modules_[module_id]->module_->threadStop(defaults::module_thread_timeout_ms_);
+            if (!res)
+            {
+                logger_->log(
+                    logging::SourceType::CORE,
+                    nullptr,
+                    0,
+                    aergo::module::logging::LogType::WARNING,
+                    "Module failed to stop within timeout during removal, continued removal may cause undefined behavior."
+                );
+            }
             stop_success = stop_success && res;    // stop_success: T->{T,F}; F->F (never F->T)
             running_modules_[module_id]->module_ = nullptr; // only if stop successful? 
             external_lock.lock();
@@ -1130,7 +1141,7 @@ void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::m
 {
     std::shared_lock<std::shared_mutex> lock(core_mutex_);
 
-    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr)
+    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr || running_modules_[source_channel.producer_module_id_]->destruction_in_progress_)
     {
         log(aergo::module::logging::LogType::WARNING, "Module identified by producer_module_id_ does not exist, discarding message, in sendMessage");
         return;
@@ -1146,7 +1157,7 @@ void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::m
 
     for (auto other_channel_id : module_data->mapping_publish_[source_channel.producer_channel_id_])
     {
-        if (other_channel_id.producer_module_id_ >= running_modules_.size() || running_modules_[other_channel_id.producer_module_id_].get() == nullptr)
+        if (other_channel_id.producer_module_id_ >= running_modules_.size() || running_modules_[other_channel_id.producer_module_id_].get() == nullptr || running_modules_[other_channel_id.producer_module_id_]->destruction_in_progress_)
         {
             log(aergo::module::logging::LogType::WARNING, "Other module identified by producer_module_id_ does not exist, in sendMessage");
             continue;
@@ -1170,8 +1181,8 @@ void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::
 {
     std::shared_lock<std::shared_mutex> lock(core_mutex_);
 
-    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr
-     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr)
+    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr || running_modules_[source_channel.producer_module_id_]->destruction_in_progress_
+     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr || running_modules_[target_channel.producer_module_id_]->destruction_in_progress_)
     {
         log(aergo::module::logging::LogType::WARNING, "Source or target module identified by producer_module_id_ does not exist, discarding message, in sendResponse");
         return;
@@ -1195,8 +1206,8 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
 {
     std::shared_lock<std::shared_mutex> lock(core_mutex_);
 
-    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr
-     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr)
+    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr || running_modules_[source_channel.producer_module_id_]->destruction_in_progress_
+     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr || running_modules_[target_channel.producer_module_id_]->destruction_in_progress_)
     {
         sendResponse(target_channel, source_channel, { // send failure response
             .data_ = nullptr,
