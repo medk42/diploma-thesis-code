@@ -13,6 +13,8 @@
 #include <set>
 #include <atomic>
 #include <memory>
+#include <thread>
+#include <condition_variable>
 
 #include "module_common/base_module.h"
 #include "module_common/module_interface_.h"
@@ -30,7 +32,7 @@ namespace aergo::module::helpers::usecase_tree
     {
     public:
         UsecaseTree(aergo::module::BaseModule* base_module);
-        ~UsecaseTree() noexcept = default;
+        ~UsecaseTree() noexcept;
 
         bool valid() const { return valid_; }
         uint32_t getUsecaseRequestChannelId() const { return usecase_request_channel_id_; }
@@ -51,9 +53,12 @@ namespace aergo::module::helpers::usecase_tree
         structs::ExistingCommand& operator[](size_t list_index) { return existing_commands_list_.at(list_index); } // get existing command at specified index, throws out_of_range if index invalid; there is no protection that the list won't change while being accessed, ensure external synchronization if needed
 
         // send request to generate command data JSON for command at specified index, returns true if request was sent, false if wrong list_index or parameters invalid
-        bool generateCommandDataJson(size_t list_index, std::optional<std::function<void(bool, uw::helper::ErrorInfo)>> on_finish = std::nullopt);
+        // on finish, the optional callback is called with success flag, error info and list_index of the command (or 0 on failure)
+        bool generateCommandDataJson(size_t list_index, std::optional<std::function<void(bool, uw::helper::ErrorInfo, size_t)>> on_finish = std::nullopt);
         
-        bool readCustomValue(size_t list_index, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback = std::nullopt);
+        // read custom parameter value for command at specified index, returns true if request was sent, false if wrong list_index or parameters invalid
+        // on value ready, the optional callback is called with success flag and list_index of the command (or 0 on failure)
+        bool readCustomValue(size_t list_index, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool, size_t)>> on_value_ready_callback = std::nullopt);
 
         /// @brief starts all commands in the usecase tree, returns true if start request was accepted (all commands valid), 
         /// false otherwise (invalid commands, no commands, already running, etc.).
@@ -76,7 +81,7 @@ namespace aergo::module::helpers::usecase_tree
 
 
     private:
-        void processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference);
+        void processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool, size_t)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference);
 
         /// @brief Send request and wait for response synchronously (blocking).
         /// @param target_channel 
@@ -86,6 +91,8 @@ namespace aergo::module::helpers::usecase_tree
         /// @param out_response_blob blob received in response (if any), use nullptr if no blob needed
         /// @return true if response received successfully, false otherwise (failed response, mismatched response size, etc.)
         bool sendRequestSynchronized(ChannelIdentifier target_channel, uw::message_types::Request request, std::optional<std::span<const std::byte>> send_data, uw::message_types::Response& out_response, aergo::module::message::SharedDataBlob* out_response_blob);
+
+        void delayedSendThreadFunction();
 
         aergo::module::BaseModule* base_module_ref_;
 
@@ -107,5 +114,22 @@ namespace aergo::module::helpers::usecase_tree
         std::unique_ptr<ProgramInstance> running_program_instance_;
 
         uint64_t next_command_id_{1};
+
+        std::condition_variable delayed_send_cv_;
+        bool send_thread_running_{true};
+        bool send_requested_;
+        uw::message_types::Request delayed_request_;
+        ChannelIdentifier delayed_target_channel_;
+        std::thread delayed_send_thread_;
+        struct 
+        {
+            uint64_t command_id;
+            uint64_t task_id;
+            size_t param_index;
+            size_t list_index_in_param;
+            std::atomic<bool>* cancel_read;
+            std::optional<std::function<void(bool, size_t)>> on_value_ready_callback;
+        } delayed_extra_data_;
+        
     };
 }

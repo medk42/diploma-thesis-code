@@ -38,27 +38,31 @@ ProgramTree::ProgramTree(aergo::module::BaseModule* base_module, ProgramTreeStat
     {
         showGenerateCommandDataPopup();
     }
+
+    // setup refresh timer to update parameter widgets based on program_state_unsafe_ flags
+    refresh_timer_ = addChild(std::make_unique<Wt::WTimer>());
+    refresh_timer_->setInterval(std::chrono::milliseconds(100)); // 10Hz
+    refresh_timer_->timeout().connect(this, &ProgramTree::onTimerRefresh);
+    refresh_timer_->start();
 } 
+
+
+ProgramTree::~ProgramTree()
+{
+    if (refresh_timer_)
+    {
+        refresh_timer_->stop();
+    }
+}
 
 
 void ProgramTree::reloadAvailableUsecases() // called with UI and frontend_state_ locks held
 {
-    auto updating_note_dialog = showPopupDialog(
-            std::move(std::make_unique<ReusableDialog>(
-            "Updating Usecase List", 
-            "Please wait while the list of available and existing usecases is being updated from connected modules...", 
-            std::vector<ButtonDescription>{}
-        )),
-        false, // this pop-up is not dismissed on button click
-        false  // this pop-up is not dismissed on background click
-    );
-
+    showReloadUsecasePopup();
     base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::reloadAvailableUsecases: Reloading available usecases...");
-    bool success = program_state_unsafe_.usecase_tree_->updateAvailableUsecases([this, updating_note_dialog](bool success, const std::map<std::string, structs::AvailableUsecase>& available_usecases) {
-        if (popup_dialog_ == updating_note_dialog)
-        {
-            closePopupDialog();
-        }
+
+    bool success = program_state_unsafe_.usecase_tree_->updateAvailableUsecases([this](bool success, const std::map<std::string, structs::AvailableUsecase>& available_usecases) {
+        closeReloadUsecasePopup();
 
         // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
         available_usecases_list_->clearCommands();
@@ -287,39 +291,23 @@ void ProgramTree::setupOnValueChangedCallback(ProgramTreeParameters* parameter_c
                         return;
                     }
 
+                    program_state_unsafe_.cancel_reading_custom_value_ = false;
+                    auto program_state_unsafe_ptr = &program_state_unsafe_;
                     if (program_state_unsafe_.usecase_tree_->readCustomValue(
                         *existing_usecase_index_opt, 
                         param_index.param_index, 
                         param_index.list_index, 
                         program_state_unsafe_.cancel_reading_custom_value_, 
-                        [this, parameter_container](bool read_success) { // we already hold both UI and frontend_state_unsafe_ lock here (readCustomValue callback is called from UsecaseTree::handleResponse that is called on UI thread from FrontendModule::processResponse with frontend_state_ lock held)
-                            bool was_canceled = program_state_unsafe_.cancel_reading_custom_value_;
-                            program_state_unsafe_.reading_custom_value_ = false;
-                            program_state_unsafe_.cancel_reading_custom_value_ = false;
-                            closeReadCustomValueDialog();
-
-                            if (!read_success && !was_canceled)
-                            {
-                                displayErrorPopup("Failed to read CUSTOM parameter value. Please try again.");
-                                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to read CUSTOM parameter value.");
-                            }
-
-                            auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
-                            auto existing_usecase = existingUsecaseFromIndex(existing_usecase_index_opt);
-
-                            if (existing_usecase == nullptr) // if not nullptr, existing_usecase_index_opt is valid too
-                            {
-                                displayErrorPopup("Failed to update parameter value: internal error.");
-                                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseFromParametersWidget returned nullptr.");
-                                return;
-                            }
-
-                            reloadCommandValues(*existing_usecase_index_opt);
+                        [program_state_unsafe_ptr](bool read_success, size_t existing_usecase_index) { // we already hold both UI and frontend_state_unsafe_ lock here (readCustomValue callback is called from UsecaseTree::handleResponse that is called on UI thread from FrontendModule::processResponse with frontend_state_ lock held)
+                            program_state_unsafe_ptr->read_finished_ = true;
+                            program_state_unsafe_ptr->read_successful_ = read_success;
+                            program_state_unsafe_ptr->read_usecase_index = existing_usecase_index;
                         }
                     ))
                     {
                         program_state_unsafe_.reading_custom_value_ = true;
                         program_state_unsafe_.cancel_reading_custom_value_ = false;
+                        program_state_unsafe_.read_finished_ = false;
                         showReadCustomValueDialog();
                     }
                     else
@@ -376,41 +364,16 @@ void ProgramTree::setupConfirmCallback(ProgramTreeParameters* parameter_containe
                 return;
             }
 
-            if (program_state_unsafe_.usecase_tree_->generateCommandDataJson(*existing_usecase_index_opt, [this, parameter_container](bool success, uw::helper::ErrorInfo error_info) {
-                program_state_unsafe_.generating_command_data_json_ = false;
-                closeGenerateCommandDataPopup();
-                if (success)
-                {
-                    auto existing_usecase_index_opt = existingUsecaseIndexFromParametersWidget(parameter_container);
-                    auto existing_usecase = existingUsecaseFromIndex(existing_usecase_index_opt);
-                    if (existing_usecase == nullptr) // if not nullptr, existing_usecase_index_opt is valid too
-                    {
-                        displayErrorPopup("Failed to update command status: internal error.");
-                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: existingUsecaseFromParametersWidget returned nullptr.");
-                        return;
-                    }
-
-                    // this should disable the confirm button and update the command status to Normal
-                    updateCommandStatus(*existing_usecase_index_opt);
-                }
-                else // error, confirm and command will stay the same, but we show error message
-                {
-                    if (error_info.has_details_)
-                    {
-                        std::stringstream ss;
-                        ss << (error_info.is_exception_ ? "EXCEPTION" : "ERROR") << " " << error_info.error_code_ << ": " << error_info.error_message_;
-                        displayErrorPopup(ss.str(), "Command Creation Failed");
-                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: generateCommandDataJson failed: " + ss.str());
-                    }
-                    else
-                    {
-                        displayErrorPopup("Unspecified error.", "Command Creation Failed");
-                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: generateCommandDataJson failed: Unknown error.");
-                    }
-                }
+            auto program_state_unsafe_ptr = &program_state_unsafe_;
+            if (program_state_unsafe_.usecase_tree_->generateCommandDataJson(*existing_usecase_index_opt, [program_state_unsafe_ptr](bool success, uw::helper::ErrorInfo error_info, size_t existing_usecase_index) {
+                program_state_unsafe_ptr->generate_finished_ = true;
+                program_state_unsafe_ptr->generate_successful_ = success;
+                program_state_unsafe_ptr->generate_error_info_ = error_info;
+                program_state_unsafe_ptr->generate_usecase_index = existing_usecase_index;
             }))
             {
                 program_state_unsafe_.generating_command_data_json_ = true;
+                program_state_unsafe_.generate_finished_ = false;
                 showGenerateCommandDataPopup();
             }
             else // failed to start generation
@@ -662,4 +625,82 @@ void ProgramTree::closeGenerateCommandDataPopup()
         removeWidget(generate_command_data_json_dialog_);
         generate_command_data_json_dialog_ = nullptr;
     }
+}
+
+
+void ProgramTree::showReloadUsecasePopup()
+{
+    if (reload_usecase_dialog_ != nullptr)
+    {
+        return; // already shown
+    }
+
+    reload_usecase_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+        "Reloading Usecases", 
+        "Please wait while available usecases are being reloaded from connected modules...", 
+        std::vector<ButtonDescription>{}
+    ));
+}
+
+
+void ProgramTree::closeReloadUsecasePopup()
+{
+    if (reload_usecase_dialog_ != nullptr)
+    {
+        removeWidget(reload_usecase_dialog_);
+        reload_usecase_dialog_ = nullptr;
+    }
+}
+
+
+void ProgramTree::onTimerRefresh()
+{
+    with_frontend_state_lock_([this]() { // here we hold both UI and frontend_state_ locks
+        if (program_state_unsafe_.reading_custom_value_ && program_state_unsafe_.read_finished_)
+        {
+            // reading custom value finished
+            closeReadCustomValueDialog();
+            program_state_unsafe_.reading_custom_value_ = false;
+
+            if (program_state_unsafe_.read_successful_)
+            {
+                // reload parameter values for the affected usecase
+                reloadCommandValues(program_state_unsafe_.read_usecase_index);
+            }
+            else if (!program_state_unsafe_.cancel_reading_custom_value_)
+            {
+                displayErrorPopup("Failed to read custom parameter value from connected module.");
+                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onTimerRefresh: Custom parameter value read failed.");
+            }
+        }
+
+        if (program_state_unsafe_.generating_command_data_json_ && program_state_unsafe_.generate_finished_)
+        {
+            // command data JSON generation finished
+            closeGenerateCommandDataPopup();
+            program_state_unsafe_.generating_command_data_json_ = false;
+
+            if (program_state_unsafe_.generate_successful_)
+            {
+                // this should disable the confirm button and update the command status to Normal
+                updateCommandStatus(program_state_unsafe_.generate_usecase_index);
+            }
+            else // error, confirm and command will stay the same, but we show error message
+            {
+                const auto& error_info = program_state_unsafe_.generate_error_info_;
+                if (error_info.has_details_)
+                {
+                    std::stringstream ss;
+                    ss << (error_info.is_exception_ ? "EXCEPTION" : "ERROR") << " " << error_info.error_code_ << ": " << error_info.error_message_;
+                    displayErrorPopup(ss.str(), "Command Creation Failed");
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: generateCommandDataJson failed: " + ss.str());
+                }
+                else
+                {
+                    displayErrorPopup("Unspecified error.", "Command Creation Failed");
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: generateCommandDataJson failed: Unknown error.");
+                }
+            }
+        }
+    });
 }

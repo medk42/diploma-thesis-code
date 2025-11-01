@@ -16,6 +16,7 @@
 
 #include <Wt/WContainerWidget.h>
 #include <Wt/WStackedWidget.h>
+#include <Wt/WTimer.h>
 
 namespace aergo::default_modules::frontend_module::webapp::ui::helper
 {
@@ -27,8 +28,15 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         bool reading_custom_value_ = false; // whether a custom value read is in progress
         std::atomic<bool> cancel_reading_custom_value_{ false }; // request to cancel reading custom value
-
+        bool read_finished_ = false; // whether reading of existing usecases has finished
+        bool read_successful_ = false; // whether reading of existing usecases was successful
+        size_t read_usecase_index = 0; // index of existing usecase being read initially
+        
         bool generating_command_data_json_ = false; // whether command data JSON generation is in progress
+        bool generate_finished_ = false; // whether generation of command data JSON was successful
+        ut::uw::helper::ErrorInfo generate_error_info_; // error info from generation of command data JSON
+        bool generate_successful_ = false; // whether generation of command data JSON was successful
+        size_t generate_usecase_index = 0; // index of existing usecase being generated
     };
 
     enum class ProgramTreeButtons {
@@ -49,6 +57,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         /// @param program_state_unsafe Unsafe reference to program tree state, must be accessed only via access_program_state_
         /// @param with_frontend_state_lock Function to access frontend state data (program_state_unsafe in our case) with frontend_state lock
         ProgramTree(aergo::module::BaseModule* base_module, ProgramTreeState& program_state_unsafe, std::function<void(std::function<void()>)> with_frontend_state_lock);
+        ~ProgramTree() override;
 
         // call after available usecases may have changed; call WHILE HOLDING both the frontend_state and UI locks
         void reloadAvailableUsecases();
@@ -71,6 +80,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void showGenerateCommandDataPopup();
         void closeGenerateCommandDataPopup();
 
+        void showReloadUsecasePopup();
+        void closeReloadUsecasePopup();
+
         void setupParameterContainer(ProgramTreeParameters* parameter_container, const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index);
         std::optional<size_t> existingUsecaseIndexFromParametersWidget(ProgramTreeParameters* parameter_widget) const; // find index from parameter_widget and return it, or std::nullopt if not found
         ut::structs::ExistingCommand* existingUsecaseFromIndex(std::optional<size_t> index_opt) const; // get existing usecase from index, or nullptr if index_opt is std::nullopt or invalid
@@ -83,6 +95,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void setupOnValueChangedCallback(ProgramTreeParameters* parameter_container);
         void setupConfirmCallback(ProgramTreeParameters* parameter_container);
 
+        void onTimerRefresh();
+
         aergo::module::BaseModule* base_module_{ nullptr };
         std::function<void(std::function<void()>)> with_frontend_state_lock_; // function to access program tree state with frontend_state lock
         ProgramTreeState& program_state_unsafe_; // unsafe reference to program tree state, must be accessed only via access_program_state_
@@ -90,6 +104,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         // child 0 is empty, child 1-N corresponds to parameters of existing usecases (0, N-1). 
         // If a usecase is invalid (not found in available usecases), an empty container is shown.
         Wt::WStackedWidget* parameters_container_{ nullptr };
+        Wt::WTimer* refresh_timer_{ nullptr };
 
         ProgramList* existing_usecases_list_{ nullptr };
         ProgramList* available_usecases_list_{ nullptr };
@@ -97,6 +112,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         ReusableDialog* popup_dialog_{ nullptr };
         ReusableDialog* read_custom_value_dialog_{ nullptr };
         ReusableDialog* generate_command_data_json_dialog_{ nullptr };
+        ReusableDialog* reload_usecase_dialog_{ nullptr };
 
         std::vector<std::string> available_usecase_ids_;
         std::vector<ProgramTreeParameters*> existing_usecase_parameter_widgets_;

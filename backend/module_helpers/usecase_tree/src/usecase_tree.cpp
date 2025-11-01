@@ -38,7 +38,25 @@ UsecaseTree::UsecaseTree(aergo::module::BaseModule* base_module)
         return;
     }
 
+    send_thread_running_ = true;
+    delayed_send_thread_ = std::thread(&UsecaseTree::delayedSendThreadFunction, this);
+
     valid_ = true;
+}
+
+
+UsecaseTree::~UsecaseTree() noexcept
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        send_thread_running_ = false;
+        delayed_send_cv_.notify_all();
+    }
+
+    if (delayed_send_thread_.joinable())
+    {
+        delayed_send_thread_.join();
+    }
 }
 
 
@@ -302,7 +320,7 @@ bool UsecaseTree::removeCommand(size_t list_index)
 }
 
 
-bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::function<void(bool, uw::helper::ErrorInfo)>> on_finish)
+bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::function<void(bool, uw::helper::ErrorInfo, size_t)>> on_finish)
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -389,7 +407,7 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
         if (!response_message.success_)
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::generateCommandDataJson: Received failure response for command with ID: " + std::to_string(command_id) + ", usecase_identifier: " + usecase_identifier + ".");
-            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Request failed to get processed/reach module."));
+            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Request failed to get processed/reach module."), 0);
             return;
         }
 
@@ -397,7 +415,7 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
         if (!response_message.readAs(response))
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::generateCommandDataJson: Failed to read response for command with ID: " + std::to_string(command_id) + ", usecase_identifier: " + usecase_identifier + ".");    
-            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Module responded with an invalid response."));
+            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Module responded with an invalid response."), 0);
             return;
         }
 
@@ -412,18 +430,18 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
                 uw::helper::ErrorInfo error_info;
                 if (uw::deserialize::readErrorInfo(reader, error_info))
                 {
-                    if (on_finish) (*on_finish)(false, error_info);
+                    if (on_finish) (*on_finish)(false, error_info, 0);
                     return;
                 }
             }
-            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Module responded with FAILURE result, no specific error info available."));
+            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Module responded with FAILURE result, no specific error info available."), 0);
             return;
         }
 
         if (response_message.blobs_ == nullptr || response_message.blob_count_ != 1 || !response_message.blobs_[0].valid())
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::generateCommandDataJson: Empty response data for command with ID: " + std::to_string(command_id) + ", usecase_identifier: " + usecase_identifier + ".");
-            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Module responded with SUCCESS state, but no data."));
+            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Module responded with SUCCESS state, but no data."), 0);
             return;
         }
 
@@ -433,19 +451,20 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
         if (!command_id_to_index_map_.contains(command_id))
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::generateCommandDataJson: Command ID to index map does not contain command ID: " + std::to_string(command_id) + ", usecase_identifier: " + usecase_identifier + ".");
-            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Internal error: Command ID to index map does not contain command ID."));
+            if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Internal error: Command ID to index map does not contain command ID."), 0);
             return;
         }
 
-        existing_commands_list_[command_id_to_index_map_[command_id]].setCommandDataJson(std::move(command_data_json));
-        if (on_finish) (*on_finish)(true, uw::helper::ErrorInfo::WithoutDetails());
+        size_t list_index = command_id_to_index_map_.at(command_id);
+        existing_commands_list_[list_index].setCommandDataJson(std::move(command_data_json));
+        if (on_finish) (*on_finish)(true, uw::helper::ErrorInfo::WithoutDetails(), list_index);
     };
 
     return true;
 }
 
 
-bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback)
+bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool, size_t)>> on_value_ready_callback)
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -494,7 +513,7 @@ bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t 
         if (!response_message.success_)
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::readCustomValue: Received failure response for custom value read, param_index: " + std::to_string(param_index) + ".");
-            if (on_value_ready_callback) (*on_value_ready_callback)(false);
+            if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
             return;
         }
 
@@ -502,14 +521,14 @@ bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t 
         if (!response_message.readAs(response))
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::readCustomValue: Failed to read response for custom value read, param_index: " + std::to_string(param_index) + ".");    
-            if (on_value_ready_callback) (*on_value_ready_callback)(false);
+            if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
             return;
         }
 
         if (response.result_ != uw::message_types::Result::SUCCESS)
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::readCustomValue: Module reported failure in response for custom value read, param_index: " + std::to_string(param_index) + ".");
-            if (on_value_ready_callback) (*on_value_ready_callback)(false);
+            if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
             return;
         }
 
@@ -526,7 +545,7 @@ bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t 
         if (it == available_usecases_map_.end())
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::readCustomValue: Usecase with identifier '" + usecase_identifier + "' not found.");
-            if (on_value_ready_callback) (*on_value_ready_callback)(false);
+            if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
             return;
         }
         const structs::AvailableUsecase& usecase_ref = it->second;
@@ -547,12 +566,12 @@ bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t 
 }
 
 
-void UsecaseTree::processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference)
+void UsecaseTree::processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool, size_t)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference)
 {
     if (!message.success_)
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Received failure response for custom value read, param_index: " + std::to_string(param_index) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
@@ -560,46 +579,48 @@ void UsecaseTree::processCustomValueResponse(uint64_t command_id, uint64_t task_
     if (!message.readAs(response))
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Failed to read response for custom value read, param_index: " + std::to_string(param_index) + ".");    
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
     if (response.result_ == uw::message_types::Result::ID_INVALID)
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Invalid task ID in response for custom value read, param_index: " + std::to_string(param_index) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
     if (response.result_ == uw::message_types::Result::FAIL)
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Module reported failure in response for custom value read, param_index: " + std::to_string(param_index) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
     if (response.result_ == uw::message_types::Result::IN_PROGRESS) // still in progress, check again in a moment (call request that will "recursively" call this function on finish)
     {
-        lock_reference.unlock();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // wait before checking again
-        lock_reference.lock();
+        if (send_requested_)
+        {
+            base_module_ref_->log(logging::LogType::WARNING, "UsecaseTree::processCustomValueResponse: Send already requested for another custom value read, cannot queue another one, param_index: " + std::to_string(param_index) + ".");
+            return;
+        }
 
-        uw::message_types::Request check_request { 
+        send_requested_ = true;
+        delayed_request_ = uw::message_types::Request { 
             .req_type_ = uw::message_types::ReqType::READ_CUSTOM_PARAMETER_CHECK, 
             .task_id_ = task_id,
             .cancel_ = cancel_read.load()
         };
+        delayed_target_channel_ = source_channel;
+        
+        delayed_extra_data_.command_id = command_id;
+        delayed_extra_data_.task_id = task_id;
+        delayed_extra_data_.param_index = param_index;
+        delayed_extra_data_.list_index_in_param = list_index_in_param;
+        delayed_extra_data_.cancel_read = &cancel_read;
+        delayed_extra_data_.on_value_ready_callback = on_value_ready_callback;
 
-        uint64_t check_request_id = base_module_ref_->sendRequest(
-            usecase_request_channel_id_, 
-            source_channel,
-            aergo::module::message::MessageHeader::Message(&check_request)
-        );
-
-        response_handlers_[check_request_id] = [this, command_id, task_id, param_index, list_index_in_param, &cancel_read, on_value_ready_callback](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
-        {
-            processCustomValueResponse(command_id, task_id, param_index, list_index_in_param, cancel_read, on_value_ready_callback, source_channel, response_message, lock_reference);
-        };
+        delayed_send_cv_.notify_all();
 
         return;
     }
@@ -607,21 +628,21 @@ void UsecaseTree::processCustomValueResponse(uint64_t command_id, uint64_t task_
     if (response.result_ != uw::message_types::Result::SUCCESS) // should be SUCCESS here
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Unexpected result in response for custom value read, param_index: " + std::to_string(param_index) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
     if (message.blob_count_ == 0) // means cancelled request
     {
         base_module_ref_->log(logging::LogType::INFO, "UsecaseTree::processCustomValueResponse: Custom value read cancelled for param_index: " + std::to_string(param_index) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
     if (message.blobs_ == nullptr || message.blob_count_ != 1)
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Invalid blob data in response for custom value read, param_index: " + std::to_string(param_index) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
@@ -630,19 +651,20 @@ void UsecaseTree::processCustomValueResponse(uint64_t command_id, uint64_t task_
     if (!command_id_to_index_map_.contains(command_id))
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Command ID to index map does not contain command ID: " + std::to_string(command_id) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
-    structs::ExistingCommand& command = existing_commands_list_[command_id_to_index_map_[command_id]];
+    size_t command_list_index = command_id_to_index_map_.at(command_id);
+    structs::ExistingCommand& command = existing_commands_list_[command_list_index];
     if (!command.setValue(structs::ExistingCommand::ParamType::AUTO, param_index, list_index_in_param, std::vector<uint8_t>(value_blob.data(), value_blob.data() + value_blob.size())))
     {
         base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::processCustomValueResponse: Failed to set custom value for command ID: " + std::to_string(command_id) + ", param_index: " + std::to_string(param_index) + ".");
-        if (on_value_ready_callback) (*on_value_ready_callback)(false);
+        if (on_value_ready_callback) (*on_value_ready_callback)(false, 0);
         return;
     }
 
-    if (on_value_ready_callback) (*on_value_ready_callback)(true);
+    if (on_value_ready_callback) (*on_value_ready_callback)(true, command_list_index);
 }
 
 
@@ -1153,4 +1175,49 @@ bool UsecaseTree::fromJson(const std::string& json_str, std::string& out_missing
     }
 
     return true;
+}
+
+
+void UsecaseTree::delayedSendThreadFunction()
+{
+    std::unique_lock<std::mutex> lock(mutex_);
+    while (send_thread_running_)
+    {
+        delayed_send_cv_.wait(lock, [this]() { return send_requested_ || !send_thread_running_; });
+
+        if (!send_thread_running_)
+        {
+            break;
+        }
+
+        if (send_requested_)
+        {
+            send_requested_ = false;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // wait before retrying
+
+            // Send the delayed request
+            uint64_t request_id = base_module_ref_->sendRequest(
+                usecase_request_channel_id_, 
+                delayed_target_channel_,
+                aergo::module::message::MessageHeader::Message(&delayed_request_)
+            );
+
+            // Set up a response handler that simply reuses the existing handler for this request type
+            response_handlers_[request_id] = [this](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
+            {
+                processCustomValueResponse(
+                    delayed_extra_data_.command_id,
+                    delayed_extra_data_.task_id,
+                    delayed_extra_data_.param_index,
+                    delayed_extra_data_.list_index_in_param,
+                    *delayed_extra_data_.cancel_read,
+                    delayed_extra_data_.on_value_ready_callback,
+                    source_channel,
+                    response_message,
+                    lock_reference
+                );
+            };
+        }
+    }
 }
