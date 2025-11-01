@@ -74,9 +74,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void setupParameterContainer(ProgramTreeParameters* parameter_container, const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index);
         std::optional<size_t> existingUsecaseIndexFromParametersWidget(ProgramTreeParameters* parameter_widget) const; // find index from parameter_widget and return it, or std::nullopt if not found
         ut::structs::ExistingCommand* existingUsecaseFromIndex(std::optional<size_t> index_opt) const; // get existing usecase from index, or nullptr if index_opt is std::nullopt or invalid
-        void reloadCommandValues(ProgramTreeParameters* parameter_widget, const ut::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index); // reload all parameter values from existing_usecase into parameter_widget, set confirm and existing usecase status accordingly
+        void reloadCommandValues(size_t existing_usecase_index); // reload all parameter values from existing_usecase into parameter_widget, set confirm and existing usecase status accordingly
         p_desc::ParameterValueOpt convertToParameterValueOpt(const value_opt_t& value_opt) const; // does NOT handle CUSTOM type, bool is only for boolean parameters
-        void updateCommandStatus(ProgramTreeParameters* parameter_widget, const ut::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index); // update confirm button and existing usecase status in parameter_widget
+        void updateCommandStatus(size_t existing_usecase_index); // update confirm button and existing usecase status in parameter_widget
 
         void setupOnValueAddedCallback(ProgramTreeParameters* parameter_container);
         void setupOnValueRemovedCallback(ProgramTreeParameters* parameter_container);

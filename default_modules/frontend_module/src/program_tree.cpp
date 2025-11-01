@@ -176,7 +176,7 @@ void ProgramTree::setupParameterContainer(
         showParameterDescriptionPopup(title, description);
     });
 
-    reloadCommandValues(parameter_container, existing_usecase, existing_usecase_index);
+    reloadCommandValues(existing_usecase_index);
 
     setupOnValueAddedCallback(parameter_container);
     setupOnValueRemovedCallback(parameter_container);
@@ -217,12 +217,12 @@ void ProgramTree::setupOnValueAddedCallback(ProgramTreeParameters* parameter_con
             {
                 displayErrorPopup("Failed to add parameter value. Please try again.");
                 base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to add parameter value to ExistingCommand.");
-                reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                reloadCommandValues(*existing_usecase_index_opt);
                 return;
             }
             else
             {
-                updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                updateCommandStatus(*existing_usecase_index_opt);
             }
         });
     });
@@ -246,12 +246,12 @@ void ProgramTree::setupOnValueRemovedCallback(ProgramTreeParameters* parameter_c
             {
                 displayErrorPopup("Failed to remove parameter value. Please try again.");
                 base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to remove parameter value from ExistingCommand.");
-                reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                reloadCommandValues(*existing_usecase_index_opt);
                 return;
             }
             else
             {
-                updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                updateCommandStatus(*existing_usecase_index_opt);
             }
         });
     });
@@ -314,7 +314,7 @@ void ProgramTree::setupOnValueChangedCallback(ProgramTreeParameters* parameter_c
                                 return;
                             }
 
-                            reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                            reloadCommandValues(*existing_usecase_index_opt);
                         }
                     ))
                     {
@@ -334,13 +334,13 @@ void ProgramTree::setupOnValueChangedCallback(ProgramTreeParameters* parameter_c
                     {
                         displayErrorPopup("Failed to reset parameter value. Please try again.");
                         base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to reset parameter value in ExistingCommand.");
-                        reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                        reloadCommandValues(*existing_usecase_index_opt);
                         return;
                     }
                     else
                     {
                         parameter_container->setValue(param_index.param_type, param_index.param_index, param_index.list_index, std::nullopt); // show that we removed the CUSTOM value
-                        updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                        updateCommandStatus(*existing_usecase_index_opt);
                     }
                 }
             }
@@ -350,12 +350,12 @@ void ProgramTree::setupOnValueChangedCallback(ProgramTreeParameters* parameter_c
                 {
                     displayErrorPopup("Failed to change parameter value. Please try again.");
                     base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::setupParameterContainer: Failed to set parameter value in ExistingCommand.");
-                    reloadCommandValues(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                    reloadCommandValues(*existing_usecase_index_opt);
                     return;
                 }
                 else
                 {
-                    updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                    updateCommandStatus(*existing_usecase_index_opt);
                 }   
             }
             
@@ -391,7 +391,7 @@ void ProgramTree::setupConfirmCallback(ProgramTreeParameters* parameter_containe
                     }
 
                     // this should disable the confirm button and update the command status to Normal
-                    updateCommandStatus(parameter_container, *existing_usecase, *existing_usecase_index_opt);
+                    updateCommandStatus(*existing_usecase_index_opt);
                 }
                 else // error, confirm and command will stay the same, but we show error message
                 {
@@ -424,20 +424,25 @@ void ProgramTree::setupConfirmCallback(ProgramTreeParameters* parameter_containe
 }
 
 
-void ProgramTree::reloadCommandValues(ProgramTreeParameters* parameter_widget, const ut::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index)
+void ProgramTree::reloadCommandValues(size_t existing_usecase_index)
 {
+    const ut::structs::ExistingCommand& existing_usecase = (*program_state_unsafe_.usecase_tree_)[existing_usecase_index];
+    ProgramTreeParameters* parameter_widget = existing_usecase_parameter_widgets_[existing_usecase_index];
+
     parameter_widget->setAllValues(
         existing_usecase.getParameterValues(structs::ExistingCommand::ParamType::AUTO),
         existing_usecase.getParameterValues(structs::ExistingCommand::ParamType::REQUIRED),
         existing_usecase.getParameterValues(structs::ExistingCommand::ParamType::ADVANCED)
     );
 
-    updateCommandStatus(parameter_widget, existing_usecase, existing_usecase_index);
+    updateCommandStatus(existing_usecase_index);
 }
 
 
-void ProgramTree::updateCommandStatus(ProgramTreeParameters* parameter_widget, const ut::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index)
+void ProgramTree::updateCommandStatus(size_t existing_usecase_index)
 {
+    const ut::structs::ExistingCommand& existing_usecase = (*program_state_unsafe_.usecase_tree_)[existing_usecase_index];
+    ProgramTreeParameters* parameter_widget = existing_usecase_parameter_widgets_[existing_usecase_index];
     bool command_ready = existing_usecase.hasCommandDataJson() && existing_usecase.isCommandDataJsonInSync();
 
     if (command_ready)
