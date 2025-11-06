@@ -3,6 +3,7 @@
 
 #include <ranges>
 #include <sstream>
+#include <fstream>
 
 using namespace aergo::default_modules::frontend_module::webapp::ui::helper;
 using namespace aergo::module;
@@ -37,6 +38,11 @@ ProgramTree::ProgramTree(aergo::module::BaseModule* base_module, ProgramTreeStat
     if (program_state_unsafe.generating_command_data_json_)
     {
         showGenerateCommandDataPopup();
+    }
+
+    if (program_state_unsafe.save_program_task_) // saving task is running
+    {
+        showStateSaving();
     }
 
     // setup refresh timer to update parameter widgets based on program_state_unsafe_ flags
@@ -693,6 +699,8 @@ void ProgramTree::onTimerRefresh()
                 }
             }
         }
+
+        handleSaveTask();
     });
 }
 
@@ -775,6 +783,140 @@ void ProgramTree::closeProgramFileDialog()
     {
         removeWidget(program_file_dialog_);
         program_file_dialog_ = nullptr;
+    }
+}
+
+
+void ProgramTree::closeSaveProgramDialog()
+{
+    if (save_program_dialog_ != nullptr)
+    {
+        removeWidget(save_program_dialog_);
+        save_program_dialog_ = nullptr;
+    }
+}
+
+
+void ProgramTree::showStateSaving()
+{
+    closeSaveProgramDialog();
+
+    save_program_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+        "Saving Program", 
+        "Please wait while the program state is being saved to file...", 
+        std::vector<ButtonDescription>{}
+    ));
+}
+
+
+void ProgramTree::saveStateToFile(const std::filesystem::path& file_path, bool overwrite_confirmed)
+{
+    if (!overwrite_confirmed && std::filesystem::exists(file_path))
+    {
+        // ask for confirmation
+        save_program_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+            "Confirm Overwrite", 
+            "The selected file already exists. Do you want to overwrite it?",
+            std::vector<ButtonDescription>{
+                ButtonDescription{"Cancel", ButtonStyle::Secondary, true},
+                ButtonDescription{"Overwrite", ButtonStyle::Danger, true}
+            }
+        ));
+
+        save_program_dialog_->onButtonClicked().connect([this, file_path](size_t button_id) {
+            closeSaveProgramDialog();
+            if (button_id == 1) // Overwrite
+            {
+                saveStateToFile(file_path, true);
+            }
+        });
+
+        return;
+    }
+
+    with_frontend_state_lock_([this, &file_path]() { // here we hold both UI and frontend_state_ locks
+        auto usecase_tree_ptr = program_state_unsafe_.usecase_tree_.get();
+
+        if (program_state_unsafe_.save_program_task_ != nullptr)
+        {
+            displayErrorPopup("A save operation is already in progress. Please wait.");
+            base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::saveStateToFile: Save operation already in progress.");
+            return;
+        }
+
+        program_state_unsafe_.save_program_task_ = std::make_unique<helpers::async_helpers::AsyncTask<std::optional<std::string>>>(
+            [usecase_tree_ptr, file_path](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> std::optional<std::string> {
+                return usecase_tree_ptr->toJson();
+            }
+        );
+        program_state_unsafe_.save_program_task_->start();
+        program_state_unsafe_.save_file_path_ = file_path.string();
+        showStateSaving();
+    });
+}
+
+
+void ProgramTree::handleSaveTask()
+{
+    const auto& task = program_state_unsafe_.save_program_task_;
+    if (task == nullptr)
+    {
+        closeSaveProgramDialog();
+        return; // no task
+    }
+
+    auto state = task->getState();
+    if (state == helpers::async_helpers::AsyncTaskState::NOT_STARTED)
+    {
+        closeSaveProgramDialog();
+        displayErrorPopup("Internal error.", "Failed to save program");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleSaveTask: Save task in NOT_STARTED state.");
+        program_state_unsafe_.save_program_task_ = nullptr;
+        return;
+    }
+
+    if (state == helpers::async_helpers::AsyncTaskState::RUNNING)
+    {
+        return; // still running
+    }
+
+    auto result = task->getResult(); // otherwise task finished
+    program_state_unsafe_.save_program_task_ = nullptr; // clear task
+    closeSaveProgramDialog();
+
+    if (!result.has_value() || !result.value().has_value())
+    {
+        displayErrorPopup("Could not serialize program state to JSON.", "Failed to save program");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleSaveTask: Failed to serialize program state to JSON.");
+        return;
+    }
+
+    if (!writeFile(program_state_unsafe_.save_file_path_, result.value().value()))
+    {
+        displayErrorPopup("Could not write to file.", "Failed to save program");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleSaveTask: Failed to write program state to file: " + program_state_unsafe_.save_file_path_);
+        return;
+    }
+}
+
+
+bool ProgramTree::writeFile(const std::filesystem::path& p, std::string_view data) noexcept {
+    try {
+        if (!p.has_parent_path() || !std::filesystem::exists(p.parent_path())) {
+            std::filesystem::create_directories(p.parent_path());
+        }
+
+        // Write exact bytes (no locale conversions)
+        std::ofstream out(p, std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+
+        out.write(data.data(), static_cast<std::streamsize>(data.size()));
+        if (!out) return false;
+
+        out.flush();
+        return static_cast<bool>(out);
+    } catch (...) {
+        return false;
     }
 }
 
@@ -954,21 +1096,9 @@ void ProgramTree::onSaveProgram()
 
     program_file_dialog_->onCancelClicked().connect([this]() { closeProgramFileDialog(); });
     program_file_dialog_->onAcceptClicked().connect([this, program_dir](std::string selected_file) {
-        auto save_path = program_dir / (selected_file + AERGO_PROGRAM_EXTENSION);
-        // TODO save...
+        closeProgramFileDialog();
+        saveStateToFile(program_dir / (selected_file + AERGO_PROGRAM_EXTENSION), false);
     });
-
-
-    // TODO move to save logic... also do async!
-    auto serialized_json_str_opt = program_state_unsafe_.usecase_tree_->toJson();
-    if (!serialized_json_str_opt)
-    {
-        displayErrorPopup("Failed to serialize program to JSON. Please try again.");
-        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onSaveProgram: Failed to serialize UsecaseTree to JSON.");
-        return;
-    }
-
-    base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onSaveProgram: Program JSON serialized successfully: " + std::to_string(serialized_json_str_opt->size()) + " bytes.");
 }
 
 

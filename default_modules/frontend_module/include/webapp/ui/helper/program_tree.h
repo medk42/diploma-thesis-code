@@ -8,6 +8,7 @@
 #include "module_common/base_module.h"
 #include "module_helpers/usecase_tree/usecase_tree.h"
 #include "module_helpers/usecase_tree/structs.h"
+#include "module_helpers/async_helpers/async_task.h"
 
 #include <memory>
 #include <vector>
@@ -23,6 +24,7 @@
 namespace aergo::default_modules::frontend_module::webapp::ui::helper
 {
     namespace ut = aergo::module::helpers::usecase_tree;
+    namespace helpers = aergo::module::helpers;
 
     struct ProgramTreeState
     {
@@ -39,6 +41,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         ut::uw::helper::ErrorInfo generate_error_info_; // error info from generation of command data JSON
         bool generate_successful_ = false; // whether generation of command data JSON was successful
         size_t generate_usecase_index = 0; // index of existing usecase being generated
+
+        std::unique_ptr<helpers::async_helpers::AsyncTask<std::optional<std::string>>> save_program_task_; // async task for saving program to file
+        std::string save_file_path_;
     };
 
     enum class ProgramTreeButtons {
@@ -87,6 +92,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         void closeProgramFileDialog();
 
+        void showStateSaving();
+        void closeSaveProgramDialog();
+
         void setupParameterContainer(ProgramTreeParameters* parameter_container, const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index);
         std::optional<size_t> existingUsecaseIndexFromParametersWidget(ProgramTreeParameters* parameter_widget) const; // find index from parameter_widget and return it, or std::nullopt if not found
         ut::structs::ExistingCommand* existingUsecaseFromIndex(std::optional<size_t> index_opt) const; // get existing usecase from index, or nullptr if index_opt is std::nullopt or invalid
@@ -106,6 +114,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         bool getProgramDirectory(std::filesystem::path& out_directory);
         std::vector<std::string> getExistingProgramsInDirectory(const std::filesystem::path& directory);
+        void saveStateToFile(const std::filesystem::path& file, bool overwrite_confirmed);
+        void handleSaveTask();
+        bool writeFile(const std::filesystem::path& p, std::string_view data) noexcept;
 
         void onCutCommand();
         void onCopyCommand();
@@ -134,6 +145,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         ReusableDialog* generate_command_data_json_dialog_{ nullptr };
         ReusableDialog* reload_usecase_dialog_{ nullptr };
         ReusableDialog* new_program_dialog_{ nullptr };
+        ReusableDialog* save_program_dialog_{ nullptr };
         FileDialog* program_file_dialog_{ nullptr };
 
         std::vector<std::string> available_usecase_ids_;
