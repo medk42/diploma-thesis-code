@@ -3,6 +3,7 @@
 #include "program_command.h"
 
 #include <vector>
+#include <optional>
 
 #include <Wt/WContainerWidget.h>
 #include <Wt/WSignal.h>
@@ -14,13 +15,14 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     public:
         ProgramList(std::string title, std::string style_class, bool selectable);
 
-        void addCommand(const std::string& command_name, ProgramCommand::Status command_status, bool selected = false);
-        void insertCommand(size_t index, const std::string& command_name, ProgramCommand::Status command_status, bool selected = false);
+        void addCommand(const std::string& command_name, ProgramCommand::Status command_status);
+        void insertCommand(size_t index, const std::string& command_name, ProgramCommand::Status command_status);
         void clearCommands();
         size_t commandCount() const { return command_list_.size(); }
         void setCommandSelected(size_t index);
         void setCommandStatus(size_t index, ProgramCommand::Status status);
         void removeCommand(size_t index);
+        std::optional<size_t> selectedCommandIndex() const { return selected_command_index_; } // returns std::nullopt if no command is selected or selection is disabled
 
         Wt::Signal<size_t>& onCommandClicked() { return onCommandClicked_; }
 
@@ -30,5 +32,6 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         Wt::WContainerWidget* command_container_;
 
         Wt::Signal<size_t> onCommandClicked_;
+        std::optional<size_t> selected_command_index_{ std::nullopt };
     };
 }

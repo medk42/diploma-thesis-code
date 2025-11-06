@@ -17,13 +17,13 @@ ProgramList::ProgramList(std::string title, std::string style_class, bool select
 }
 
 
-void ProgramList::addCommand(const std::string& command_name, ProgramCommand::Status command_status, bool selected)
+void ProgramList::addCommand(const std::string& command_name, ProgramCommand::Status command_status)
 {
-    insertCommand(command_list_.size(), command_name, command_status, selected);
+    insertCommand(command_list_.size(), command_name, command_status);
 }
 
 
-void ProgramList::insertCommand(size_t index, const std::string& command_name, ProgramCommand::Status command_status, bool selected)
+void ProgramList::insertCommand(size_t index, const std::string& command_name, ProgramCommand::Status command_status)
 {
     index = std::min(index, command_list_.size());
     auto program_command = command_container_->insertWidget(index, std::make_unique<ProgramCommand>(command_name, command_status));
@@ -38,6 +38,8 @@ void ProgramList::insertCommand(size_t index, const std::string& command_name, P
 
         if (selectable_)
         {
+            selected_command_index_ = index;
+
             for (size_t i = 0; i < command_list_.size(); ++i)
             {
                 command_list_[i]->setSelected(i == index);
@@ -60,7 +62,9 @@ void ProgramList::clearCommands()
 
 void ProgramList::setCommandSelected(size_t index)
 {
-    if (!selectable_) return;
+    if (!selectable_ || index >= command_list_.size()) return;
+
+    selected_command_index_ = index;
 
     for (size_t i = 0; i < command_list_.size(); ++i)
     {
@@ -80,6 +84,15 @@ void ProgramList::setCommandStatus(size_t index, ProgramCommand::Status status)
 void ProgramList::removeCommand(size_t index)
 {
     if (index >= command_list_.size()) return;
+
+    if (selected_command_index_ && *selected_command_index_ == index)
+    {
+        selected_command_index_ = std::nullopt;
+    }
+    else if (selected_command_index_ && *selected_command_index_ > index)
+    {
+        --(*selected_command_index_);
+    }
 
     command_container_->removeWidget(command_list_[index]);
     command_list_.erase(command_list_.begin() + index);
