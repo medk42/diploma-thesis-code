@@ -23,6 +23,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void setCommandStatus(size_t index, ProgramCommand::Status status);
         void removeCommand(size_t index);
         std::optional<size_t> selectedCommandIndex() const { return selected_command_index_; } // returns std::nullopt if no command is selected or selection is disabled
+        bool allCommandsHaveStatus(ProgramCommand::Status status) const;
 
         Wt::Signal<size_t>& onCommandClicked() { return onCommandClicked_; }
 

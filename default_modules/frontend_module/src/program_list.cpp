@@ -97,3 +97,16 @@ void ProgramList::removeCommand(size_t index)
     command_container_->removeWidget(command_list_[index]);
     command_list_.erase(command_list_.begin() + index);
 }
+
+
+bool ProgramList::allCommandsHaveStatus(ProgramCommand::Status status) const
+{
+    for (const auto& command : command_list_)
+    {
+        if (command->getStatus() != status)
+        {
+            return false;
+        }
+    }
+    return true;
+}
