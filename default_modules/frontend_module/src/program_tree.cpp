@@ -1311,6 +1311,11 @@ void ProgramTree::onLoadProgram()
 
 void ProgramTree::handleButtonStates()
 {
+    if (program_state_unsafe_.save_program_task_ != nullptr || program_state_unsafe_.load_program_task_ != nullptr)
+    {
+        return; // we can not access usecase tree while saving or loading (we would be stuck on a mutex lock)
+    }
+
     auto program_state_opt = program_state_unsafe_.usecase_tree_->getProgramState();
     bool all_existing_usecases_valid = existing_usecases_list_->allCommandsHaveStatus(ProgramCommand::Status::Normal);
     size_t command_count = existing_usecases_list_->commandCount();
