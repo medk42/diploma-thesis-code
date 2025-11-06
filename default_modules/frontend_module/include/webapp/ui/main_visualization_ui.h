@@ -38,5 +38,6 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         Wt::Signal<> onSetupClicked_; // setup button clicked
 
         aergo::module::BaseModule* base_module_{ nullptr };
+        std::function<void(std::function<void()>)> with_frontend_state_lock_;
     };
 }

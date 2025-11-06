@@ -11,7 +11,8 @@ MainVisualizationUi::MainVisualizationUi(
     helper::ProgramTreeState& program_state_unsafe, 
     std::function<void(std::function<void()>)> with_frontend_state_lock
 )
-: base_module_(base_module)
+: base_module_(base_module), 
+  with_frontend_state_lock_(with_frontend_state_lock)
 {
     setStyleClass("main-visualization-ui");
 
@@ -142,43 +143,45 @@ MainVisualizationUi::MainVisualizationUi(
 
 void MainVisualizationUi::programTreeButtonClicked(size_t index)
 {
-    switch (index)
-    {
-        case 1:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::NewProgram);
-            return;
-        case 2:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::SaveProgram);
-            return;
-        case 3:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::LoadProgram);
-            return;
-        case 4:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::CutCommand);
-            return;
-        case 5:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::CopyCommand);
-            return;
-        case 6:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::PasteCommand);
-            return;
-        case 7:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::StartProgram);
-            return;
-        case 8:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::SimulateProgram);
-            return;
-        case 9:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::StopProgram);
-            return;
-        case 10:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::PauseProgram);
-            return;
-        case 11:
-            program_tree_->onButtonClicked(helper::ProgramTreeButtons::ResumeProgram);
-            return;
-        default:
-            base_module_->log(aergo::module::logging::LogType::ERROR, "Unknown program tree button index: " + std::to_string(index));
-            break;
-    }
+    with_frontend_state_lock_([this, index]() {
+        switch (index)
+        {
+            case 1:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::NewProgram);
+                return;
+            case 2:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::SaveProgram);
+                return;
+            case 3:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::LoadProgram);
+                return;
+            case 4:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::CutCommand);
+                return;
+            case 5:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::CopyCommand);
+                return;
+            case 6:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::PasteCommand);
+                return;
+            case 7:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::StartProgram);
+                return;
+            case 8:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::SimulateProgram);
+                return;
+            case 9:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::StopProgram);
+                return;
+            case 10:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::PauseProgram);
+                return;
+            case 11:
+                program_tree_->onButtonClicked(helper::ProgramTreeButtons::ResumeProgram);
+                return;
+            default:
+                base_module_->log(aergo::module::logging::LogType::ERROR, "Unknown program tree button index: " + std::to_string(index));
+                break;
+        }
+    });
 }
