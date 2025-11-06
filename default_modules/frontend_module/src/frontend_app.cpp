@@ -325,7 +325,7 @@ void FrontendApp::handleModuleCreation(size_t available_module_id, ui::AddModule
 
     // start the creation
     aergo::module::ICoreControl* core_ptr = core_;
-    frontend_state_->async_task_ = std::make_unique<aergo::module::helpers::activation_wrapper::AsyncTask<bool>>(
+    frontend_state_->async_task_ = std::make_unique<helpers::async_helpers::AsyncTask<bool>>(
         [core_ptr, available_module_id, creation_channel_map_info](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> bool
         {
             return core_ptr->addModule(available_module_id, creation_channel_map_info); // this task can not be cancelled
@@ -415,7 +415,7 @@ void FrontendApp::timerUpdate()
             dismissDialog();
             base_module_->log(aergo::module::logging::LogType::ERROR, "No async task in CREATE_MODULE state");
         }
-        else if (frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::CANCELLED)
+        else if (frontend_state_->async_task_->getState() == helpers::async_helpers::AsyncTaskState::CANCELLED)
         {
             frontend_state_->creation_data_.reset();
             frontend_state_->running_task_ = RunningTask::NONE;
@@ -423,7 +423,7 @@ void FrontendApp::timerUpdate()
             frontend_state_->async_task_.reset();
             base_module_->log(aergo::module::logging::LogType::INFO, "Task is not cancellable but was cancelled in CREATE_MODULE state");
         }        
-        else if (frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::COMPLETED)
+        else if (frontend_state_->async_task_->getState() == helpers::async_helpers::AsyncTaskState::COMPLETED)
         {
             bool success = frontend_state_->async_task_->getResult().value_or(false); // value is always there because state is COMPLETED
 
@@ -465,7 +465,7 @@ void FrontendApp::timerUpdate()
             dismissDialog();
             base_module_->log(aergo::module::logging::LogType::ERROR, "No async task in DESTROY_MODULE state");
         }
-        else if (frontend_state_->async_task_->getState() != aergo::module::helpers::activation_wrapper::AsyncTaskState::RUNNING)
+        else if (frontend_state_->async_task_->getState() != helpers::async_helpers::AsyncTaskState::RUNNING)
         {
             frontend_state_->running_task_ = RunningTask::NONE;
             frontend_state_->async_task_.reset();
@@ -704,7 +704,7 @@ void FrontendApp::handleModuleDestruction(uint64_t running_module_index)
 
     // start the destruction
     aergo::module::ICoreControl* core_ptr = core_;
-    frontend_state_->async_task_ = std::make_unique<aergo::module::helpers::activation_wrapper::AsyncTask<bool>>(
+    frontend_state_->async_task_ = std::make_unique<helpers::async_helpers::AsyncTask<bool>>(
         [core_ptr, running_module_index](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> bool
         {
             return core_ptr->removeModuleById(running_module_index, true); // this task can not be cancelled
@@ -1847,7 +1847,7 @@ void FrontendApp::loadStateFromFile(const std::filesystem::path& file)
     }
 
     auto core_ptr = base_module_->getCoreControl();
-    frontend_state_->async_task_ = std::make_unique<aergo::module::helpers::activation_wrapper::AsyncTask<bool>>(
+    frontend_state_->async_task_ = std::make_unique<helpers::async_helpers::AsyncTask<bool>>(
         [core_ptr, serialized_state](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> bool
         {
             return core_ptr->load(serialized_state.data(), serialized_state.size()); // this task can not be cancelled
@@ -1928,7 +1928,7 @@ void FrontendApp::saveStateToFile(const std::filesystem::path& file, bool overwr
     }
 
     auto core_ptr = base_module_->getCoreControl();
-    frontend_state_->async_task_blob_ = std::make_unique<aergo::module::helpers::activation_wrapper::AsyncTask<message::SharedDataBlob>>(
+    frontend_state_->async_task_blob_ = std::make_unique<helpers::async_helpers::AsyncTask<message::SharedDataBlob>>(
         [core_ptr](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> message::SharedDataBlob
         {
             return core_ptr->save(); // this task can not be cancelled
@@ -2074,8 +2074,8 @@ void FrontendApp::handleLoadingState()
         return;
     }
 
-    if (frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::NOT_STARTED
-        || frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::RUNNING)
+    if (frontend_state_->async_task_->getState() == helpers::async_helpers::AsyncTaskState::NOT_STARTED
+        || frontend_state_->async_task_->getState() == helpers::async_helpers::AsyncTaskState::RUNNING)
     {
         return; // still running
     }
@@ -2083,7 +2083,7 @@ void FrontendApp::handleLoadingState()
 
     // task finished
     bool success = false;
-    if (frontend_state_->async_task_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::COMPLETED)
+    if (frontend_state_->async_task_->getState() == helpers::async_helpers::AsyncTaskState::COMPLETED)
     {
         success = frontend_state_->async_task_->getResult().value_or(false);
     }
@@ -2154,15 +2154,15 @@ void FrontendApp::handleSavingState()
         return;
     }
 
-    if (frontend_state_->async_task_blob_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::NOT_STARTED
-        || frontend_state_->async_task_blob_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::RUNNING)
+    if (frontend_state_->async_task_blob_->getState() == helpers::async_helpers::AsyncTaskState::NOT_STARTED
+        || frontend_state_->async_task_blob_->getState() == helpers::async_helpers::AsyncTaskState::RUNNING)
     {
         return; // still running
     }
 
     // task finished
     message::SharedDataBlob save_data;
-    if (frontend_state_->async_task_blob_->getState() == aergo::module::helpers::activation_wrapper::AsyncTaskState::COMPLETED)
+    if (frontend_state_->async_task_blob_->getState() == helpers::async_helpers::AsyncTaskState::COMPLETED)
     {
         save_data = frontend_state_->async_task_blob_->getResult().value_or(message::SharedDataBlob());
     }

@@ -14,7 +14,7 @@ add_library(${LIB_NAME} STATIC ${PROJECT_SOURCES})
 target_include_directories(${LIB_NAME} PUBLIC include)
 
 target_link_libraries(${LIB_NAME} PRIVATE module_common nlohmann_json::nlohmann_json)
-target_link_libraries(${LIB_NAME} PUBLIC helpers___parameter_description)
+target_link_libraries(${LIB_NAME} PUBLIC helpers___parameter_description helpers___async_helpers)
 
 # MSVC: force dynamic CRT
 if (MSVC)

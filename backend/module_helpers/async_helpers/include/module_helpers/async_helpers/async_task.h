@@ -5,7 +5,7 @@
 #include <thread>
 #include <optional>
 
-namespace aergo::module::helpers::activation_wrapper
+namespace aergo::module::helpers::async_helpers
 {
     enum class AsyncTaskState
     {

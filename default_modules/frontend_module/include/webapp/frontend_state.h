@@ -3,7 +3,7 @@
 #include "module_common/module_interface_.h"
 #include "module_helpers/parameter_description/parameter_description.h"
 #include "ui/helper/parameter_value.h"
-#include "module_helpers/activation_wrapper/async_task.h"
+#include "module_helpers/async_helpers/async_task.h"
 #include "ui/add_module_ui.h"
 #include "ui/activation_ui.h"
 #include "module_helpers/activation_wrapper/message_types.h"
@@ -22,6 +22,8 @@
 
 namespace aergo::default_modules::frontend_module::webapp
 {
+    namespace helpers = aergo::module::helpers;
+
     class FrontendApp;
 
     enum class FrontendScreen : int
@@ -94,8 +96,8 @@ namespace aergo::default_modules::frontend_module::webapp
 
         std::unique_ptr<CreateStateData> creation_data_; // if set, data for creating a module for the currently running core_->addModule call
         
-        std::unique_ptr<aergo::module::helpers::activation_wrapper::AsyncTask<bool>> async_task_;
-        std::unique_ptr<aergo::module::helpers::activation_wrapper::AsyncTask<aergo::module::message::SharedDataBlob>> async_task_blob_;
+        std::unique_ptr<helpers::async_helpers::AsyncTask<bool>> async_task_;
+        std::unique_ptr<helpers::async_helpers::AsyncTask<aergo::module::message::SharedDataBlob>> async_task_blob_;
         RunningTask running_task_ = RunningTask::NONE;
         std::string save_file_path_; // path to file where state is saved, used when saving state asynchronously
 

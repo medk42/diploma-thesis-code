@@ -3,7 +3,7 @@
 #include "module_common/module_interface_.h"
 #include "module_common/base_module.h"
 #include "activable_module.h"
-#include "async_task.h"
+#include "module_helpers/async_helpers/async_task.h"
 
 #include <tuple>
 #include <vector>
@@ -63,7 +63,7 @@ namespace aergo::module::helpers::activation_wrapper
         uint32_t expected_response_producer_id_;  // ID of the response producer channel for activation wrapper messages
 
         std::atomic<bool> activated_;                      // is the module currently activated; be careful when assigning, activated_ is accessed without locking mutex_
-        std::unique_ptr<AsyncTask<bool>> activation_task_; // currently running activation/deactivation task (if any)
+        std::unique_ptr<async_helpers::AsyncTask<bool>> activation_task_; // currently running activation/deactivation task (if any)
 
         std::vector<std::vector<std::vector<uint8_t>>> parameter_values_; // current parameter values (for lists, each list entry is a vector of bytes; for non-lists, only first entry is used)
 
