@@ -819,6 +819,8 @@ void ProgramTree::onCutCommand()
     existing_usecases_list_->removeCommand(selected_index);
     parameters_container_->removeWidget(existing_usecase_parameter_widgets_[selected_index]);
     existing_usecase_parameter_widgets_.erase(existing_usecase_parameter_widgets_.begin() + selected_index);
+
+    parameters_container_->setCurrentIndex(0); // show empty page after removal
 }
 
 
