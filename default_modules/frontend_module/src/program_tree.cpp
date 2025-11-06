@@ -45,6 +45,11 @@ ProgramTree::ProgramTree(aergo::module::BaseModule* base_module, ProgramTreeStat
         showStateSaving();
     }
 
+    if (program_state_unsafe.load_program_task_) // loading task is running
+    {
+        showStateLoading();
+    }
+
     // setup refresh timer to update parameter widgets based on program_state_unsafe_ flags
     refresh_timer_ = addChild(std::make_unique<Wt::WTimer>());
     refresh_timer_->setInterval(std::chrono::milliseconds(100)); // 10Hz
@@ -701,6 +706,7 @@ void ProgramTree::onTimerRefresh()
         }
 
         handleSaveTask();
+        handleLoadTask();
     });
 }
 
@@ -809,6 +815,18 @@ void ProgramTree::showStateSaving()
 }
 
 
+void ProgramTree::showStateLoading()
+{
+    closeSaveProgramDialog();
+
+    save_program_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+        "Loading Program", 
+        "Please wait while the program state is being loaded from file...", 
+        std::vector<ButtonDescription>{}
+    ));
+}
+
+
 void ProgramTree::saveStateToFile(const std::filesystem::path& file_path, bool overwrite_confirmed)
 {
     if (!overwrite_confirmed && std::filesystem::exists(file_path))
@@ -900,6 +918,70 @@ void ProgramTree::handleSaveTask()
 }
 
 
+void ProgramTree::handleLoadTask()
+{
+    const auto& task = program_state_unsafe_.load_program_task_;
+    if (task == nullptr)
+    {
+        closeSaveProgramDialog();
+        return; // no task
+    }
+
+    auto state = task->getState();
+    if (state == helpers::async_helpers::AsyncTaskState::NOT_STARTED)
+    {
+        closeSaveProgramDialog();
+        displayErrorPopup("Internal error.", "Failed to load program");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleLoadTask: Load task in NOT_STARTED state.");
+        program_state_unsafe_.load_program_task_ = nullptr;
+        return;
+    }
+
+    if (state == helpers::async_helpers::AsyncTaskState::RUNNING)
+    {
+        return; // still running
+    }
+
+    auto result_opt = task->getResult(); // otherwise task finished
+    program_state_unsafe_.load_program_task_ = nullptr; // clear task
+    closeSaveProgramDialog();
+    
+    // reload existing usecases in UI
+    clearExistingUsecases();
+    loadExistingUsecases();
+
+    if (!result_opt.has_value())
+    {
+        displayErrorPopup("Internal error.", "Failed to load program");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleLoadTask: Load task returned no result.");
+        return;
+    }
+
+    const auto& result = *result_opt;
+    if (!result)
+    {
+        auto missing_identifier_opt = result.error();
+        if (missing_identifier_opt.has_value())
+        {
+            displayErrorPopup("The program file references a usecase with identifier '" + *missing_identifier_opt + "' which is not available in the connected modules. Please add the missing identifier and try loading again.", "Failed to load program");
+            base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleLoadTask: Missing usecase identifier: " + *missing_identifier_opt);
+        }
+        else
+        {
+            displayErrorPopup("The program file is not valid.", "Failed to load program");
+            base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleLoadTask: Program file is not valid.");
+        }
+
+        // clear usecases after failed load (no need to reload, there are none)
+        program_state_unsafe_.usecase_tree_->clearCommands(); // clear program tree
+        clearExistingUsecases(); // clear UI
+        return;
+    }
+
+    base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::handleLoadTask: Program loaded successfully from file with " + std::to_string(program_state_unsafe_.usecase_tree_->size()) + " usecases.");
+}
+
+
 bool ProgramTree::writeFile(const std::filesystem::path& p, std::string_view data) noexcept {
     try {
         if (!p.has_parent_path() || !std::filesystem::exists(p.parent_path())) {
@@ -916,6 +998,39 @@ bool ProgramTree::writeFile(const std::filesystem::path& p, std::string_view dat
         out.flush();
         return static_cast<bool>(out);
     } catch (...) {
+        return false;
+    }
+}
+
+
+bool ProgramTree::readFile(const std::filesystem::path& p, std::string& out_data) noexcept {
+    out_data.clear();
+
+    try {
+        // Quick existence and file check
+        if (!std::filesystem::exists(p) || !std::filesystem::is_regular_file(p))
+            return false;
+
+        std::ifstream in(p, std::ios::binary);
+        if (!in)
+            return false;
+
+        // Determine size
+        in.seekg(0, std::ios::end);
+        std::streamsize size = in.tellg();
+        if (size < 0)
+            return false; // tellg() failed
+
+        out_data.resize(static_cast<size_t>(size));
+        in.seekg(0, std::ios::beg);
+
+        // Read whole file
+        if (!in.read(out_data.data(), size))
+            return false;
+
+        return true;
+    }
+    catch (...) {
         return false;
     }
 }
@@ -1104,5 +1219,75 @@ void ProgramTree::onSaveProgram()
 
 void ProgramTree::onLoadProgram()
 {
-    
+    if (program_file_dialog_ != nullptr)
+    {
+        return; // already shown
+    }
+
+    std::filesystem::path program_dir;
+    if (!getProgramDirectory(program_dir))
+    {
+        displayErrorPopup("Failed to get or create program directory for loading.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onLoadProgram: getProgramDirectory failed.");
+        return;
+    }
+
+    std::vector<std::string> filtered_files = getExistingProgramsInDirectory(program_dir);
+    std::string selected_file;
+    if (!filtered_files.empty())
+    {
+        selected_file = filtered_files[filtered_files.size() - 1];
+    }
+
+    program_file_dialog_ = addWidget(std::make_unique<FileDialog>(
+        "Load Program", 
+        std::move(filtered_files),
+        selected_file,
+        "Load"
+    ));
+
+    program_file_dialog_->onCancelClicked().connect([this]() { closeProgramFileDialog(); });
+    program_file_dialog_->onAcceptClicked().connect([this, program_dir](std::string selected_file) {
+        closeProgramFileDialog();
+
+        std::filesystem::path file_path = program_dir / (selected_file + AERGO_PROGRAM_EXTENSION);
+        std::string file_content;
+        if (!readFile(file_path, file_content))
+        {
+            displayErrorPopup("Failed to read program file.");
+            base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onLoadProgram: Failed to read program file: " + file_path.string());
+            return;
+        }
+
+        with_frontend_state_lock_([this, &file_content]() {
+            auto usecase_tree_ptr = program_state_unsafe_.usecase_tree_.get();
+
+            if (program_state_unsafe_.load_program_task_ != nullptr)
+            {
+                displayErrorPopup("A load operation is already in progress. Please wait.");
+                base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onLoadProgram: Load operation already in progress.");
+                return;
+            }
+            
+            program_state_unsafe_.usecase_tree_->clearCommands(); // clear program tree
+            clearExistingUsecases(); // clear UI
+
+            program_state_unsafe_.load_program_task_ = std::make_unique<helpers::async_helpers::AsyncTask<std::expected<void, std::optional<std::string>>>>(
+                [usecase_tree_ptr, file_content = std::move(file_content)](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> std::expected<void, std::optional<std::string>> {
+                    std::string missing_identifier;
+                    bool result = usecase_tree_ptr->fromJson(file_content, missing_identifier);
+                    if (result)
+                    {
+                        return std::expected<void, std::optional<std::string>>{};
+                    }
+                    else
+                    {
+                        return std::unexpected{ missing_identifier.empty() ? std::nullopt : std::optional<std::string>{missing_identifier} };
+                    }
+                }
+            );
+            program_state_unsafe_.load_program_task_->start();
+            showStateLoading();
+        });
+    });
 }

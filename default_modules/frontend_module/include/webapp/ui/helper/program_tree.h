@@ -16,6 +16,7 @@
 #include <functional>
 #include <atomic>
 #include <filesystem>
+#include <expected>
 
 #include <Wt/WContainerWidget.h>
 #include <Wt/WStackedWidget.h>
@@ -44,6 +45,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         std::unique_ptr<helpers::async_helpers::AsyncTask<std::optional<std::string>>> save_program_task_; // async task for saving program to file
         std::string save_file_path_;
+
+        std::unique_ptr<helpers::async_helpers::AsyncTask<std::expected<void, std::optional<std::string>>>> load_program_task_; // async task for loading program from file
     };
 
     enum class ProgramTreeButtons {
@@ -93,6 +96,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void closeProgramFileDialog();
 
         void showStateSaving();
+        void showStateLoading();
         void closeSaveProgramDialog();
 
         void setupParameterContainer(ProgramTreeParameters* parameter_container, const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index);
@@ -116,7 +120,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         std::vector<std::string> getExistingProgramsInDirectory(const std::filesystem::path& directory);
         void saveStateToFile(const std::filesystem::path& file, bool overwrite_confirmed);
         void handleSaveTask();
+        void handleLoadTask();
         bool writeFile(const std::filesystem::path& p, std::string_view data) noexcept;
+        bool readFile(const std::filesystem::path& p, std::string& out_data) noexcept;
 
         void onCutCommand();
         void onCopyCommand();
