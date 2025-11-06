@@ -79,7 +79,7 @@ p_desc::ParameterList required_parameters(std::move(std::vector<p_desc::Paramete
         .limit_min_ = true,
         .limit_max_ = true,
         .min_value_long_ = 0,
-        .max_value_long_ = 1000,
+        .max_value_long_ = 2000,
         .default_value_ = "500"
     },
     {
@@ -89,7 +89,7 @@ p_desc::ParameterList required_parameters(std::move(std::vector<p_desc::Paramete
         .limit_min_ = true,
         .limit_max_ = true,
         .min_value_long_ = 1,
-        .max_value_long_ = 3
+        .max_value_long_ = 10
     }
 }));
 
