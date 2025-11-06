@@ -32,6 +32,7 @@ ExistingCommand::ExistingCommand(
 
 ExistingCommand::ExistingCommand(ExistingCommand&& other, uint64_t new_command_id)
     : usecase_identifier_(std::move(other.usecase_identifier_)),
+      usecase_name_(std::move(other.usecase_name_)),
       command_id_(new_command_id),
       available_usecases_map_(other.available_usecases_map_),
       auto_parameter_values_(std::move(other.auto_parameter_values_)),
