@@ -2,6 +2,7 @@
 
 #include "program_list.h"
 #include "reusable_dialog.h"
+#include "file_dialog.h"
 #include "program_tree_parameters.h"
 
 #include "module_common/base_module.h"
@@ -13,6 +14,7 @@
 #include <string>
 #include <functional>
 #include <atomic>
+#include <filesystem>
 
 #include <Wt/WContainerWidget.h>
 #include <Wt/WStackedWidget.h>
@@ -68,7 +70,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
     private:
         void setupCallbacks();
         ReusableDialog* showParameterDescriptionPopup(const std::string& title, const std::string& description);
-        void addExistingUsecase(const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase);
+        void insertExistingUsecase(const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t index);
 
         ReusableDialog* showPopupDialog(std::unique_ptr<ReusableDialog> dialog, bool dismiss_on_button_click = true, bool dismiss_on_background_click = true);
         void closePopupDialog();
@@ -83,6 +85,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void showReloadUsecasePopup();
         void closeReloadUsecasePopup();
 
+        void closeProgramFileDialog();
+
         void setupParameterContainer(ProgramTreeParameters* parameter_container, const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index);
         std::optional<size_t> existingUsecaseIndexFromParametersWidget(ProgramTreeParameters* parameter_widget) const; // find index from parameter_widget and return it, or std::nullopt if not found
         ut::structs::ExistingCommand* existingUsecaseFromIndex(std::optional<size_t> index_opt) const; // get existing usecase from index, or nullptr if index_opt is std::nullopt or invalid
@@ -96,6 +100,22 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void setupConfirmCallback(ProgramTreeParameters* parameter_container);
 
         void onTimerRefresh();
+
+        void clearExistingUsecases();
+        void loadExistingUsecases();
+
+        bool getProgramDirectory(std::filesystem::path& out_directory);
+        std::vector<std::string> getExistingProgramsInDirectory(const std::filesystem::path& directory);
+
+        void onCutCommand();
+        void onCopyCommand();
+        void onPasteCommand();
+
+        void onNewProgram();
+        void onSaveProgram();
+        void onLoadProgram();
+
+        const char* AERGO_PROGRAM_EXTENSION = ".paergo";
 
         aergo::module::BaseModule* base_module_{ nullptr };
         std::function<void(std::function<void()>)> with_frontend_state_lock_; // function to access program tree state with frontend_state lock
@@ -113,8 +133,12 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         ReusableDialog* read_custom_value_dialog_{ nullptr };
         ReusableDialog* generate_command_data_json_dialog_{ nullptr };
         ReusableDialog* reload_usecase_dialog_{ nullptr };
+        ReusableDialog* new_program_dialog_{ nullptr };
+        FileDialog* program_file_dialog_{ nullptr };
 
         std::vector<std::string> available_usecase_ids_;
         std::vector<ProgramTreeParameters*> existing_usecase_parameter_widgets_;
+
+        std::optional<ut::structs::ExistingCommand> clipboard_command_{ std::nullopt };
     };
 }

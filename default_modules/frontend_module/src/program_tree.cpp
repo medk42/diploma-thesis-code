@@ -67,12 +67,8 @@ void ProgramTree::reloadAvailableUsecases() // called with UI and frontend_state
         // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
         available_usecases_list_->clearCommands();
         available_usecase_ids_.clear();
-        existing_usecases_list_->clearCommands();
-        existing_usecase_parameter_widgets_.clear();
 
-        parameters_container_->clear();
-        parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for New Program
-        parameters_container_->setCurrentIndex(0); // show empty page after reload
+        clearExistingUsecases();
 
         if (!success)
         {
@@ -87,11 +83,7 @@ void ProgramTree::reloadAvailableUsecases() // called with UI and frontend_state
             available_usecase_ids_.push_back(usecase_id);
         }        
 
-        for (size_t i = 0; i < program_state_unsafe_.usecase_tree_->size(); ++i)
-        {
-            const auto& existing_usecase = (*program_state_unsafe_.usecase_tree_)[i];
-            addExistingUsecase(existing_usecase);
-        }
+        loadExistingUsecases();
 
         base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::reloadAvailableUsecases: Reloaded usecases: " + std::to_string(available_usecases.size()) + " available, " + std::to_string(program_state_unsafe_.usecase_tree_->size()) + " existing.");
     });
@@ -124,7 +116,7 @@ void ProgramTree::setupCallbacks()
                 return;
             }
             const auto& new_command = (*program_state_unsafe_.usecase_tree_)[program_state_unsafe_.usecase_tree_->size() - 1];
-            addExistingUsecase(new_command);
+            insertExistingUsecase(new_command, existing_usecases_list_->commandCount());
             existing_usecases_list_->setCommandSelected(existing_usecases_list_->commandCount() - 1); // show newly added usecase
             parameters_container_->setCurrentIndex(parameters_container_->count() - 1); // show parameters of newly added usecase
         });
@@ -142,7 +134,7 @@ void ProgramTree::setupCallbacks()
 }
 
 
-void ProgramTree::addExistingUsecase(const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase)
+void ProgramTree::insertExistingUsecase(const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t index)
 {
     // TODO this all does NOT work for insert!
 
@@ -150,22 +142,24 @@ void ProgramTree::addExistingUsecase(const aergo::module::helpers::usecase_tree:
     if (!usecase_ref)
     {
         // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
-        existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Invalid);
-        parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for invalid usecase
-        existing_usecase_parameter_widgets_.push_back(nullptr);
+        existing_usecases_list_->insertCommand(index, existing_usecase.getUsecaseName(), ProgramCommand::Status::Invalid);
+        parameters_container_->insertWidget(static_cast<int>(index + 1), std::make_unique<Wt::WContainerWidget>()); // +1 because child 0 is empty; empty page for invalid usecase
+        existing_usecase_parameter_widgets_.insert(existing_usecase_parameter_widgets_.begin() + index, nullptr);
     }
     else
     {
         // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
-        existing_usecases_list_->addCommand(existing_usecase.getUsecaseName(), ProgramCommand::Status::Warning);
-        auto params = parameters_container_->addWidget(std::make_unique<ProgramTreeParameters>(
+        existing_usecases_list_->insertCommand(index, existing_usecase.getUsecaseName(), ProgramCommand::Status::Normal);
+        auto w = std::make_unique<ProgramTreeParameters>(
             usecase_ref->getAutoParameters().getParameters(),
             usecase_ref->getRequiredParameters().getParameters(),
             usecase_ref->getAdvancedParameters().getParameters()
-        ));
-        existing_usecase_parameter_widgets_.push_back(params);
+        );
+        ProgramTreeParameters* params = w.get();
+        parameters_container_->insertWidget(static_cast<int>(index + 1), std::move(w)); // +1 because child 0 is empty
+        existing_usecase_parameter_widgets_.insert(existing_usecase_parameter_widgets_.begin() + index, params);
 
-        setupParameterContainer(params, existing_usecase, existing_usecases_list_->commandCount() - 1);
+        setupParameterContainer(params, existing_usecase, index);
     }
 }
 
@@ -486,28 +480,25 @@ p_desc::ParameterValueOpt ProgramTree::convertToParameterValueOpt(const value_op
 
 void ProgramTree::onButtonClicked(ProgramTreeButtons button)
 {
-    if (button == ProgramTreeButtons::NewProgram)
-    {
-        parameters_container_->setCurrentIndex(0); // show dummy parameters for demonstration
-    }
-    if (button == ProgramTreeButtons::LoadProgram)
-    {
-        parameters_container_->setCurrentIndex(1); // show dummy parameters for demonstration
-    }
-
     switch (button)
     {
     case ProgramTreeButtons::NewProgram:
-        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onButtonClicked: NewProgram button clicked.");
-        // TODO implement
+        onNewProgram();
         break;
     case ProgramTreeButtons::SaveProgram:
-        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onButtonClicked: SaveProgram button clicked.");
-        // TODO implement
+        onSaveProgram();
         break;
     case ProgramTreeButtons::LoadProgram:
-        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onButtonClicked: LoadProgram button clicked.");
-        // TODO implement
+        onLoadProgram();
+        break;
+    case ProgramTreeButtons::CutCommand:
+        onCutCommand();
+        break;
+    case ProgramTreeButtons::CopyCommand:
+        onCopyCommand();
+        break;
+    case ProgramTreeButtons::PasteCommand:
+        onPasteCommand();
         break;
     default:
         base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onButtonClicked: Unhandled button clicked.");
@@ -703,4 +694,283 @@ void ProgramTree::onTimerRefresh()
             }
         }
     });
+}
+
+
+void ProgramTree::clearExistingUsecases()
+{
+    existing_usecases_list_->clearCommands();
+
+    existing_usecase_parameter_widgets_.clear();
+
+    parameters_container_->clear();
+    parameters_container_->addWidget(std::make_unique<Wt::WContainerWidget>()); // empty page for New Program
+    parameters_container_->setCurrentIndex(0); // show empty page after reload
+}
+
+
+void ProgramTree::loadExistingUsecases()
+{
+    for (size_t i = 0; i < program_state_unsafe_.usecase_tree_->size(); ++i)
+    {
+        const auto& existing_usecase = (*program_state_unsafe_.usecase_tree_)[i];
+        insertExistingUsecase(existing_usecase, existing_usecases_list_->commandCount());
+    }
+}
+
+
+bool ProgramTree::getProgramDirectory(std::filesystem::path& out_directory)
+{
+    std::string base_path = base_module_->getDataPath();
+    std::filesystem::path base_dir(base_path);
+    std::filesystem::path program_dir = base_dir / "programs";
+
+    if (!std::filesystem::exists(program_dir))
+    {
+        base_module_->log(aergo::module::logging::LogType::WARNING, "Programs directory does not exist, creating: " + program_dir.string());
+        if (!std::filesystem::create_directories(program_dir))
+        {
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Failed to create programs directory: " + program_dir.string());
+            return false;
+        }
+    }
+
+    out_directory = program_dir;
+    return true;
+}
+
+
+std::vector<std::string> ProgramTree::getExistingProgramsInDirectory(const std::filesystem::path& directory)
+{
+    std::vector<std::string> files;
+
+    if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory))
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "Directory does not exist or is not a directory: " + directory.string());
+        return files;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(directory))
+    {
+        if (entry.is_regular_file())
+        {
+            files.push_back(entry.path().filename().string());
+        }
+    }
+
+    std::vector<std::string> filtered_files;
+    for (const auto& file : files) {
+        if (file.ends_with(AERGO_PROGRAM_EXTENSION)) { // aergo program file extension
+            filtered_files.push_back(file.substr(0, file.find_last_of('.')));
+        }
+    }
+
+    return filtered_files;
+}
+
+
+void ProgramTree::closeProgramFileDialog()
+{
+    if (program_file_dialog_ != nullptr)
+    {
+        removeWidget(program_file_dialog_);
+        program_file_dialog_ = nullptr;
+    }
+}
+
+
+void ProgramTree::onCutCommand()
+{
+    auto selected_index_opt = existing_usecases_list_->selectedCommandIndex();
+    if (!selected_index_opt) 
+    {
+        displayErrorPopup("Failed to cut command: no command selected.");
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onCutCommand: No command selected to cut.");
+        return;
+    }
+    
+    size_t selected_index = *selected_index_opt;
+    if (selected_index >= program_state_unsafe_.usecase_tree_->size())
+    {
+        displayErrorPopup("Failed to cut command: internal error.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onCutCommand: selected_index out of range.");
+        return;
+    }
+
+    const auto& existing_usecase = (*program_state_unsafe_.usecase_tree_)[selected_index];
+    clipboard_command_ = existing_usecase; // copy the command
+
+    if (!program_state_unsafe_.usecase_tree_->removeCommand(selected_index))
+    {
+        displayErrorPopup("Failed to remove command after copy. Please try again.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onCopyCommand: Failed to remove command after copy.");
+        return;
+    }
+
+    // remove from UI
+    if (selected_index >= existing_usecases_list_->commandCount() || selected_index >= existing_usecase_parameter_widgets_.size())
+    {
+        displayErrorPopup("Failed to remove command from UI after copy. Please try again.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onCopyCommand: selected_index out of range for UI removal.");
+        return;
+    }
+
+    // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
+    existing_usecases_list_->removeCommand(selected_index);
+    parameters_container_->removeWidget(existing_usecase_parameter_widgets_[selected_index]);
+    existing_usecase_parameter_widgets_.erase(existing_usecase_parameter_widgets_.begin() + selected_index);
+}
+
+
+void ProgramTree::onCopyCommand()
+{
+    auto selected_index_opt = existing_usecases_list_->selectedCommandIndex();
+    if (!selected_index_opt) 
+    {
+        displayErrorPopup("Failed to copy command: no command selected.");
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onCopyCommand: No command selected to copy.");
+        return;
+    }
+    
+    size_t selected_index = *selected_index_opt;
+    if (selected_index >= program_state_unsafe_.usecase_tree_->size())
+    {
+        displayErrorPopup("Failed to copy command: internal error.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onCopyCommand: selected_index out of range.");
+        return;
+    }
+
+    const auto& existing_usecase = (*program_state_unsafe_.usecase_tree_)[selected_index];
+    clipboard_command_ = existing_usecase; // copy the command
+}
+
+
+void ProgramTree::onPasteCommand()
+{
+    if (!clipboard_command_)
+    {
+        displayErrorPopup("Failed to paste command: clipboard is empty.");
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onPasteCommand: Clipboard is empty.");
+        return;
+    }
+
+    auto selected_index_opt = existing_usecases_list_->selectedCommandIndex();
+    if (!selected_index_opt) 
+    {
+        displayErrorPopup("Failed to paste command: no command selected to paste after.");
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onPasteCommand: No command selected to paste after.");
+        return;
+    }
+    size_t copy_target_index = *selected_index_opt + 1; // paste after selected
+
+    if (!program_state_unsafe_.usecase_tree_->insertCommand(copy_target_index, *clipboard_command_))
+    {
+        displayErrorPopup("Failed to append command from clipboard. Please try again.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onPasteCommand: Failed to append command from clipboard.");
+        return;
+    }
+
+    const auto& new_command = (*program_state_unsafe_.usecase_tree_)[copy_target_index];
+    insertExistingUsecase(new_command, copy_target_index);
+    existing_usecases_list_->setCommandSelected(copy_target_index); // show newly pasted usecase
+    parameters_container_->setCurrentIndex(static_cast<int>(copy_target_index + 1)); // show parameters of newly pasted usecase
+}
+
+
+void ProgramTree::onNewProgram()
+{
+    if (new_program_dialog_ != nullptr)
+    {
+        return; // already shown
+    }
+
+    new_program_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+        "New Program", 
+        "Are you sure you want to create a new program? All unsaved changes will be lost.",
+        std::vector<ButtonDescription>{
+            ButtonDescription{"Cancel", ButtonStyle::Secondary, true},
+            ButtonDescription{"Create New Program", ButtonStyle::Danger, true}
+        }
+    ));
+
+    new_program_dialog_->onButtonClicked().connect([this](size_t button_id) {
+        if (button_id == 1) // Create New Program
+        {
+            with_frontend_state_lock_([this]() { // here we hold both UI and frontend_state_ locks
+                // clear program tree
+                program_state_unsafe_.usecase_tree_->clearCommands();
+
+                // clear UI
+                clearExistingUsecases();
+            });
+        }
+
+        // close dialog in any case
+        if (new_program_dialog_ != nullptr)
+        {
+            removeWidget(new_program_dialog_);
+            new_program_dialog_ = nullptr;
+        }
+    });
+}
+
+
+void ProgramTree::onSaveProgram()
+{
+    if (program_file_dialog_ != nullptr)
+    {
+        return; // already shown
+    }
+
+    std::filesystem::path program_dir;
+    if (!getProgramDirectory(program_dir))
+    {
+        displayErrorPopup("Failed to get or create program directory for saving.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onSaveProgram: getProgramDirectory failed.");
+        return;
+    }
+
+    std::vector<std::string> filtered_files = getExistingProgramsInDirectory(program_dir);
+
+    std::string selected_file;
+    for (int i = 0; i < 1000; ++i)
+    {
+        std::string filename = "program_" + std::to_string(i);
+        if (std::find(filtered_files.begin(), filtered_files.end(), filename) == filtered_files.end())
+        {
+            selected_file = filename;
+            break;
+        }
+    }
+
+    program_file_dialog_ = addWidget(std::make_unique<FileDialog>(
+        "Save Program As", 
+        std::move(filtered_files),
+        selected_file,
+        "Save"
+    ));
+
+    program_file_dialog_->onCancelClicked().connect([this]() { closeProgramFileDialog(); });
+    program_file_dialog_->onAcceptClicked().connect([this, program_dir](std::string selected_file) {
+        auto save_path = program_dir / (selected_file + AERGO_PROGRAM_EXTENSION);
+        // TODO save...
+    });
+
+
+    // TODO move to save logic... also do async!
+    auto serialized_json_str_opt = program_state_unsafe_.usecase_tree_->toJson();
+    if (!serialized_json_str_opt)
+    {
+        displayErrorPopup("Failed to serialize program to JSON. Please try again.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onSaveProgram: Failed to serialize UsecaseTree to JSON.");
+        return;
+    }
+
+    base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onSaveProgram: Program JSON serialized successfully: " + std::to_string(serialized_json_str_opt->size()) + " bytes.");
+}
+
+
+void ProgramTree::onLoadProgram()
+{
+    
 }
