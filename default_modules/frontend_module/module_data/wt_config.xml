@@ -21,6 +21,7 @@
     <!-- Debug / logging -->
     <debug>false</debug>
     <!-- <log-file>wt-app.log</log-file> -->
+    <log-config>* -info -debug</log-config>
 
     <!-- Allow websockets (wthttpd must support websockets too) -->
     <web-sockets>true</web-sockets>
