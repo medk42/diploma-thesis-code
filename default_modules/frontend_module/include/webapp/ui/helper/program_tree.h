@@ -7,8 +7,10 @@
 
 #include "module_common/base_module.h"
 #include "module_helpers/usecase_tree/usecase_tree.h"
+#include "module_helpers/usecase_tree/program_instance.h"
 #include "module_helpers/usecase_tree/structs.h"
 #include "module_helpers/async_helpers/async_task.h"
+#include "module_helpers/usecase_wrapper/helper_types.h"
 
 #include <memory>
 #include <vector>
@@ -21,6 +23,7 @@
 #include <Wt/WContainerWidget.h>
 #include <Wt/WStackedWidget.h>
 #include <Wt/WTimer.h>
+#include <Wt/WSignal.h>
 
 namespace aergo::default_modules::frontend_module::webapp::ui::helper
 {
@@ -49,6 +52,15 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         std::unique_ptr<helpers::async_helpers::AsyncTask<std::expected<void, std::optional<std::string>>>> load_program_task_; // async task for loading program from file
     };
 
+    struct ProgramTreeButtonState
+    {
+        bool start_program_enabled{ false };
+        bool simulate_program_enabled{ false };
+        bool stop_program_enabled{ false };
+        bool pause_program_enabled{ false };
+        bool resume_program_enabled{ false };
+    };
+
     enum class ProgramTreeButtons {
         NewProgram, SaveProgram, LoadProgram,
         CutCommand, CopyCommand, PasteCommand,
@@ -74,6 +86,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         // handle button clicks, call WHILE HOLDING both the frontend_state and UI locks
         void onButtonClicked(ProgramTreeButtons button);
+
+        Wt::Signal<ProgramTreeButtonState>& onButtonStateChanged() { return onButtonStateChanged_; } // emitted when button states change
 
     private:
         void setupCallbacks();
@@ -132,6 +146,14 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void onSaveProgram();
         void onLoadProgram();
 
+        void handleButtonStates();
+        void handleProgramStopped();
+        std::string parseErrorInfo(const std::optional<ut::uw::helper::ErrorInfo>& error_info) const;
+        void startProgram(bool simulate);
+        void stopProgram();
+        void pauseProgram();
+        void resumeProgram();
+
         const char* AERGO_PROGRAM_EXTENSION = ".paergo";
 
         aergo::module::BaseModule* base_module_{ nullptr };
@@ -158,5 +180,10 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         std::vector<ProgramTreeParameters*> existing_usecase_parameter_widgets_;
 
         std::optional<ut::structs::ExistingCommand> clipboard_command_{ std::nullopt };
+
+        bool all_existing_usecases_valid_{ false };
+        size_t last_existing_usecase_count_{ 0 };
+        std::optional<ut::ProgramInstance::ProgramState> current_running_program_state_{ std::nullopt };
+        Wt::Signal<ProgramTreeButtonState> onButtonStateChanged_; // emitted when button states change
     };
 }

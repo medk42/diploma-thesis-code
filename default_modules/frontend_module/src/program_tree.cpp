@@ -511,6 +511,21 @@ void ProgramTree::onButtonClicked(ProgramTreeButtons button)
     case ProgramTreeButtons::PasteCommand:
         onPasteCommand();
         break;
+    case ProgramTreeButtons::StartProgram:
+        startProgram(false);
+        break;
+    case ProgramTreeButtons::SimulateProgram:
+        startProgram(true);
+        break;
+    case ProgramTreeButtons::StopProgram:
+        stopProgram();
+        break;
+    case ProgramTreeButtons::PauseProgram:
+        pauseProgram();
+        break;
+    case ProgramTreeButtons::ResumeProgram:
+        resumeProgram();
+        break;
     default:
         base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::onButtonClicked: Unhandled button clicked.");
         break;
@@ -707,6 +722,7 @@ void ProgramTree::onTimerRefresh()
 
         handleSaveTask();
         handleLoadTask();
+        handleButtonStates();
     });
 }
 
@@ -1290,4 +1306,160 @@ void ProgramTree::onLoadProgram()
             showStateLoading();
         });
     });
+}
+
+
+void ProgramTree::handleButtonStates()
+{
+    auto program_state_opt = program_state_unsafe_.usecase_tree_->getProgramState();
+    bool all_existing_usecases_valid = existing_usecases_list_->allCommandsHaveStatus(ProgramCommand::Status::Normal);
+    size_t command_count = existing_usecases_list_->commandCount();
+
+    if (program_state_opt == current_running_program_state_ && 
+        all_existing_usecases_valid == all_existing_usecases_valid_ &&
+        command_count == last_existing_usecase_count_) 
+    {
+        return; // no change
+    }
+
+    if (program_state_opt.has_value() && program_state_opt == ut::ProgramInstance::ProgramState::STOPPED && program_state_opt != current_running_program_state_)
+    {
+        handleProgramStopped();
+    }
+    
+    current_running_program_state_ = program_state_opt;
+    all_existing_usecases_valid_ = all_existing_usecases_valid;
+    last_existing_usecase_count_ = command_count;
+
+    if (!program_state_opt.has_value() || *program_state_opt == ut::ProgramInstance::ProgramState::STOPPED)
+    {
+        if (all_existing_usecases_valid && command_count > 0)
+        {
+            onButtonStateChanged_.emit(ProgramTreeButtonState { true, true, false, false, false });
+        }
+        else
+        {
+            onButtonStateChanged_.emit(ProgramTreeButtonState { false, false, false, false, false });
+        }
+    }
+    else if (*program_state_opt == ut::ProgramInstance::ProgramState::NOT_STARTED || *program_state_opt == ut::ProgramInstance::ProgramState::STOPPING)
+    {
+        onButtonStateChanged_.emit(ProgramTreeButtonState { false, false, false, false, false });
+    }
+    else if (*program_state_opt == ut::ProgramInstance::ProgramState::RUNNING)
+    {
+        onButtonStateChanged_.emit(ProgramTreeButtonState { false, false, true, true, false });
+    }
+    else if (*program_state_opt == ut::ProgramInstance::ProgramState::PAUSED)
+    {
+        onButtonStateChanged_.emit(ProgramTreeButtonState { false, false, true, false, true });
+    }
+    else // RESUMING or PAUSING
+    {
+        onButtonStateChanged_.emit(ProgramTreeButtonState { false, false, true, false, false });
+    }
+}
+
+
+void ProgramTree::handleProgramStopped()
+{
+    auto program_result_opt = program_state_unsafe_.usecase_tree_->getProgramResult();
+
+    if (!program_result_opt.has_value())
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleButtonStates: Failed to get program result after stop.");
+        displayErrorPopup("Internal error: Unable to get stop reason.", "Program Finished");
+        return;
+    }
+
+    const auto& program_result = *program_result_opt;
+    if (program_result.failed_to_remove_programs_)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleButtonStates: Program failed to remove running programs after stopping.");
+    }
+
+    if (program_result.program_stop_reason_ == ut::ProgramInstance::ProgramStopReason::NONE)
+    {
+        displayErrorPopup("Internal error: Program stopped without a specified reason.", "Program Finished");
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::handleButtonStates: Program stopped without a specified reason.");
+        return;
+    }
+    else if (program_result.program_stop_reason_ == ut::ProgramInstance::ProgramStopReason::COMPLETED)
+    {
+        displayErrorPopup("Program completed successfully.", "Program Finished");
+        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::handleButtonStates: Program completed successfully.");
+        return;
+    }
+    else if (program_result.program_stop_reason_ == ut::ProgramInstance::ProgramStopReason::STOP_REQUESTED)
+    {
+        displayErrorPopup("Program stopped on user request.", "Program Stopped");
+        base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::handleButtonStates: Program stopped as requested by the user.");
+        return;
+    }
+    else if (program_result.program_stop_reason_ == ut::ProgramInstance::ProgramStopReason::ERROR)
+    {
+        std::string err_msg = parseErrorInfo(program_result.program_last_error_info_);
+        displayErrorPopup("Program stopped due to an error during execution: " + err_msg, "Program Error");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleButtonStates: Program stopped due to an error during execution: " + err_msg);
+        return;
+    }
+    else if (program_result.program_stop_reason_ == ut::ProgramInstance::ProgramStopReason::EXCEPTION)
+    {
+        std::string err_msg = parseErrorInfo(program_result.program_last_error_info_);
+        displayErrorPopup("Program stopped due to an exception during execution: " + err_msg, "Program Exception");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleButtonStates: Program stopped due to an exception during execution: " + err_msg);
+        return;
+    }
+    else if (program_result.program_stop_reason_ == ut::ProgramInstance::ProgramStopReason::INTERNAL_ERROR)
+    {
+        std::string err_msg = parseErrorInfo(program_result.program_last_error_info_);
+        displayErrorPopup("Program stopped due to an internal error: " + err_msg, "Program Internal Error");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleButtonStates: Program stopped due to an internal error: " + err_msg);
+        return;
+    }
+    else
+    {
+        displayErrorPopup("Program stopped due to an unknown reason.", "Program Stopped");
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::handleButtonStates: Program stopped due to an unknown reason.");
+        return;
+    }
+}
+
+
+std::string ProgramTree::parseErrorInfo(const std::optional<ut::uw::helper::ErrorInfo>& error_info) const
+{
+    if (!error_info.has_value() || !error_info->has_details_)
+    {
+        return "Unspecified error.";
+    }
+
+    return (error_info->is_exception_ ? "EXCEPTION " : "ERROR ") + std::to_string(error_info->error_code_) + ": " + error_info->error_message_;
+}
+
+
+void ProgramTree::startProgram(bool simulate)
+{
+    if (!program_state_unsafe_.usecase_tree_->start(simulate))
+    {
+        displayErrorPopup("Failed to start program. Please try again.");
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::startProgram: Failed to start program.");
+    }
+}
+
+
+void ProgramTree::stopProgram()
+{
+    program_state_unsafe_.usecase_tree_->stop();
+}
+
+
+void ProgramTree::pauseProgram()
+{
+    program_state_unsafe_.usecase_tree_->pause();
+}
+
+
+void ProgramTree::resumeProgram()
+{
+    program_state_unsafe_.usecase_tree_->resume();
 }

@@ -63,6 +63,14 @@ MainVisualizationUi::MainVisualizationUi(
     ));
     camera_container_ = content_container->addWidget(std::make_unique<helper::CameraContainer>());
 
+    program_tree_->onButtonStateChanged().connect([top_bar](helper::ProgramTreeButtonState state){
+        top_bar->setEnabled(7, state.start_program_enabled);     // Start
+        top_bar->setEnabled(8, state.simulate_program_enabled);  // Simulate
+        top_bar->setEnabled(9, state.stop_program_enabled);      // Stop
+        top_bar->setEnabled(10, state.pause_program_enabled);    // Pause
+        top_bar->setEnabled(11, state.resume_program_enabled);   // Resume
+    });
+
     auto register_id_complex = scene_container_->createObjectDescription(
         helper::vis3d::ComplexShape {
             .parts = {
