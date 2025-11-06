@@ -117,7 +117,7 @@ namespace aergo::module::helpers::usecase_tree
 
         std::condition_variable delayed_send_cv_;
         bool send_thread_running_{true};
-        bool send_requested_;
+        bool send_requested_{false};
         uw::message_types::Request delayed_request_;
         ChannelIdentifier delayed_target_channel_;
         std::thread delayed_send_thread_;
