@@ -94,6 +94,8 @@ namespace aergo::module::helpers::usecase_tree
 
         void delayedSendThreadFunction();
 
+        void clearCommandsInternal(); // call with mutex_ locked
+
         aergo::module::BaseModule* base_module_ref_;
 
         aergo::module::BaseModule::AllocatorPtr dynamic_allocator_;

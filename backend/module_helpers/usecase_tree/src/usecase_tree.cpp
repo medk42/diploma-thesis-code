@@ -825,7 +825,12 @@ std::optional<ProgramInstance::ProgramResult> UsecaseTree::getProgramResult() co
 void UsecaseTree::clearCommands()
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    clearCommandsInternal();
+}
 
+
+void UsecaseTree::clearCommandsInternal()
+{
     existing_commands_list_.clear();
     command_id_to_index_map_.clear();
     next_command_id_ = 1; // we can start from 1 again, no conflicts
@@ -1079,7 +1084,7 @@ bool UsecaseTree::fromJson(const std::string& json_str, std::string& out_missing
         return false;
     }
 
-    clearCommands();
+    clearCommandsInternal();
 
     for (const auto& cmd_json : j["program"])
     {
