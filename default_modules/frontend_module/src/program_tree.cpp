@@ -819,6 +819,16 @@ void ProgramTree::closeSaveProgramDialog()
 }
 
 
+void ProgramTree::closeLoadProgramDialog()
+{
+    if (load_program_dialog_ != nullptr)
+    {
+        removeWidget(load_program_dialog_);
+        load_program_dialog_ = nullptr;
+    }
+}
+
+
 void ProgramTree::showStateSaving()
 {
     closeSaveProgramDialog();
@@ -833,9 +843,9 @@ void ProgramTree::showStateSaving()
 
 void ProgramTree::showStateLoading()
 {
-    closeSaveProgramDialog();
+    closeLoadProgramDialog();
 
-    save_program_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+    load_program_dialog_ = addWidget(std::make_unique<ReusableDialog>(
         "Loading Program", 
         "Please wait while the program state is being loaded from file...", 
         std::vector<ButtonDescription>{}
@@ -939,14 +949,14 @@ void ProgramTree::handleLoadTask()
     const auto& task = program_state_unsafe_.load_program_task_;
     if (task == nullptr)
     {
-        closeSaveProgramDialog();
+        closeLoadProgramDialog();
         return; // no task
     }
 
     auto state = task->getState();
     if (state == helpers::async_helpers::AsyncTaskState::NOT_STARTED)
     {
-        closeSaveProgramDialog();
+        closeLoadProgramDialog();
         displayErrorPopup("Internal error.", "Failed to load program");
         base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleLoadTask: Load task in NOT_STARTED state.");
         program_state_unsafe_.load_program_task_ = nullptr;
@@ -960,8 +970,8 @@ void ProgramTree::handleLoadTask()
 
     auto result_opt = task->getResult(); // otherwise task finished
     program_state_unsafe_.load_program_task_ = nullptr; // clear task
-    closeSaveProgramDialog();
-    
+    closeLoadProgramDialog();
+
     // reload existing usecases in UI
     clearExistingUsecases();
     loadExistingUsecases();

@@ -110,8 +110,10 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void closeProgramFileDialog();
 
         void showStateSaving();
-        void showStateLoading();
         void closeSaveProgramDialog();
+        
+        void showStateLoading();
+        void closeLoadProgramDialog();
 
         void setupParameterContainer(ProgramTreeParameters* parameter_container, const aergo::module::helpers::usecase_tree::structs::ExistingCommand& existing_usecase, size_t existing_usecase_index);
         std::optional<size_t> existingUsecaseIndexFromParametersWidget(ProgramTreeParameters* parameter_widget) const; // find index from parameter_widget and return it, or std::nullopt if not found
@@ -174,6 +176,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         ReusableDialog* reload_usecase_dialog_{ nullptr };
         ReusableDialog* new_program_dialog_{ nullptr };
         ReusableDialog* save_program_dialog_{ nullptr };
+        ReusableDialog* load_program_dialog_{ nullptr };
         FileDialog* program_file_dialog_{ nullptr };
 
         std::vector<std::string> available_usecase_ids_;
