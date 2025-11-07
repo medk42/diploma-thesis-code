@@ -60,7 +60,7 @@ UsecaseTree::~UsecaseTree() noexcept
 }
 
 
-void UsecaseTree::handleResponse(ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference)
+void UsecaseTree::handleResponse(ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message)
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -69,7 +69,7 @@ void UsecaseTree::handleResponse(ChannelIdentifier source_channel, const aergo::
     {
         auto handler = handler_it->second;
         response_handlers_.erase(handler_it);
-        handler(source_channel, message, lock_reference);
+        handler(source_channel, message);
     }
     else
     {
@@ -127,7 +127,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
 
         uint64_t request_id = base_module_ref_->sendRequest(usecase_request_channel_id_, channel, request_message);
 
-        response_handlers_[request_id] = [this](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
+        response_handlers_[request_id] = [this](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message)
         {
             if (pending_modules_for_update_.find(source_channel.producer_module_id_) == pending_modules_for_update_.end())
             {
@@ -402,7 +402,7 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
 
     std::string usecase_identifier = command.getUsecaseIdentifier();
     uint64_t command_id = command.getCommandId();
-    response_handlers_[request_id] = [this, usecase_identifier, command_id, on_finish](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
+    response_handlers_[request_id] = [this, usecase_identifier, command_id, on_finish](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message)
     {
         if (!response_message.success_)
         {
@@ -508,7 +508,7 @@ bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t 
 
     uint64_t command_id = command.getCommandId();
     std::string usecase_identifier = command.getUsecaseIdentifier();
-    response_handlers_[request_id] = [this, command_id, usecase_identifier, param_index, list_index_in_param, &cancel_read, on_value_ready_callback](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
+    response_handlers_[request_id] = [this, command_id, usecase_identifier, param_index, list_index_in_param, &cancel_read, on_value_ready_callback](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message)
     {
         if (!response_message.success_)
         {
@@ -556,9 +556,9 @@ bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t 
             aergo::module::message::MessageHeader::Message(&check_request)
         );
         
-        response_handlers_[check_request_id] = [this, command_id, task_id, param_index, list_index_in_param, &cancel_read, on_value_ready_callback, &lock_reference](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
+        response_handlers_[check_request_id] = [this, command_id, task_id, param_index, list_index_in_param, &cancel_read, on_value_ready_callback](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message)
         {
-            processCustomValueResponse(command_id, task_id, param_index, list_index_in_param, cancel_read, on_value_ready_callback, source_channel, response_message, lock_reference);
+            processCustomValueResponse(command_id, task_id, param_index, list_index_in_param, cancel_read, on_value_ready_callback, source_channel, response_message);
         };
     };
 
@@ -566,7 +566,7 @@ bool UsecaseTree::readCustomValue(size_t list_index, size_t param_index, size_t 
 }
 
 
-void UsecaseTree::processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool, size_t)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message, std::unique_lock<std::mutex>& lock_reference)
+void UsecaseTree::processCustomValueResponse(uint64_t command_id, uint64_t task_id, size_t param_index, size_t list_index_in_param, std::atomic<bool>& cancel_read, std::optional<std::function<void(bool, size_t)>> on_value_ready_callback, ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& message)
 {
     if (!message.success_)
     {
@@ -729,7 +729,7 @@ bool UsecaseTree::sendRequestSynchronized(ChannelIdentifier target_channel, uw::
     bool finished = false;
     bool success = false;
 
-    response_handlers_[request_id] = [this, &finished, &success, &out_response, out_response_blob, &response_condition](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
+    response_handlers_[request_id] = [this, &finished, &success, &out_response, out_response_blob, &response_condition](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message)
     {
         if (!response_message.success_)
         {
@@ -1209,7 +1209,7 @@ void UsecaseTree::delayedSendThreadFunction()
             );
 
             // Set up a response handler that simply reuses the existing handler for this request type
-            response_handlers_[request_id] = [this](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message, std::unique_lock<std::mutex>& lock_reference)
+            response_handlers_[request_id] = [this](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message)
             {
                 processCustomValueResponse(
                     delayed_extra_data_.command_id,
@@ -1219,8 +1219,7 @@ void UsecaseTree::delayedSendThreadFunction()
                     *delayed_extra_data_.cancel_read,
                     delayed_extra_data_.on_value_ready_callback,
                     source_channel,
-                    response_message,
-                    lock_reference
+                    response_message
                 );
             };
         }

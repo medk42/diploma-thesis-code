@@ -321,8 +321,7 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
                         .id_ = message_id,
                         .timestamp_ns_ = timestamp_ns,
                         .success_ = success
-                    },
-                    lock
+                    }
                 );
             });
         }
