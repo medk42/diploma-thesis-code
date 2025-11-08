@@ -141,6 +141,7 @@ bool SceneSocket::sendCommandBuffer(const CommandBuffer& cmd_buf)
     serialization::pushObjectCommands(command_frame, cmd_buf.objects_);
     serialization::pushTrajectoryCommands(command_frame, cmd_buf.trajectories_);
 
+    can_send_ = false; // will be set to true again on done callback after message is sent
     conn_->sendMessage(command_frame);
 
     return true;
