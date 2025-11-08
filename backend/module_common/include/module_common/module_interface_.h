@@ -574,7 +574,8 @@ namespace aergo::module
         enum class QueueStatus 
         { 
             NORMAL,     // queue has space for this message
-            QUEUE_FULL  // queue is full, message can not be accepted (on ACCEPT response, message will be dropped)
+            QUEUE_FULL,  // queue is full, message can not be accepted (on ACCEPT response, message will be dropped)
+            QUEUE_FULL_CAN_DROP  // queue is full, but processing has not yet started on at least one message, so oldest message can be dropped if needed
         };
 
         enum class IngressDecision
@@ -594,9 +595,16 @@ namespace aergo::module
         virtual void* query_capability(const std::type_info& id) noexcept = 0;
 
         /// @brief Called when a message/request/response is received, before it is pushed to a processing queue. This method must be non-blocking and return immediately.
-        /// If queue is full, queue needs to be cleared (ACCEPT_DROP_QUEUE_FIRST or ACCEPT_REPLACE_QUEUE) or message dropped (DROP or ACCEPT).
-        /// Otherwise message can be accepted (ACCEPT, add to end of queue), dropped (DROP), or added to queue after dropping oldest message (ACCEPT_DROP_QUEUE_FIRST) 
-        /// or clearing the queue (ACCEPT_REPLACE_QUEUE, to only keep the latest data - useful for video).
+        /// Queue can be in 3 states: NORMAL (has space), QUEUE_FULL_CAN_DROP (no available space, but processing has not yet started on at least one message, so oldest message can be dropped if needed),
+        /// QUEUE_FULL (no available space, processing has started on all messages in the queue).
+        ///
+        /// In NORMAL state, message can be ACCEPTed (added to end of queue), DROPped (not added to queue), ACCEPT_DROP_QUEUE_FIRST (oldest message in queue dropped, new message added to end of queue)
+        /// or ACCEPT_REPLACE_QUEUE (queue cleared, new message added to end of queue).
+        ///
+        /// In QUEUE_FULL_CAN_DROP state, message can be DROPped (not added to queue), ACCEPT_DROP_QUEUE_FIRST (oldest message in queue dropped, new message added to end of queue)
+        /// or ACCEPT_REPLACE_QUEUE (queue cleared, new message added to end of queue). ACCEPT is not allowed, since queue is full - will be treated as DROP.
+        ///
+        /// In QUEUE_FULL state, all decisions will be treated as DROP, since queue is full and processing has started on all messages in the queue.
         /// @return decision on what to do with the message.
         virtual IngressDecision onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, QueueStatus queue_status) noexcept = 0;
 

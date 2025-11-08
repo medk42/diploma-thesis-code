@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <algorithm>
+#include <cstring>
 
 using namespace aergo::module;
 using namespace aergo::module::dll;
@@ -30,10 +31,9 @@ DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> modul
     responses_channel_count_ = module_info_->request_consumer_count_;
     
     uint32_t total_channels = messages_channel_count_ + requests_channel_count_ + responses_channel_count_;
-    prioritized_queues_.resize(total_channels);
-    regular_queues_.resize(total_channels);
+    available_queues_.reserve(total_channels);
+    to_be_processed_queues_.reserve(total_channels);
     is_queue_prioritized_.resize(total_channels, false);
-    queue_capacities_.resize(total_channels, 4); // default capacity
 
     // Determine which channels are prioritized and their capacities
     for (uint32_t i = 0; i < messages_channel_count_; ++i)
@@ -42,13 +42,17 @@ DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> modul
         {
             is_queue_prioritized_[i] = true;
         }
-        if (module_info_->subscribe_consumers_[i].message_queue_capacity_ >= 1)
+
+        size_t required_capacity = module_info_->subscribe_consumers_[i].message_queue_capacity_;
+        if (required_capacity < 1) required_capacity = 1; // minimum capacity
+        available_queues_.emplace_back(required_capacity);
+        to_be_processed_queues_.emplace_back(required_capacity);
+        for (size_t j = 0; j < required_capacity; ++j)
         {
-            queue_capacities_[i] = module_info_->subscribe_consumers_[i].message_queue_capacity_;
-        }
-        else
-        {
-            queue_capacities_[i] = 1; // minimum capacity
+            if (available_queues_.back().tryPush(std::make_unique<ProcessingData>()))
+            {
+                logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Failed to initialize available ProcessingData pool.");
+            }
         }
     }
     for (uint32_t i = 0; i < requests_channel_count_; ++i)
@@ -58,13 +62,17 @@ DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> modul
         {
             is_queue_prioritized_[idx] = true;
         }
-        if (module_info_->response_producers_[i].message_queue_capacity_ >= 1)
+
+        size_t required_capacity = module_info_->response_producers_[i].message_queue_capacity_;
+        if (required_capacity < 1) required_capacity = 1; // minimum capacity
+        available_queues_.emplace_back(required_capacity);
+        to_be_processed_queues_.emplace_back(required_capacity);
+        for (size_t j = 0; j < required_capacity; ++j)
         {
-            queue_capacities_[idx] = module_info_->response_producers_[i].message_queue_capacity_;
-        }
-        else
-        {
-            queue_capacities_[idx] = 1; // minimum capacity
+            if (available_queues_.back().tryPush(std::make_unique<ProcessingData>()))
+            {
+                logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Failed to initialize available ProcessingData pool.");
+            }
         }
     }
     for (uint32_t i = 0; i < responses_channel_count_; ++i)
@@ -74,13 +82,17 @@ DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> modul
         {
             is_queue_prioritized_[idx] = true;
         }
-        if (module_info_->request_consumers_[i].message_queue_capacity_ >= 1)
+
+        size_t required_capacity = module_info_->request_consumers_[i].message_queue_capacity_;
+        if (required_capacity < 1) required_capacity = 1; // minimum capacity
+        available_queues_.emplace_back(required_capacity);
+        to_be_processed_queues_.emplace_back(required_capacity);
+        for (size_t j = 0; j < required_capacity; ++j)
         {
-            queue_capacities_[idx] = module_info_->request_consumers_[i].message_queue_capacity_;
-        }
-        else
-        {
-            queue_capacities_[idx] = 1; // minimum capacity
+            if (available_queues_.back().tryPush(std::make_unique<ProcessingData>()))
+            {
+                logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Failed to initialize available ProcessingData pool.");
+            }
         }
     }
 }
@@ -165,8 +177,19 @@ bool DllModuleWrapper::threadStop(uint32_t timeout_ms) noexcept
 
     // clear queues to remove SharedDataBlob references before allocators are destroyed in destructors
     module_stopping_ = true;
-    std::for_each(prioritized_queues_.begin(), prioritized_queues_.end(), [](auto& q) { std::queue<ProcessingData> empty; std::swap(q, empty); });
-    std::for_each(regular_queues_.begin(), regular_queues_.end(), [](auto& q) { std::queue<ProcessingData> empty; std::swap(q, empty); });
+    std::for_each(to_be_processed_queues_.begin(), to_be_processed_queues_.end(), [this](auto& q) {
+        while (true) {
+            auto data_exp = q.tryPop();
+            if (!data_exp.has_value()) break;
+            auto data_ptr = std::move(data_exp.value());
+
+            if (data_ptr->processing_type_ == aergo::module::IModule::ProcessingType::REQUEST) {
+                // send failed response for pending requests
+                sendFailedResponse(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_.id_);
+            }
+            data_ptr->blobs_.clear(); // release SharedDataBlob references
+        }
+     });
 
     if (prioritized_worker_threads_.size() == 0 && regular_worker_threads_.size() == 0)
     {
@@ -268,9 +291,15 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
             return;
     }
 
+    if (idx >= available_queues_.size())
+    {
+        logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Invalid channel index in pushProcessingData.");
+        return; // invalid channel index
+    }
+
     bool is_prioritized = is_queue_prioritized_[idx];
-    uint16_t capacity = queue_capacities_[idx];
-    std::queue<ProcessingData>& target_queue = is_prioritized ? prioritized_queues_[idx] : regular_queues_[idx];
+    RingBuffer<std::unique_ptr<ProcessingData>>& available_queue = available_queues_[idx];
+    RingBuffer<std::unique_ptr<ProcessingData>>& target_queue = to_be_processed_queues_[idx];
 
     std::unique_lock<std::mutex> lock(mutex_);
 
@@ -284,13 +313,24 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
         return;
     }
     
-    bool queue_full = (target_queue.size() >= capacity);
-    aergo::module::IModule::QueueStatus queue_status = queue_full ? aergo::module::IModule::QueueStatus::QUEUE_FULL : aergo::module::IModule::QueueStatus::NORMAL;
+    size_t queue_size = available_queue.capacity() - available_queue.size();
+    bool slot_available = !available_queue.empty();
+    bool steal_available = !target_queue.empty(); // can only steal if there is at least one item in the processing queue
+
+    aergo::module::IModule::QueueStatus queue_status = aergo::module::IModule::QueueStatus::NORMAL;
+    if (!slot_available)
+    {
+        queue_status = steal_available ? aergo::module::IModule::QueueStatus::QUEUE_FULL_CAN_DROP : aergo::module::IModule::QueueStatus::QUEUE_FULL;
+    }
     aergo::module::IModule::IngressDecision decision = module_->onIngress(type, local_channel_id, source_channel, message, queue_status);
 
-    metrics_->record(idx, target_queue.size(), decision, queue_full); 
+    metrics_->record(idx, queue_size, decision, !slot_available); 
 
-    if (decision == aergo::module::IModule::IngressDecision::DROP || (decision == aergo::module::IModule::IngressDecision::ACCEPT && queue_full))
+    // also always drop if queue capacity is 0 (should not happen, but just in case)
+    if (decision == aergo::module::IModule::IngressDecision::DROP || 
+        queue_status == aergo::module::IModule::QueueStatus::QUEUE_FULL || 
+        (queue_status == aergo::module::IModule::QueueStatus::QUEUE_FULL_CAN_DROP && decision == aergo::module::IModule::IngressDecision::ACCEPT) ||
+        available_queue.capacity() == 0)
     {
         if (type == aergo::module::IModule::ProcessingType::REQUEST)
         {
@@ -300,48 +340,91 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
     }
     else if (decision == aergo::module::IModule::IngressDecision::ACCEPT_DROP_QUEUE_FIRST)
     {
-        if (queue_full)
+        if (steal_available) // we know capacity >= 1 here, so there is at least one item to drop
         {
-            ProcessingData data = std::move(target_queue.front());
-            if (data.processing_type_ == aergo::module::IModule::ProcessingType::REQUEST)
+            std::unique_ptr<ProcessingData> data_ptr = std::move(*target_queue.tryPop());
+            data_ptr->blobs_.clear(); // release SharedDataBlob references
+            if (data_ptr->processing_type_ == aergo::module::IModule::ProcessingType::REQUEST)
             {
-                sendFailedResponse(data.local_channel_id_, data.source_channel_, data.message_.id_);
+                sendFailedResponse(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_.id_);
             }
 
-            target_queue.pop(); // drop oldest message
+            auto res = available_queue.tryPush(std::move(data_ptr)); // return to available pool (should always succeed)
+            if (res.has_value()) // should not happen
+            {
+                logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - failed to return ProcessingData to available pool.");
+            }
+        }
+        else 
+        {
+            logger_->log(logging::LogType::WARNING, "DllModuleWrapper: ACCEPT_DROP_QUEUE_FIRST decision made but no messages to drop.");
         }
     }
     else if (decision == aergo::module::IModule::IngressDecision::ACCEPT_REPLACE_QUEUE)
     {
-        while (!target_queue.empty())
+        while (true)
         {
-            ProcessingData data = std::move(target_queue.front());
-            if (data.processing_type_ == aergo::module::IModule::ProcessingType::REQUEST)
+            std::optional<std::unique_ptr<ProcessingData>> data_opt = target_queue.tryPop();
+            if (!data_opt.has_value()) break; // queue is empty
+
+            std::unique_ptr<ProcessingData> data_ptr = std::move(data_opt.value());
+            data_ptr->blobs_.clear(); // release SharedDataBlob references
+            if (data_ptr->processing_type_ == aergo::module::IModule::ProcessingType::REQUEST)
             {
-                sendFailedResponse(data.local_channel_id_, data.source_channel_, data.message_.id_);
+                sendFailedResponse(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_.id_);
             }
 
-            target_queue.pop(); // clear the queue
+            auto res = available_queue.tryPush(std::move(data_ptr)); // return to available pool (should always succeed)
+            if (res.has_value()) // should not happen
+            {
+                logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - failed to return ProcessingData to available pool.");
+            }
         }
     }
 
-    // Copy data and blobs to ensure they remain valid
-    std::vector<uint8_t> data(message.data_, message.data_ + message.data_len_);
-    message.data_ = data.data();
+    // Now there is guaranteed space in the queue
+    std::optional<std::unique_ptr<ProcessingData>> data_opt = available_queue.tryPop();
+    if (!data_opt.has_value())
+    {
+        logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - no available ProcessingData to push.");
+        // should not happen
+        if (type == aergo::module::IModule::ProcessingType::REQUEST)
+        {
+            sendFailedResponse(local_channel_id, source_channel, message.id_);
+        }
+        return;
+    }
+    std::unique_ptr<ProcessingData> data_ptr = std::move(data_opt.value());
 
-    std::vector<message::SharedDataBlob> blobs(message.blobs_, message.blobs_ + message.blob_count_);
-    message.blobs_ = blobs.data();
+    if (data_ptr->blobs_.size() > 0)
+    {
+        logger_->log(logging::LogType::WARNING, "DllModuleWrapper: Reusing ProcessingData with non-empty blobs_. Clearing previous blobs.");
+        data_ptr->blobs_.clear(); // release previous SharedDataBlob references
+    }
 
-    ProcessingData processing_data {
-        .processing_type_ = type,
-        .local_channel_id_ = local_channel_id,
-        .source_channel_ = source_channel,
-        .message_ = message,
-        .data_ = std::move(data),
-        .blobs_ = std::move(blobs)
-    };
+    data_ptr->processing_type_ = type;
+    data_ptr->local_channel_id_ = local_channel_id;
+    data_ptr->source_channel_ = source_channel;
+    data_ptr->message_ = message;
 
-    target_queue.push(std::move(processing_data));
+    data_ptr->data_.reserve(message.data_len_);     // ensure enough capacity before memcpy
+    std::memcpy(data_ptr->data_.data(), message.data_, message.data_len_); // raw copy message data
+    data_ptr->message_.data_ = data_ptr->data_.data();
+    
+    // Use insert to call copy constructor of SharedDataBlob
+    data_ptr->blobs_.insert(data_ptr->blobs_.end(), message.blobs_, message.blobs_ + message.blob_count_);
+    data_ptr->message_.blobs_ = data_ptr->blobs_.data();
+
+    auto res = target_queue.tryPush(std::move(data_ptr));; // push to processing queue
+    if (res.has_value()) // should not happen
+    {
+        logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - failed to push ProcessingData to processing queue.");
+        if (type == aergo::module::IModule::ProcessingType::REQUEST)
+        {
+            sendFailedResponse(local_channel_id, source_channel, message.id_);
+        }
+        return;
+    }
 
     lock.unlock();
 
@@ -389,42 +472,58 @@ void DllModuleWrapper::regularWorkerThreadFunc()
             break;
         }
 
-        ProcessingData processing_data; 
-        if (!popRegularProcessingData(processing_data))
+        auto index_opt = getNonEmptyRegularQueue();
+        if (!index_opt.has_value()) continue;
+        
+        auto data_opt = to_be_processed_queues_[index_opt.value()].tryPop();
+        if (!data_opt.has_value())
         {
+            logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - failed to pop from non-empty regular queue.");
             continue;
         }
+        auto data_ptr = std::move(data_opt.value());
 
         lock.unlock();
 
-        aergo::module::ResponseData resp;
-        switch (processing_data.processing_type_)
+        switch (data_ptr->processing_type_)
         {
             case aergo::module::IModule::ProcessingType::MESSAGE:
-                module_->processMessage(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                module_->processMessage(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 break;
             case aergo::module::IModule::ProcessingType::REQUEST:
-                resp = module_->processRequest(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+            {
+                auto resp = module_->processRequest(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 core_->sendResponse({
                         .producer_module_id_ = module_id_, 
-                        .producer_channel_id_ = processing_data.local_channel_id_
+                        .producer_channel_id_ = data_ptr->local_channel_id_
                     },
-                    processing_data.source_channel_, {
+                    data_ptr->source_channel_, {
                         .data_ = resp.data_.data(),
                         .data_len_ = static_cast<uint64_t>(resp.data_.size()),
                         .blobs_ = resp.blobs_.data(),
                         .blob_count_ = static_cast<uint64_t>(resp.blobs_.size()),
-                        .id_ = processing_data.message_.id_,
+                        .id_ = data_ptr->message_.id_,
                         .timestamp_ns_ = nowNs(),
                         .success_ = resp.success_
                     }
                 );
                 break;
+            }
+                
             case aergo::module::IModule::ProcessingType::RESPONSE:
-                module_->processResponse(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                module_->processResponse(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 break;
         }
+
+        data_ptr->blobs_.clear(); // release SharedDataBlob references
+
         lock.lock();
+
+        auto res = available_queues_[index_opt.value()].tryPush(std::move(data_ptr)); // return to available pool (should always succeed)
+        if (res.has_value()) // should not happen
+        {
+            logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - failed to return ProcessingData to available pool in regular worker.");
+        }
     }
     --regular_worker_running_count_;
 }
@@ -442,43 +541,57 @@ void DllModuleWrapper::prioritizedWorkerThreadFunc()
         {
             break;
         }
-
-        ProcessingData processing_data;
-        if (!popPrioritizedProcessingData(processing_data))
+        
+        auto index_opt = getNonEmptyPrioritizedQueue();
+        if (!index_opt.has_value()) continue;
+        
+        auto data_opt = to_be_processed_queues_[index_opt.value()].tryPop();
+        if (!data_opt.has_value())
         {
+            logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - failed to pop from non-empty prioritized queue.");
             continue;
         }
+        auto data_ptr = std::move(data_opt.value());
 
         lock.unlock();
 
         aergo::module::ResponseData resp;
-        switch (processing_data.processing_type_)
+        switch (data_ptr->processing_type_)
         {
             case aergo::module::IModule::ProcessingType::MESSAGE:
-                module_->processMessage(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                module_->processMessage(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 break;
             case aergo::module::IModule::ProcessingType::REQUEST:
-                resp = module_->processRequest(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                resp = module_->processRequest(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 core_->sendResponse({
                         .producer_module_id_ = module_id_, 
-                        .producer_channel_id_ = processing_data.local_channel_id_
+                        .producer_channel_id_ = data_ptr->local_channel_id_
                     },
-                    processing_data.source_channel_, {
+                    data_ptr->source_channel_, {
                         .data_ = resp.data_.data(),
                         .data_len_ = static_cast<uint64_t>(resp.data_.size()),
                         .blobs_ = resp.blobs_.data(),
                         .blob_count_ = static_cast<uint64_t>(resp.blobs_.size()),
-                        .id_ = processing_data.message_.id_,
+                        .id_ = data_ptr->message_.id_,
                         .timestamp_ns_ = nowNs(),
                         .success_ = resp.success_
                     }
                 );
                 break;
             case aergo::module::IModule::ProcessingType::RESPONSE:
-                module_->processResponse(processing_data.local_channel_id_, processing_data.source_channel_, processing_data.message_);
+                module_->processResponse(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 break;
         }
+
+        data_ptr->blobs_.clear(); // release SharedDataBlob references
+
         lock.lock();
+
+        auto res = available_queues_[index_opt.value()].tryPush(std::move(data_ptr)); // return to available pool (should always succeed)
+        if (res.has_value()) // should not happen
+        {
+            logger_->log(logging::LogType::ERROR, "DllModuleWrapper: Unexpected error - failed to return ProcessingData to available pool in prioritized worker.");
+        }
     }
     --prioritized_worker_running_count_;
 }
@@ -487,9 +600,9 @@ void DllModuleWrapper::prioritizedWorkerThreadFunc()
 
 bool DllModuleWrapper::regularQueuesEmpty()
 {
-    for (const auto& queue : regular_queues_)
+    for (size_t idx = 0; idx < to_be_processed_queues_.size(); ++idx)
     {
-        if (!queue.empty())
+        if (!is_queue_prioritized_[idx] && !to_be_processed_queues_[idx].empty())
         {
             return false;
         }
@@ -502,9 +615,9 @@ bool DllModuleWrapper::regularQueuesEmpty()
 
 bool DllModuleWrapper::prioritizedQueuesEmpty()
 {
-    for (const auto& queue : prioritized_queues_)
+    for (size_t idx = 0; idx < to_be_processed_queues_.size(); ++idx)
     {
-        if (!queue.empty())
+        if (is_queue_prioritized_[idx] && !to_be_processed_queues_[idx].empty())
         {
             return false;
         }
@@ -515,40 +628,34 @@ bool DllModuleWrapper::prioritizedQueuesEmpty()
 
 
 
-bool DllModuleWrapper::popRegularProcessingData(ProcessingData& data)
+std::optional<size_t> DllModuleWrapper::getNonEmptyRegularQueue()
 {
-    for (uint32_t i = 0; i < regular_queues_.size(); ++i)
+    for (size_t i = 0; i < to_be_processed_queues_.size(); ++i)
     {
-        uint32_t idx = (next_regular_queue_idx_ + i) % regular_queues_.size();
-        if (!regular_queues_[idx].empty())
+        size_t idx = (next_regular_queue_idx_ + i) % to_be_processed_queues_.size(); // modulo is safe, if size is 0, the outer loop will not run
+        if (!is_queue_prioritized_[idx] && !to_be_processed_queues_[idx].empty())
         {
-            data = std::move(regular_queues_[idx].front());
-            regular_queues_[idx].pop();
-            next_regular_queue_idx_ = (idx + 1) % regular_queues_.size();
-            return true;
+            return idx;
         }
     }
 
-    return false;
-}
+    return std::nullopt;
+} 
 
 
 
-bool DllModuleWrapper::popPrioritizedProcessingData(ProcessingData& data)
+std::optional<size_t> DllModuleWrapper::getNonEmptyPrioritizedQueue()
 {
-    for (uint32_t i = 0; i < prioritized_queues_.size(); ++i)
+    for (size_t i = 0; i < to_be_processed_queues_.size(); ++i)
     {
-        uint32_t idx = (next_prioritized_queue_idx_ + i) % prioritized_queues_.size();
-        if (!prioritized_queues_[idx].empty())
+        size_t idx = (next_prioritized_queue_idx_ + i) % to_be_processed_queues_.size(); // modulo is safe, if size is 0, the outer loop will not run
+        if (is_queue_prioritized_[idx] && !to_be_processed_queues_[idx].empty())
         {
-            data = std::move(prioritized_queues_[idx].front());
-            prioritized_queues_[idx].pop();
-            next_prioritized_queue_idx_ = (idx + 1) % prioritized_queues_.size();
-            return true;
+            return idx;
         }
     }
 
-    return false;
+    return std::nullopt;
 }
 
 
