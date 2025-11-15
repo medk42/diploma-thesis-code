@@ -112,18 +112,6 @@
             "preLaunchTask": "Project: Build and Install"
         },
         {
-            "name": "core (linux, gdb)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/binaries/core",
-            "args": ["modules", "data"],
-            "cwd": "${workspaceFolder}/binaries",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "setupCommands": [ { "text": "-enable-pretty-printing" } ],
-            "preLaunchTask": "Project: Build and Install"
-        },
-        {
             "name": "core_test_1",
             "type": "cppvsdbg",
             "request": "launch",
@@ -133,6 +121,36 @@
             "cwd": "${workspaceFolder}/build-core-windows/backend/core/lib/core/tests/",
             "environment": [],
             "console": "integratedTerminal",
+            "preLaunchTask": "Project: Build and Install"
+        },
+        {
+            "name": "aruco_test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/demos/binaries/aruco_tests/aruco_test",
+            "args": [],
+            "cwd": "${workspaceFolder}/demos/binaries/aruco_tests",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [ { "text": "-enable-pretty-printing" } ],
+            "preLaunchTask": "Project: Build and Install",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/build-demos-linux/vcpkg_installed/x64-linux-dynamic/debug/lib:${env:LD_LIBRARY_PATH}"
+                }
+            ],
+        },
+        {
+            "name": "core (linux, gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/binaries/core",
+            "args": ["modules", "data"],
+            "cwd": "${workspaceFolder}/binaries",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [ { "text": "-enable-pretty-printing" } ],
             "preLaunchTask": "Project: Build and Install"
         }
     ]
