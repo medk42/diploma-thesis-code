@@ -7,11 +7,14 @@
 #include <thread>
 #include <atomic>
 #include <condition_variable>
+#include <cstddef>
+#include <memory>
 
 #include "module_interface_.h"
 #include "dll_interface_threads.h"
 #include "base_module.h"
 #include "dll_module_metrics.h"
+#include "ring_buffer.h"
 
 namespace aergo::module::dll
 {
@@ -58,7 +61,7 @@ namespace aergo::module::dll
         bool load(uint8_t* data, uint64_t data_size) noexcept override;
 
     private:
-        struct ProcessingData
+        struct alignas(std::hardware_destructive_interference_size) ProcessingData
         {
             aergo::module::IModule::ProcessingType processing_type_;
             uint32_t local_channel_id_;
@@ -77,8 +80,8 @@ namespace aergo::module::dll
         bool regularQueuesEmpty(); // true if all regular queues are empty
         bool prioritizedQueuesEmpty(); // true if all prioritized queues are empty
 
-        bool popRegularProcessingData(ProcessingData& data); // pops data from any non-empty regular queue, returns false if all queues are empty
-        bool popPrioritizedProcessingData(ProcessingData& data); // pops data from any non-empty prioritized queue, returns false if all queues are empty
+        std::optional<size_t> getNonEmptyRegularQueue();     // returns index of a non-empty regular queue, or nullopt if all regular queues are empty
+        std::optional<size_t> getNonEmptyPrioritizedQueue(); // returns index of a non-empty prioritized queue, or nullopt if all prioritized queues are empty
 
         void sendFailedResponse(uint32_t local_channel_id, ChannelIdentifier source_channel, uint64_t message_id);
 
@@ -92,11 +95,9 @@ namespace aergo::module::dll
 
         std::mutex mutex_;
 
-        std::vector<std::queue<ProcessingData>> prioritized_queues_; // one queue per prioritized message/request/response channel
-        std::vector<std::queue<ProcessingData>> regular_queues_;     // one queue per regular message/request/response channel
-
+        std::vector<RingBuffer<std::unique_ptr<ProcessingData>>> available_queues_;
+        std::vector<RingBuffer<std::unique_ptr<ProcessingData>>> to_be_processed_queues_;
         std::vector<bool> is_queue_prioritized_;                     // true if channel is prioritized, false otherwise
-        std::vector<uint16_t> queue_capacities_;                      // maximum number of waiting messages/requests/responses in the queue (beyond that, new messages/requests/responses are dropped)
 
         uint32_t next_prioritized_queue_idx_ = 0;                    // index of next prioritized queue to check for data (round-robin)
         uint32_t next_regular_queue_idx_ = 0;                        // index of next regular queue to check for data (round-robin)
