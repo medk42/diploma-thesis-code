@@ -3,8 +3,17 @@
 #include "structs.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 #include <span>
+#include <string>
+#include <variant>
+
+// Forward declaration of BufferReader so we don't pull in the helper here.
+namespace aergo::module::helpers::serialization_helper::deserialization
+{
+    class BufferReader;
+}
 
 /// @brief Implemenation of robot control feature.
 /// Start requests include move commands (move joint, move linear, move arc, move trajectory) and get robot specs request.
@@ -20,55 +29,89 @@
 ///    Finished messages shall be sent after a long-running move command has completed (successfully or with failure).
 namespace aergo::module::helpers::robot_interface::robot_control
 {
+    /// @brief Major protocol version of robot control messages.
+    inline constexpr std::uint8_t ROBOT_CONTROL_MAJOR_VERSION = 1;
+
     namespace start
     {
         namespace requests
         {
+            /// @brief Type tag for start request payloads.
+            enum class RequestType : std::uint8_t
+            {
+                MoveJoint      = 0,
+                MoveLinear     = 1,
+                MoveArc        = 2,
+                MoveTrajectory = 3,
+                GetRobotSpecs  = 4,
+            };
+
+            uint64_t MAX_SUPPORTED_JOINTS = 16; // maximum joints supported in move joint request, throws if exceeded
+            uint64_t MAX_SUPPORTED_POSES = 32768; // maximum poses supported in move trajectory request, throws if exceeded
+            uint64_t MAX_ERROR_MESSAGE_LENGTH = 4096; // maximum error message length, clipped if exceeded
+
             namespace serialization
             {
-                /// @brief Build a request to move the robot's joints to the specified target positions.
+                /// @brief Build a request to move the robot's joints to the specified target positions. Maximum supported joint count is 16.
+                /// Layout (payload):
+                ///    [u8 version][u8 type=MoveJoint]
+                ///    [u8 joint_count][joint_count * f64 joint_targets]
+                ///    [f64 speed][f64 acceleration]
                 /// @param joint_targets The target joint positions to move to.
                 /// @param speed The speed to move at, in rad/s.
                 /// @param acceleration The acceleration to use, in rad/s^2.
-                /// @param blocking Whether to block until the movement is complete.
                 /// @return A serialized request message.
-                std::vector<std::byte>& moveJoint(std::vector<std::byte>& buffer, std::span<const double> joint_targets, double speed, double acceleration, bool blocking);
+                std::vector<std::byte>& moveJoint(std::vector<std::byte>& buffer, std::span<const double> joint_targets, double speed, double acceleration);
 
                 /// @brief Build a request to move the robot from its current pose to a target pose in a linear fashion.
                 /// Poses are specified in world coordinates and represent the end-effector pose.
+                /// Layout (payload):
+                ///    [u8 version][u8 type=MoveLinear]
+                ///    [Pose:7xf64 pose_target][f64 speed][f64 acceleration]
                 /// @param pose_target The target pose to move to.
                 /// @param speed The speed to move at, in m/s.
                 /// @param acceleration The acceleration to use, in m/s^2.
-                /// @param blocking Whether to block until the movement is complete.
                 /// @return A serialized request message.
-                std::vector<std::byte>& moveLinear(std::vector<std::byte>& buffer, Pose pose_target, double speed, double acceleration, bool blocking);
+                std::vector<std::byte>& moveLinear(std::vector<std::byte>& buffer, Pose pose_target, double speed, double acceleration);
 
                 /// @brief Build a request to move the robot along an arc starting at the current pose, passing through a control point, and ending at a target pose.
                 /// Poses are specified in world coordinates and represent the end-effector pose.
+                /// Layout (payload):
+                ///    [u8 version][u8 type=MoveArc]
+                ///    [Pose:7xf64 pose_through][Pose:7xf64 pose_target]
+                ///    [f64 speed][f64 acceleration]
+                ///    [OrientationType:u8 orientation_type]
+                ///    [bool as_circle][f64 circle_percentage]
                 /// @param pose_through The control point for the arc.
                 /// @param pose_target The target pose to move to.
                 /// @param speed The speed to move at, in m/s.
                 /// @param acceleration The acceleration to use, in m/s^2.
-                /// @param blocking Whether to block until the movement is complete.
                 /// @param orientation_type The type of orientation to use.
                 /// @param as_circle If true, the movement will be treated as percentage of a full circle instead of an arc segment ending at the target.
                 /// @param circle_percentage The percentage of the full circle to move along if as_circle is true, non-negative value, where 1.0 represents a full circle (can be greater than 1.0 for multiple revolutions).
                 /// @return A serialized request message.
-                std::vector<std::byte>& moveArc(std::vector<std::byte>& buffer, Pose pose_through, Pose pose_target, double speed, double acceleration, bool blocking, OrientationType orientation_type, bool as_circle, double circle_percentage);
+                std::vector<std::byte>& moveArc(std::vector<std::byte>& buffer, Pose pose_through, Pose pose_target, double speed, double acceleration, OrientationType orientation_type, bool as_circle, double circle_percentage);
 
                 /// @brief Build a request to move the robot along a trajectory defined by a series of poses. Robot's current pose is the start of the trajectory.
                 ///        Robot will move through each pose in the list sequentially, stopping at the last pose. In between poses, the robot
                 ///        will fit a smooth curve to avoid decelerating to a stop at each intermediate pose.
                 ///        Poses are specified in world coordinates and represent the end-effector pose.
+                ///        Maximum supported pose count is 32768.
+                /// Layout (payload):
+                ///    [u8 version][u8 type=MoveTrajectory]
+                ///    [u64 pose_count][pose_count * Pose:7xf64 pose_targets]
+                ///    [f64 speed][f64 acceleration]
+                ///    [OrientationType:u8 orientation_type]
                 /// @param pose_targets The target poses to move through, robot will stop at the last pose in the list.
                 /// @param speed The speed to move at, in m/s.
                 /// @param acceleration The acceleration to use, in m/s^2.
-                /// @param blocking Whether to block until the movement is complete.
                 /// @param orientation_type The type of orientation to use.
                 /// @return A serialized request message.
-                std::vector<std::byte>& moveTrajectory(std::vector<std::byte>& buffer, std::span<const Pose> pose_targets, double speed, double acceleration, bool blocking, OrientationType orientation_type);
+                std::vector<std::byte>& moveTrajectory(std::vector<std::byte>& buffer, std::span<const Pose> pose_targets, double speed, double acceleration, OrientationType orientation_type);
 
                 /// @brief Build a request to get the robot's specifications.
+                /// Layout (payload):
+                ///    [u8 version][u8 type=GetRobotSpecs]
                 /// @return A serialized request message.
                 std::vector<std::byte>& getRobotSpecs(std::vector<std::byte>& buffer);
             }
@@ -76,15 +119,76 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
             namespace deserialization
             {
-                    
+                using BufferReader = aergo::module::helpers::serialization_helper::deserialization::BufferReader;
+
+                struct MoveJointRequest
+                {
+                    std::vector<double> joint_targets;
+                    double speed{};
+                    double acceleration{};
+                };
+
+                struct MoveLinearRequest
+                {
+                    Pose   pose_target{};
+                    double speed{};
+                    double acceleration{};
+                };
+
+                struct MoveArcRequest
+                {
+                    Pose            pose_through{};
+                    Pose            pose_target{};
+                    double          speed{};
+                    double          acceleration{};
+                    OrientationType orientation_type{};
+                    bool            as_circle{};
+                    double          circle_percentage{};
+                };
+
+                struct MoveTrajectoryRequest
+                {
+                    std::vector<Pose> pose_targets;
+                    double            speed{};
+                    double            acceleration{};
+                    OrientationType   orientation_type{};
+                };
+
+                struct GetRobotSpecsRequest
+                {
+                    // no payload
+                };
+
+                using RequestVariant = std::variant<
+                    MoveJointRequest,
+                    MoveLinearRequest,
+                    MoveArcRequest,
+                    MoveTrajectoryRequest,
+                    GetRobotSpecsRequest
+                >;
+
+                /// @brief Deserialize a start request from the buffer.
+                /// Expects the layout documented in the serialization section.
+                /// @return true on success, false on version mismatch, unknown type or parse error.
+                bool deserialize(BufferReader& reader, RequestVariant& out_request);
             }
         }
 
-        namespace start_responses
+        namespace responses
         {
+            enum class ResponseType : std::uint8_t
+            {
+                RobotSpecs = 0
+            };
+
             namespace serialization
             {
                 /// @brief Build a response containing the robot's specifications. Response data for GET_ROBOT_SPECS requests.
+                /// Layout (payload):
+                ///    [u8 version][u8 type=RobotSpecs]
+                ///    [f64 max_velocity_linear][f64 max_velocity_angular]
+                ///    [f64 max_acceleration_linear][f64 max_acceleration_angular]
+                ///    [u8 num_joints][num_joints * {[f64 joint_min][f64 joint_max]}]
                 /// @param buffer Buffer to serialize the response into.
                 /// @param specs The robot specifications to include in the response.
                 /// @return A serialized response message.
@@ -95,7 +199,12 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
             namespace deserialization
             {
+                using BufferReader = aergo::module::helpers::serialization_helper::deserialization::BufferReader;
 
+                /// @brief Deserialize robot specifications from the response buffer.
+                /// Expects the layout documented in the serialization section.
+                /// @return true on success, false on version mismatch, unknown type or parse error.
+                bool deserializeRobotSpecs(BufferReader& reader, RobotSpecs& out_robot_specs);
             }
         }
     }
@@ -104,37 +213,38 @@ namespace aergo::module::helpers::robot_interface::robot_control
     {
         namespace requests
         {
+            enum class MoveRequest : std::uint8_t
+            {
+                CancelMovement = 0,
+            };
+
             namespace serialization
             {
-                /// @brief Build a request to cancel the current robot movement.
+                /// @brief Build an update request for a current movement.
+                /// Layout (payload):
+                ///    [u8 version][u8 request_type]
                 /// @param buffer Buffer to serialize the request into.
                 /// @return A serialized request message.
-                std::vector<std::byte>& cancelMovement(std::vector<std::byte>& buffer, uint64_t action_id);
+                std::vector<std::byte>& moveRequest(std::vector<std::byte>& buffer, MoveRequest request_type);
             }
 
             namespace deserialization
             {
+                using BufferReader = aergo::module::helpers::serialization_helper::deserialization::BufferReader;
 
+                /// @brief Deserialize an update request from the buffer.
+                /// Expects the layout documented in the serialization section.
+                /// @return true on success, false on version mismatch, unknown type or parse error.
+                bool deserializeMoveRequest(BufferReader& reader, MoveRequest& out_move_request);
             }
         }
-
-        namespace update_responses
+        
+        // Success / Failure response corresponds to cancel started and does not support cancelling.
+        // With failure we can get optional error message in common namespace.
+        namespace responses
         {
-            enum class CancelMovementResult : uint8_t { STARTED = 0, NOT_SUPPORTED = 1 };
-
-            namespace serialization
-            {
-                /// @brief Build a response for cancel movement request. Indicates whether cancel was started successfully or not supported.
-                /// @param buffer Buffer to serialize the response into.
-                /// @param result The result of the cancel movement request.
-                /// @return A serialized response message.
-                std::vector<std::byte>& cancelMovementResponse(std::vector<std::byte>& buffer, CancelMovementResult result);
-            }
-
-            namespace deserialization
-            {
-
-            }
+            namespace serialization {}
+            namespace deserialization {}
         }
     }
     
@@ -151,6 +261,15 @@ namespace aergo::module::helpers::robot_interface::robot_control
         {
             /// @brief Build a status message indicating the robot's current status, pose, and joint positions.
             /// This message shall be sent periodically so that the current state of the robot can be monitored.
+            /// Layout (payload):
+            ///    [u8 version]
+            ///    [u64 timestamp_us]
+            ///    [Pose:7xf64 current_pose]
+            ///    [u8 joint_count][joint_count * f64 joint_positions]
+            ///    [RobotStatus:u8 status]
+            ///    [bool has_error_msg]
+            ///    if has_error_msg:
+            ///       [u64 msg_len][msg_len * char8 / utf-8]
             /// @param buffer Buffer to serialize the message into.
             /// @param timestamp_us Timestamp of the status message in microseconds.
             /// @param current_pose The robot's current pose in world coordinates (pose of the end-effector).
@@ -163,7 +282,21 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
         namespace deserialization
         {
+            using BufferReader = aergo::module::helpers::serialization_helper::deserialization::BufferReader;
 
+            struct StatusMessage
+            {
+                uint64_t          timestamp_us{};
+                Pose              current_pose{};
+                std::vector<double> joint_positions;
+                RobotStatus      status{};
+                std::string      error_msg;
+            };
+
+            /// @brief Deserialize a status message from the buffer.
+            /// Expects the layout documented in the serialization section.
+            /// @return true on success, false on version mismatch or parse error.
+            bool deserializeStatusMessage(BufferReader& reader, StatusMessage& out_status_message);
         }
     }
 
@@ -172,6 +305,8 @@ namespace aergo::module::helpers::robot_interface::robot_control
         namespace serialization
         {
             /// @brief Serialize an error message for failed actions.
+            /// Layout (payload):
+            ///    [u8 version][u64 msg_len][msg_len * char8 / utf-8]
             /// @param buffer Buffer to serialize the message into.
             /// @param error_msg The error message to include in the message.
             /// @return A serialized message.
@@ -180,7 +315,12 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
         namespace deserialization
         {
+            using BufferReader = aergo::module::helpers::serialization_helper::deserialization::BufferReader;
 
+            /// @brief Deserialize a finished error message.
+            /// Expects the layout documented in the serialization section.
+            /// @return true on success, false on version mismatch or parse error.
+            bool deserializeErrorMessage(BufferReader& reader, std::string& out_message);
         }
     }
 }

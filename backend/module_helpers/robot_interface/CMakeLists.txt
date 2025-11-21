@@ -10,7 +10,7 @@ add_library(${LIB_NAME} STATIC ${PROJECT_SOURCES})
 
 target_include_directories(${LIB_NAME} PUBLIC include)
 
-target_link_libraries(${LIB_NAME} PRIVATE module_common)
+target_link_libraries(${LIB_NAME} PRIVATE module_common helpers___serialization_helper)
 
 
 # MSVC: force dynamic CRT

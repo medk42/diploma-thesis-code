@@ -47,13 +47,13 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
     struct RobotSpecs
     {
-        double max_velocity_linear;
-        double max_velocity_angular;
-        double max_acceleration_linear;
-        double max_acceleration_angular;
-        
+        double max_velocity_linear;           // in m/s
+        double max_velocity_angular;          // in rad/s
+        double max_acceleration_linear;       // in m/s²
+        double max_acceleration_angular;      // in rad/s²
+
         uint8_t num_joints;
-        std::vector<JointRange> joint_limits;
+        std::vector<JointRange> joint_limits; // joint limits for each joint in radians
     };
 
 }
