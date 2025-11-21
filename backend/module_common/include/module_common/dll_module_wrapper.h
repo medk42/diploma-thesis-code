@@ -18,6 +18,8 @@
 
 namespace aergo::module::dll
 {
+    inline constexpr std::size_t processing_data_alignment = 64;
+
     class DllModuleWrapper : public IDllModule
     {
     public:
@@ -61,7 +63,7 @@ namespace aergo::module::dll
         bool load(uint8_t* data, uint64_t data_size) noexcept override;
 
     private:
-        struct alignas(std::hardware_destructive_interference_size) ProcessingData
+        struct alignas(processing_data_alignment) ProcessingData
         {
             aergo::module::IModule::ProcessingType processing_type_;
             uint32_t local_channel_id_;

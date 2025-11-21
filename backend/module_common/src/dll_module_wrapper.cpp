@@ -9,6 +9,11 @@ using namespace aergo::module::dll;
 
 
 
+static_assert(processing_data_alignment >= std::hardware_destructive_interference_size,
+                  "processing_data_alignment must be >= hardware_destructive_interference_size");
+
+
+
 DllModuleWrapper::DllModuleWrapper(std::unique_ptr<aergo::module::IModule> module, aergo::module::ICore* core, uint64_t module_id, const aergo::module::logging::ILogger* logger)
 : module_(std::move(module)), core_(core), module_id_(module_id), logger_(logger)
 {
