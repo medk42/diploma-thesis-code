@@ -51,6 +51,25 @@ namespace
 }
 
 
+void RobotModuleKassow::LoggerAdapter::log(aergo::robot::kassow::rpc::RpcLogType type, const char* message) const noexcept
+{
+    if (!logger_ || !message)
+    {
+        return;
+    }
+
+    using LT = aergo::module::logging::LogType;
+    LT mapped = LT::INFO;
+    switch (type)
+    {
+        case aergo::robot::kassow::rpc::RpcLogType::INFO: mapped = LT::INFO; break;
+        case aergo::robot::kassow::rpc::RpcLogType::WARNING: mapped = LT::WARNING; break;
+        case aergo::robot::kassow::rpc::RpcLogType::ERROR: mapped = LT::ERROR; break;
+    }
+    logger_->log(mapped, message);
+}
+
+
 RobotModuleKassow::RobotModuleKassow(const char* data_path,
                                      ICore* core,
                                      InputChannelMapInfo channel_map_info,
@@ -62,7 +81,8 @@ RobotModuleKassow::RobotModuleKassow(const char* data_path,
       response_channel_id_(0),
       status_publish_id_(0),
       finished_publish_id_(0),
-      rpc_client_(std::make_unique<aergo::robot::kassow::rpc::RpcClient>(logger)),
+      rpc_logger_(logger),
+      rpc_client_(std::make_unique<aergo::robot::kassow::rpc::RpcClient>(&rpc_logger_)),
       allocator_(createDynamicAllocator()),
       stop_async_(false),
       kassow_host_(DEFAULT_HOST),
@@ -309,7 +329,7 @@ void RobotModuleKassow::forwardStatus(const helpers::robot_interface::StatusMess
         .data_ = reinterpret_cast<uint8_t*>(&status_copy),
         .data_len_ = sizeof(status_copy),
         .blobs_ = blob_copy.valid() ? &blob_copy : nullptr,
-        .blob_count_ = blob_copy.valid() ? 1 : 0,
+        .blob_count_ = blob_copy.valid() ? 1u : 0u,
         .id_ = 0,
         .timestamp_ns_ = nowNs(),
         .success_ = true
@@ -336,7 +356,7 @@ void RobotModuleKassow::forwardFinished(const helpers::robot_interface::Finished
         .data_ = reinterpret_cast<uint8_t*>(&finished_copy),
         .data_len_ = sizeof(finished_copy),
         .blobs_ = blob_copy.valid() ? &blob_copy : nullptr,
-        .blob_count_ = blob_copy.valid() ? 1 : 0,
+        .blob_count_ = blob_copy.valid() ? 1u : 0u,
         .id_ = 0,
         .timestamp_ns_ = nowNs(),
         .success_ = true

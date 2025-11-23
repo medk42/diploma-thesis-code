@@ -45,11 +45,22 @@ namespace aergo::default_modules::robot_module_kassow
         void forwardFinished(const aergo::module::helpers::robot_interface::FinishedMessage& finished, std::span<const std::byte> blob);
         aergo::module::message::SharedDataBlob makeBlobCopy(std::span<const std::byte> blob);
 
+        class LoggerAdapter : public aergo::robot::kassow::rpc::RpcLogger
+        {
+        public:
+            explicit LoggerAdapter(const aergo::module::logging::ILogger* logger) : logger_(logger) {}
+            void setLogger(const aergo::module::logging::ILogger* logger) { logger_ = logger; }
+            void log(aergo::robot::kassow::rpc::RpcLogType type, const char* message) const noexcept override;
+        private:
+            const aergo::module::logging::ILogger* logger_;
+        };
+
         bool valid_;
         uint32_t response_channel_id_;
         uint32_t status_publish_id_;
         uint32_t finished_publish_id_;
 
+        LoggerAdapter rpc_logger_;
         std::unique_ptr<aergo::robot::kassow::rpc::RpcClient> rpc_client_;
         aergo::module::BaseModule::AllocatorPtr allocator_;
 
