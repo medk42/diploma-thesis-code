@@ -2,7 +2,7 @@
 
 #include "module_common/module_contract.h"
 #include "module_common/dll_module_wrapper.h"
-#include "module_helpers/robot_interface/message_types.h"
+#include "module_helpers/robot_interface/message_types_definitions.h"
 
 #define MODULE_A_API_VERSION 2
 

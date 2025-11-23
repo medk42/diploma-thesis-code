@@ -1,5 +1,7 @@
 #include "robot_module_kassow/robot_module_kassow.h"
 
+#include "module_helpers/robot_interface/message_types_definitions.h"
+
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
