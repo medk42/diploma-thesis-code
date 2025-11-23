@@ -2,8 +2,9 @@
 
 #include "module_helpers/robot_interface/message_types_definitions.h"
 
+#include <nlohmann/json.hpp>
+
 #include <chrono>
-#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <span>
@@ -11,46 +12,7 @@
 
 using namespace aergo::default_modules::robot_module_kassow;
 using namespace aergo::module;
-
-namespace
-{
-    constexpr const char* DEFAULT_HOST = "127.0.0.1";
-    constexpr uint16_t DEFAULT_PORT = 15050;
-    constexpr uint32_t REQUEST_TIMEOUT_MS = 3000;
-    constexpr std::chrono::milliseconds ASYNC_POLL_WAIT{200};
-    constexpr std::chrono::milliseconds RECONNECT_WAIT{500};
-
-    uint16_t readPortFromEnv(const char* env_name, uint16_t fallback, const logging::ILogger* logger)
-    {
-        if (!env_name)
-        {
-            return fallback;
-        }
-        if (const char* value = std::getenv(env_name))
-        {
-            try
-            {
-                int parsed = std::stoi(value);
-                if (parsed > 0 && parsed <= 65535)
-                {
-                    return static_cast<uint16_t>(parsed);
-                }
-                if (logger)
-                {
-                    logger->log(logging::LogType::WARNING, "Invalid port in environment variable, using default");
-                }
-            }
-            catch (const std::exception&)
-            {
-                if (logger)
-                {
-                    logger->log(logging::LogType::WARNING, "Failed to parse port from environment variable, using default");
-                }
-            }
-        }
-        return fallback;
-    }
-}
+using json = nlohmann::json;
 
 
 void RobotModuleKassow::LoggerAdapter::log(aergo::robot::kassow::rpc::RpcLogType type, const char* message) const noexcept
@@ -87,16 +49,8 @@ RobotModuleKassow::RobotModuleKassow(const char* data_path,
       rpc_client_(std::make_unique<aergo::robot::kassow::rpc::RpcClient>(&rpc_logger_)),
       allocator_(createDynamicAllocator()),
       stop_async_(false),
-      kassow_host_(DEFAULT_HOST),
-      kassow_port_(DEFAULT_PORT)
+      activated_(false)
 {
-    const char* env_host = std::getenv("KASSOW_ROBOT_HOST");
-    if (env_host && std::strlen(env_host) > 0)
-    {
-        kassow_host_ = env_host;
-    }
-    kassow_port_ = readPortFromEnv("KASSOW_ROBOT_PORT", DEFAULT_PORT, logger);
-
     if (!getResponseChannelByName(helpers::robot_interface::robot_interface_response_producer.channel_type_identifier_, response_channel_id_))
     {
         log(logging::LogType::ERROR, "Failed to locate robot interface response channel");
@@ -131,21 +85,24 @@ RobotModuleKassow::RobotModuleKassow(const char* data_path,
     valid_ = true;
 }
 
-RobotModuleKassow::~RobotModuleKassow() noexcept
-{
-    threadStop(1000);
-}
+RobotModuleKassow::~RobotModuleKassow() noexcept = default;
 
 void* RobotModuleKassow::query_capability(const std::type_info& id) noexcept
 {
     if (id == typeid(BaseModule)) return static_cast<BaseModule*>(this);
+    if (id == typeid(helpers::activation_wrapper::IActivableModule)) return static_cast<helpers::activation_wrapper::IActivableModule*>(this);
     return nullptr;
 }
 
-IModule::IngressDecision RobotModuleKassow::onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier, const message::MessageHeader&, QueueStatus) noexcept
+IModule::IngressDecision RobotModuleKassow::onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier identifier, const message::MessageHeader&, QueueStatus queue_status) noexcept
 {
     if (kind == ProcessingType::REQUEST && local_channel_id == response_channel_id_)
     {
+        if (queue_status != QueueStatus::NORMAL)
+        {
+            log(logging::LogType::WARNING, "Kassow robot module dropping request due to request queue full: " + std::to_string(identifier.producer_module_id_) + "/" + std::to_string(identifier.producer_channel_id_));
+            return IngressDecision::DROP;
+        }
         return IngressDecision::ACCEPT;
     }
     return IngressDecision::DROP;
@@ -189,15 +146,17 @@ ResponseData RobotModuleKassow::processRequest(uint32_t response_producer_id, Ch
 
     helpers::robot_interface::Response response{};
     std::vector<std::byte> response_blob;
-    bool ok = rpc_client_->sendRequest(*request,
-                                       request_blob,
-                                       response,
-                                       response_blob,
-                                       std::chrono::milliseconds(REQUEST_TIMEOUT_MS));
+    bool ok = rpc_client_->sendRequest(
+        *request,
+        request_blob,
+        response,
+        response_blob,
+        std::chrono::milliseconds(request_timeout_ms_)
+    );
 
     ResponseData resp_data;
     resp_data.success_ = ok;
-    if (!ok)
+    if (!ok) // failure to receive response from the CBun TCP server
     {
         return resp_data;
     }
@@ -207,7 +166,7 @@ ResponseData RobotModuleKassow::processRequest(uint32_t response_producer_id, Ch
 
     if (!response_blob.empty())
     {
-        auto blob_copy = makeBlobCopy(response_blob);
+        auto blob_copy = allocator_->allocateFromData(std::span<std::byte>(response_blob));
         if (blob_copy.valid())
         {
             resp_data.blobs_.push_back(std::move(blob_copy));
@@ -228,56 +187,188 @@ void RobotModuleKassow::processResponse(uint32_t, ChannelIdentifier, message::Me
 
 bool RobotModuleKassow::threadStart(uint32_t) noexcept
 {
-    if (!valid_)
-    {
-        return false;
-    }
-    stop_async_.store(false, std::memory_order_release);
-    async_thread_ = std::thread(&RobotModuleKassow::asyncPollLoop, this);
-    return true;
+    return true; // threads are started on activation
 }
 
 bool RobotModuleKassow::threadStop(uint32_t timeout_ms) noexcept
 {
+    // ensure we are deactivated (we are ignoring timeout here)
+    std::atomic<bool> cancel{false};
+    std::atomic<bool> cancelled{false};
+    deactivate(cancel, cancelled);
+
+    return true;
+}
+
+bool RobotModuleKassow::activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled)
+{
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+
+    if (!valid_)
+    {
+        return false;
+    }
+
+    if (activated_.load(std::memory_order_acquire))
+    {
+        return true;
+    }
+
+    if (parameter_values.size() != 5)
+    {
+        log(logging::LogType::ERROR, "Activation parameters malformed (expected 5 parameters)");
+        return false;
+    }
+
+    auto readInt64 = [](const std::vector<uint8_t>& buf, int64_t& out) -> bool {
+        if (buf.size() != sizeof(int64_t))
+        {
+            return false;
+        }
+        std::memcpy(&out, buf.data(), sizeof(int64_t));
+        return true;
+    };
+
+    std::string host(reinterpret_cast<const char*>(parameter_values[0][0].data()), parameter_values[0][0].size());
+    int64_t port{};
+    int64_t req_timeout{};
+    int64_t poll_interval{};
+    int64_t reconnect_wait{};
+
+    if (!readInt64(parameter_values[1][0], port) ||
+        !readInt64(parameter_values[2][0], req_timeout) ||
+        !readInt64(parameter_values[3][0], poll_interval) ||
+        !readInt64(parameter_values[4][0], reconnect_wait))
+    {
+        log(logging::LogType::ERROR, "Activation parameters malformed (integer size mismatch)");
+        return false;
+    }
+
+    if (host.empty() || port <= 0 || port > 65535 || req_timeout <= 0 || poll_interval <= 0 || reconnect_wait <= 0)
+    {
+        log(logging::LogType::ERROR, "Activation parameters out of range");
+        return false;
+    }
+
+    kassow_host_ = host;
+    kassow_port_ = static_cast<uint16_t>(port);
+    request_timeout_ms_ = static_cast<uint32_t>(req_timeout);
+    poll_interval_ms_ = static_cast<uint32_t>(poll_interval);
+    reconnect_wait_ms_ = static_cast<uint32_t>(reconnect_wait);
+
+    if (!rpc_client_->connect(kassow_host_, kassow_port_))
+    {
+        log(logging::LogType::ERROR, "Failed to connect to Kassow CBun during activation");
+        return false;
+    }
+
+    stop_async_.store(false, std::memory_order_release);
+    activated_.store(true, std::memory_order_release);
+    async_thread_ = std::thread(&RobotModuleKassow::asyncPollLoop, this);
+
+    return true;
+}
+
+bool RobotModuleKassow::deactivate(const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled)
+{
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+
+    if (!activated_.load(std::memory_order_acquire))
+    {
+        return true;
+    }
+
+    activated_.store(false, std::memory_order_release);
     stop_async_.store(true, std::memory_order_release);
     if (async_thread_.joinable())
     {
-        if (timeout_ms == 0)
-        {
-            async_thread_.join();
-        }
-        else
-        {
-            auto start = std::chrono::steady_clock::now();
-            while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(timeout_ms))
-            {
-                if (async_thread_.joinable())
-                {
-                    async_thread_.join();
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-            if (async_thread_.joinable())
-            {
-                async_thread_.join();
-            }
-        }
+        async_thread_.join();
     }
+    rpc_client_->disconnect();
+
     return true;
 }
 
 ISerializableModule::SaveData RobotModuleKassow::save() noexcept
 {
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+
     SaveData data;
-    data.supports_saving_ = false;
-    data.success_ = true;
+    data.supports_saving_ = true;
     data.schema_version_ = 1;
+    data.success_ = true;
+
+    json header;
+    header["activated"] = activated_.load(std::memory_order_acquire);
+    header["host"] = kassow_host_;
+    header["port"] = kassow_port_;
+    header["request_timeout_ms"] = request_timeout_ms_;
+    header["poll_interval_ms"] = poll_interval_ms_;
+    header["reconnect_wait_ms"] = reconnect_wait_ms_;
+
+    data.json_header_ = header.dump();
     return data;
 }
 
-bool RobotModuleKassow::load(ISerializableModule::SaveData) noexcept
+bool RobotModuleKassow::load(ISerializableModule::SaveData data) noexcept
 {
+    // Deactivate first in case we are already activated
+    std::atomic<bool> cancel{false};
+    std::atomic<bool> cancelled{false};
+    deactivate(cancel, cancelled);
+
+    std::lock_guard<std::mutex> lock(activation_mutex_);
+    if (!data.supports_saving_ || data.schema_version_ != 1)
+    {
+        log(logging::LogType::ERROR, "Unsupported save data for Kassow robot module");
+        return false;
+    }
+
+    try
+    {
+        auto header = json::parse(data.json_header_);
+        if (!header.contains("activated") || !header.contains("host") || !header.contains("port") ||
+            !header.contains("request_timeout_ms") || !header.contains("poll_interval_ms") || !header.contains("reconnect_wait_ms"))
+        {
+            log(logging::LogType::ERROR, "Save data missing required fields");
+            return false;
+        }
+
+        kassow_host_ = header["host"].get<std::string>();
+        kassow_port_ = static_cast<uint16_t>(header["port"].get<uint64_t>());
+        request_timeout_ms_ = static_cast<uint32_t>(header["request_timeout_ms"].get<uint64_t>());
+        poll_interval_ms_ = static_cast<uint32_t>(header["poll_interval_ms"].get<uint64_t>());
+        reconnect_wait_ms_ = static_cast<uint32_t>(header["reconnect_wait_ms"].get<uint64_t>());
+
+        if (kassow_host_.empty() || kassow_port_ == 0 || request_timeout_ms_ == 0 || poll_interval_ms_ == 0 || reconnect_wait_ms_ == 0)
+        {
+            log(logging::LogType::ERROR, "Loaded parameters are invalid");
+            return false;
+        }
+
+        bool was_activated = header["activated"].get<bool>();
+        if (was_activated)
+        {
+            stop_async_.store(false, std::memory_order_release);
+            if (rpc_client_->connect(kassow_host_, kassow_port_))
+            {
+                activated_.store(true, std::memory_order_release);
+                async_thread_ = std::thread(&RobotModuleKassow::asyncPollLoop, this);
+            }
+            else
+            {
+                log(logging::LogType::ERROR, "Failed to reconnect during load");
+                activated_.store(false, std::memory_order_release);
+                return false;
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        log(logging::LogType::ERROR, std::string("Failed to parse save data: ") + e.what());
+        return false;
+    }
+
     return true;
 }
 
@@ -287,11 +378,11 @@ void RobotModuleKassow::asyncPollLoop()
     {
         if (!ensureConnected())
         {
-            std::this_thread::sleep_for(RECONNECT_WAIT);
+            std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_wait_ms_));
             continue;
         }
 
-        if (!rpc_client_->pollOnce(ASYNC_POLL_WAIT))
+        if (!rpc_client_->pollOnce(std::chrono::milliseconds(poll_interval_ms_)))
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
@@ -300,6 +391,11 @@ void RobotModuleKassow::asyncPollLoop()
 
 bool RobotModuleKassow::ensureConnected()
 {
+    if (stop_async_.load(std::memory_order_acquire) || !activated_.load(std::memory_order_acquire))
+    {
+        return false;
+    }
+
     if (rpc_client_->isConnected())
     {
         return true;
@@ -314,65 +410,57 @@ bool RobotModuleKassow::ensureConnected()
 }
 
 void RobotModuleKassow::forwardStatus(const helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob)
+{
+    if (!activated_.load(std::memory_order_acquire))
     {
-        message::SharedDataBlob blob_copy;
-        if (!blob.empty())
-        {
-            blob_copy = makeBlobCopy(blob);
+        return;
+    }
+
+    message::SharedDataBlob blob_copy;
+    if (!blob.empty())
+    {
+        blob_copy = allocator_->allocateFromData(blob);
         if (!blob_copy.valid())
         {
-            log(logging::LogType::WARNING, "Dropping status blob because allocation failed");
+            log(logging::LogType::WARNING, "Failed to allocate blob in status forwarding, sending without blob");
         }
     }
 
     auto status_copy = status;
-
-    message::MessageHeader header{
-        .data_ = reinterpret_cast<uint8_t*>(&status_copy),
-        .data_len_ = sizeof(status_copy),
-        .blobs_ = blob_copy.valid() ? &blob_copy : nullptr,
-        .blob_count_ = blob_copy.valid() ? 1u : 0u,
-        .id_ = 0,
-        .timestamp_ns_ = nowNs(),
-        .success_ = true
-    };
-
-    sendMessage(status_publish_id_, header);
+    if (blob_copy.valid())  // blob must not be empty + successful allocation of blob_copy
+    {
+        sendMessage(status_publish_id_, message::MessageHeader::Message(&status_copy, &blob_copy));
+    }
+    else
+    {
+        sendMessage(status_publish_id_, message::MessageHeader::Message(&status_copy));
+    }
 }
 
 void RobotModuleKassow::forwardFinished(const helpers::robot_interface::FinishedMessage& finished, std::span<const std::byte> blob)
+{
+    if (!activated_.load(std::memory_order_acquire))
     {
-        message::SharedDataBlob blob_copy;
-        if (!blob.empty())
-        {
-            blob_copy = makeBlobCopy(blob);
+        return;
+    }
+
+    message::SharedDataBlob blob_copy;
+    if (blob.empty())
+    {
+        blob_copy = allocator_->allocateFromData(blob);
         if (!blob_copy.valid())
         {
-            log(logging::LogType::WARNING, "Dropping finished blob because allocation failed");
+            log(logging::LogType::WARNING, "Failed to allocate blob in finished forwarding, sending without blob");
         }
     }
 
     auto finished_copy = finished;
-
-    message::MessageHeader header{
-        .data_ = reinterpret_cast<uint8_t*>(&finished_copy),
-        .data_len_ = sizeof(finished_copy),
-        .blobs_ = blob_copy.valid() ? &blob_copy : nullptr,
-        .blob_count_ = blob_copy.valid() ? 1u : 0u,
-        .id_ = 0,
-        .timestamp_ns_ = nowNs(),
-        .success_ = true
-    };
-
-    sendMessage(finished_publish_id_, header);
-}
-
-message::SharedDataBlob RobotModuleKassow::makeBlobCopy(std::span<const std::byte> blob)
-{
-    if (!allocator_)
+    if (blob_copy.valid()) // blob must not be empty + successful allocation of blob_copy
     {
-        return {};
+        sendMessage(finished_publish_id_, message::MessageHeader::Message(&finished_copy, &blob_copy));
     }
-
-    return allocator_->allocateFromData(blob);
+    else
+    {
+        sendMessage(finished_publish_id_, message::MessageHeader::Message(&finished_copy));
+    }
 }

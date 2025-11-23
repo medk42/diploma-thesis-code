@@ -2,6 +2,7 @@
 
 #include "module_common/base_module.h"
 #include "module_helpers/robot_interface/message_types.h"
+#include "module_helpers/activation_wrapper/activable_module.h"
 #include "robot_module_kassow/rpc/rpc_transport.h"
 
 #include <atomic>
@@ -10,10 +11,11 @@
 #include <thread>
 #include <span>
 #include <vector>
+#include <string>
 
 namespace aergo::default_modules::robot_module_kassow
 {
-    class RobotModuleKassow : public aergo::module::BaseModule
+    class RobotModuleKassow : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule
     {
     public:
         RobotModuleKassow(const char* data_path,
@@ -35,6 +37,14 @@ namespace aergo::default_modules::robot_module_kassow
         bool threadStart(uint32_t timeout_ms) noexcept override;
         bool threadStop(uint32_t timeout_ms) noexcept override;
 
+        bool activate(std::vector<std::vector<std::vector<uint8_t>>>& parameter_values, const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override;
+        bool deactivate(const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override;
+        void sendRequestFromActivation(uint32_t request_consumer_id) override { } // No activation-time requests needed.
+        aergo::module::helpers::activation_wrapper::message_types::ProgressData getActivationProgress() override
+        { return {.progress_type_ = aergo::module::helpers::activation_wrapper::message_types::ProgressType::NONE}; }
+
+        bool isActivated() override { return activated_.load(std::memory_order_acquire); }
+
         aergo::module::ISerializableModule::SaveData save() noexcept override;
         bool load(aergo::module::ISerializableModule::SaveData data) noexcept override;
 
@@ -43,7 +53,6 @@ namespace aergo::default_modules::robot_module_kassow
         bool ensureConnected();
         void forwardStatus(const aergo::module::helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob);
         void forwardFinished(const aergo::module::helpers::robot_interface::FinishedMessage& finished, std::span<const std::byte> blob);
-        aergo::module::message::SharedDataBlob makeBlobCopy(std::span<const std::byte> blob);
 
         class LoggerAdapter : public aergo::robot::kassow::rpc::RpcLogger
         {
@@ -67,7 +76,13 @@ namespace aergo::default_modules::robot_module_kassow
         std::thread async_thread_;
         std::atomic<bool> stop_async_;
 
-        std::string kassow_host_;
-        uint16_t kassow_port_;
+        std::string kassow_host_ {"127.0.0.1"};
+        uint16_t kassow_port_ {15050};
+        uint32_t request_timeout_ms_ {200};
+        uint32_t poll_interval_ms_ {10};
+        uint32_t reconnect_wait_ms_ {500};
+
+        std::atomic<bool> activated_;
+        std::mutex activation_mutex_;
     };
 }
