@@ -5,7 +5,7 @@
 
 #include "module_common/base_module.h"
 
-namespace aergo::module::helpers::robot_interface
+namespace aergo::module::helpers::mixed_buffer_allocator
 {
     class MixedBufferedAllocator : public aergo::module::IAllocator
     {

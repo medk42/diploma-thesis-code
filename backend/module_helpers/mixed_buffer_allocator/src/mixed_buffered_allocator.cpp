@@ -1,6 +1,6 @@
-#include "module_helpers/robot_interface/mixed_buffered_allocator.h"
+#include "module_helpers/mixed_buffer_allocator/mixed_buffered_allocator.h"
 
-using namespace aergo::module::helpers::robot_interface;
+using namespace aergo::module::helpers::mixed_buffer_allocator;
 
 
 
