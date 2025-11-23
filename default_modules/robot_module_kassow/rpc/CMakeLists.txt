@@ -11,7 +11,7 @@ target_include_directories(${LIB_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(${LIB_NAME} PUBLIC module_common helpers___robot_interface)
+target_link_libraries(${LIB_NAME} PUBLIC helpers___robot_interface)
 
 if (WIN32)
     target_link_libraries(${LIB_NAME} PRIVATE ws2_32)
