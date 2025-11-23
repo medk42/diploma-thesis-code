@@ -36,7 +36,7 @@ void pushPose(std::vector<std::byte>& buffer, const Pose& pose)
 /// Start Request Serializations
 /// ============================
 
-std::vector<std::byte>& start::requests::serialization::moveJoint(std::vector<std::byte>& buffer, std::span<const double> joint_targets, double speed, double acceleration)
+std::vector<std::byte>& start::requests::serialization::moveJoint(std::vector<std::byte>& buffer, Span<const double> joint_targets, double speed, double acceleration)
 {
     buffer.clear();
 
@@ -88,7 +88,7 @@ std::vector<std::byte>& start::requests::serialization::moveArc(std::vector<std:
 }
 
 
-std::vector<std::byte>& start::requests::serialization::moveTrajectory(std::vector<std::byte>& buffer, std::span<const Pose> pose_targets, double speed, double acceleration, OrientationType orientation_type)
+std::vector<std::byte>& start::requests::serialization::moveTrajectory(std::vector<std::byte>& buffer, Span<const Pose> pose_targets, double speed, double acceleration, OrientationType orientation_type)
 {
     buffer.clear();
 
@@ -461,7 +461,7 @@ bool update::requests::deserialization::deserializeMoveRequest(BufferReader& rea
 /// Start Message Serialization
 /// ============================
 
-std::vector<std::byte>& status_messages::serialization::statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose current_pose, std::span<const double> joint_positions, RobotStatus status, const char* error_msg)
+std::vector<std::byte>& status_messages::serialization::statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose current_pose, Span<const double> joint_positions, RobotStatus status, const char* error_msg)
 {
     buffer.clear();
 

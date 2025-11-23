@@ -1,6 +1,7 @@
 #pragma once
 
 #include "module_helpers/robot_interface/message_types.h"
+#include "module_helpers/robot_interface/cpp17_utils.h"
 
 #include <array>
 #include <chrono>
@@ -9,7 +10,6 @@
 #include <functional>
 #include <mutex>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -82,8 +82,8 @@ namespace aergo::robot::kassow::rpc
     class RpcClient
     {
     public:
-        using StatusCallback = std::function<void(const StatusMessage&, std::span<const std::byte>)>;
-        using FinishedCallback = std::function<void(const FinishedMessage&, std::span<const std::byte>)>;
+        using StatusCallback = std::function<void(const StatusMessage&, Span<const std::byte>)>;
+        using FinishedCallback = std::function<void(const FinishedMessage&, Span<const std::byte>)>;
 
         explicit RpcClient(const RpcLogger* logger);
         ~RpcClient();
@@ -96,7 +96,7 @@ namespace aergo::robot::kassow::rpc
         void setFinishedCallback(FinishedCallback cb);
 
         bool sendRequest(const Request& request,
-                         std::span<const std::byte> request_blob,
+                         Span<const std::byte> request_blob,
                          Response& out_response,
                          std::vector<std::byte>& out_response_blob,
                          std::chrono::milliseconds timeout);
@@ -105,8 +105,8 @@ namespace aergo::robot::kassow::rpc
 
     private:
         bool readFrame(RpcFrameHeader& header, std::vector<std::byte>& payload, std::vector<std::byte>& blob, std::chrono::milliseconds timeout);
-        bool writeFrame(const RpcFrameHeader& header, std::span<const std::byte> payload, std::span<const std::byte> blob);
-        void dispatchAsync(const RpcFrameHeader& header, std::span<const std::byte> payload, std::span<const std::byte> blob);
+        bool writeFrame(const RpcFrameHeader& header, Span<const std::byte> payload, Span<const std::byte> blob);
+        void dispatchAsync(const RpcFrameHeader& header, Span<const std::byte> payload, Span<const std::byte> blob);
         void log(RpcLogType type, std::string_view msg) const;
 
         const RpcLogger* logger_;
@@ -128,7 +128,7 @@ namespace aergo::robot::kassow::rpc
         {
             uint32_t request_id{};
             Request request{};
-            std::span<const std::byte> blob;
+            Span<const std::byte> blob;
         };
 
         explicit RpcServer(const RpcLogger* logger);
@@ -139,9 +139,9 @@ namespace aergo::robot::kassow::rpc
         void setRequestHandler(std::function<void(const IncomingRequest&)> handler);
         bool pollOnce(std::chrono::milliseconds timeout);
 
-        bool sendResponse(uint32_t request_id, const Response& response, std::span<const std::byte> blob);
-        bool sendStatusMessage(const StatusMessage& status, std::span<const std::byte> blob);
-        bool sendFinishedMessage(const FinishedMessage& finished, std::span<const std::byte> blob);
+        bool sendResponse(uint32_t request_id, const Response& response, Span<const std::byte> blob);
+        bool sendStatusMessage(const StatusMessage& status, Span<const std::byte> blob);
+        bool sendFinishedMessage(const FinishedMessage& finished, Span<const std::byte> blob);
 
     private:
         bool ensureClient();

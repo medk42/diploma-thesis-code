@@ -4,10 +4,12 @@
 #include <cstdint>
 #include <cstring>
 #include <cstddef>
-#include <bit>
 #include <type_traits>
 
-static_assert(std::endian::native == std::endian::little, "This code assumes a little-endian architecture");
+#if (defined(_MSVC_LANG) ? _MSVC_LANG : __cplusplus) >= 202002L
+    #include <bit>
+    static_assert(std::endian::native == std::endian::little, "This code assumes a little-endian architecture");
+#endif
 
 namespace aergo::module::helpers::serialization_helper
 {

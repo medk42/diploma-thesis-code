@@ -2,10 +2,11 @@
 
 #include "structs.h"
 
+#include "module_helpers/robot_interface/cpp17_utils.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <span>
 #include <string>
 #include <variant>
 
@@ -61,7 +62,7 @@ namespace aergo::module::helpers::robot_interface::robot_control
                 /// @param speed The speed to move at, in rad/s.
                 /// @param acceleration The acceleration to use, in rad/s^2.
                 /// @return A serialized request message.
-                std::vector<std::byte>& moveJoint(std::vector<std::byte>& buffer, std::span<const double> joint_targets, double speed, double acceleration);
+                std::vector<std::byte>& moveJoint(std::vector<std::byte>& buffer, Span<const double> joint_targets, double speed, double acceleration);
 
                 /// @brief Build a request to move the robot from its current pose to a target pose in a linear fashion.
                 /// Poses are specified in world coordinates and represent the end-effector pose.
@@ -107,7 +108,7 @@ namespace aergo::module::helpers::robot_interface::robot_control
                 /// @param acceleration The acceleration to use, in m/s^2.
                 /// @param orientation_type The type of orientation to use.
                 /// @return A serialized request message.
-                std::vector<std::byte>& moveTrajectory(std::vector<std::byte>& buffer, std::span<const Pose> pose_targets, double speed, double acceleration, OrientationType orientation_type);
+                std::vector<std::byte>& moveTrajectory(std::vector<std::byte>& buffer, Span<const Pose> pose_targets, double speed, double acceleration, OrientationType orientation_type);
 
                 /// @brief Build a request to get the robot's specifications.
                 /// Layout (payload):
@@ -277,7 +278,7 @@ namespace aergo::module::helpers::robot_interface::robot_control
             /// @param status The robot's current status.
             /// @param error_msg Optional error message if the robot is in an error state (only serialized if status is ERROR, can be nullptr).
             /// @return A serialized status message.
-            std::vector<std::byte>& statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose current_pose, std::span<const double> joint_positions, RobotStatus status, const char* error_msg);
+            std::vector<std::byte>& statusMessage(std::vector<std::byte>& buffer, uint64_t timestamp_us, Pose current_pose, Span<const double> joint_positions, RobotStatus status, const char* error_msg);
         }
 
         namespace deserialization

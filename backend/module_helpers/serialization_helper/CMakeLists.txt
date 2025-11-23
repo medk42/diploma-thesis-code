@@ -10,11 +10,3 @@ file(GLOB_RECURSE PROJECT_SOURCES
 add_library(${LIB_NAME} INTERFACE)
 
 target_include_directories(${LIB_NAME} INTERFACE include)
-
-
-# ELF: hide everything by default
-set_target_properties(${LIB_NAME} PROPERTIES
-    C_VISIBILITY_PRESET hidden
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN 1
-)
