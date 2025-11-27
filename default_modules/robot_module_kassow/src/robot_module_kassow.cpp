@@ -384,7 +384,7 @@ void RobotModuleKassow::asyncPollLoop()
 
         if (!rpc_client_->pollOnce(std::chrono::milliseconds(poll_interval_ms_)))
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
 }
