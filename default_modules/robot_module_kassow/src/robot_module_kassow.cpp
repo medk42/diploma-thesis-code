@@ -318,6 +318,8 @@ bool RobotModuleKassow::deactivate(const std::atomic<bool>& cancel_flag, std::at
     }
     rpc_client_->disconnect();
 
+    robot_visualization_->removeVisualization();
+
     return true;
 }
 
@@ -527,9 +529,14 @@ void RobotModuleKassow::updateVisualization(const helpers::robot_interface::Stat
     );
 
     std::lock_guard<std::mutex> lock(vis3d_mutex_);
-    if (!robot_visualization_->isVisualizationCreated())
+    if (!visualization_announced_)
     {
         visualization_helper_->announce();
+        visualization_announced_ = true;
+    }
+
+    if (!robot_visualization_->isVisualizationCreated())
+    {
         robot_visualization_->createVisualization();
     }
 

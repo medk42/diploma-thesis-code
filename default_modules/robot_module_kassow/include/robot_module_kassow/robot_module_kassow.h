@@ -96,5 +96,6 @@ namespace aergo::default_modules::robot_module_kassow
         std::unique_ptr<aergo::module::helpers::visualization_3d_interface::VisualizationHelper> visualization_helper_;
         std::unique_ptr<robot_vis::RobotVisualization> robot_visualization_;
         std::mutex vis3d_mutex_;
+        bool visualization_announced_{false};
     };
 }
