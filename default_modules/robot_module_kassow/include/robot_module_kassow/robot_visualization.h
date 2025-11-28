@@ -13,10 +13,19 @@
 #include "kr2_robot_models/a810.h"
 
 #include "module_helpers/visualization_3d_interface/visualization_helper.h"
+#include "module_helpers/robot_interface/features/robot_control/structs.h"
 
 namespace robot_vis {
 
 namespace vis3d = aergo::module::helpers::visualization_3d_interface;
+namespace ri = aergo::module::helpers::robot_interface;
+
+struct ArrowConfig {
+    float line_length_m = 0.20f;   // 20 cm
+    float line_radius_m = 0.005f;  // 1 cm width -> 5 mm radius
+    float tip_radius_m = 0.01f;    // 2 cm width -> 1 cm radius
+    float tip_length_m = 0.02f;    // 2 cm
+};
 
 struct Mat4 {
     float m[4][4];
@@ -154,19 +163,27 @@ public:
     explicit RobotVisualization(vis3d::VisualizationHelper* helper)
         : helper_(helper) {}
 
-    // Registers resources using generated a810.h data.
+    // Registers resources using generated kr2_robot_model.hpp data.
     bool registerResources();
 
     // Register with external descriptors.
     bool registerResources(std::string_view root_link,
                            std::span<const robot_model::JointDesc> joints,
-                           std::span<const robot_model::CylinderDesc> cylinders);
+                           std::span<const robot_model::CylinderDesc> cylinders,
+                           ArrowConfig arrow_cfg = {});
 
     // Create visualization objects (call after registerResources).
     bool createVisualization();
 
     // Update poses from 7 joint angles (radians). Order must match kMovableJointNames.
     bool updateVisualization(std::span<const double> joint_angles_rad);
+
+    // Update TCP arrow pose.
+    bool updateTcpPose(
+        const ri::robot_control::Pose& base_pose,
+        const ri::robot_control::Pose& flange_pose,
+        const ri::robot_control::Pose& end_effector_pose
+    );
 
     // Remove all objects from scene.
     void removeVisualization();
@@ -188,6 +205,11 @@ private:
     std::vector<vis3d::ObjectId> objects_;
     std::vector<std::size_t> movable_order_;  // indices into joints_
     std::unordered_map<std::string, std::vector<std::size_t>> adj_;
+    ArrowConfig arrow_cfg_{};
+    vis3d::ResourceId arrow_resource_{0};
+    vis3d::ObjectId tcp_arrow_object_{0};
+    vis3d::ObjectId tfc_arrow_object_{0};
+    vis3d::ObjectId base_arrow_object_{0};
     bool resources_registered_{false};
     bool objects_created_{false};
 };
@@ -195,12 +217,13 @@ private:
 // Implementation --------------------------------------------------------------
 
 inline bool RobotVisualization::registerResources() {
-    return registerResources(robot_model::kRootLink, robot_model::kJoints, robot_model::kCylinders);
+    return registerResources(robot_model::kRootLink, robot_model::kJoints, robot_model::kCylinders, ArrowConfig{});
 }
 
 inline bool RobotVisualization::registerResources(std::string_view root_link,
                                                   std::span<const robot_model::JointDesc> joints,
-                                                  std::span<const robot_model::CylinderDesc> cylinders) {
+                                                  std::span<const robot_model::CylinderDesc> cylinders,
+                                                  ArrowConfig arrow_cfg) {
     if (resources_registered_ || helper_ == nullptr || !helper_->valid()) {
         return false;
     }
@@ -211,6 +234,7 @@ inline bool RobotVisualization::registerResources(std::string_view root_link,
         joints_.push_back(JointRuntime{joints[i], -1});
     }
     cylinders_.assign(cylinders.begin(), cylinders.end());
+    arrow_cfg_ = arrow_cfg;
     movable_order_.clear();
     for (std::size_t i = 0; i < joints_.size(); ++i) {
         if (joints_[i].desc.movable) {
@@ -240,6 +264,44 @@ inline bool RobotVisualization::registerResources(std::string_view root_link,
         shape.parts.push_back(part);
         resources_[i] = helper_->registerResource(shape);
     }
+    // Arrow resource (TCP axes)
+    auto axis_shape = [&](const vis3d::Vec3& axis_dir, const vis3d::Color& color) {
+        vis3d::ComplexShape shape{};
+        vis3d::PrimitiveShape line{};
+        line.type = vis3d::PrimitiveShapeType::CYLINDER;
+        line.desc = vis3d::CylinderDesc{arrow_cfg_.line_radius_m, arrow_cfg_.line_radius_m, arrow_cfg_.line_length_m};
+        vis3d::Pose line_pose{};
+        line_pose.t = vis3d::Vec3{axis_dir.x * (arrow_cfg_.line_length_m * 0.5f),
+                                  axis_dir.y * (arrow_cfg_.line_length_m * 0.5f),
+                                  axis_dir.z * (arrow_cfg_.line_length_m * 0.5f)};
+        line_pose.q = align_z_to_dir(axis_dir);
+        line.origin = line_pose;
+        line.color = color;
+        shape.parts.push_back(line);
+
+        vis3d::PrimitiveShape tip{};
+        tip.type = vis3d::PrimitiveShapeType::CYLINDER;
+        tip.desc = vis3d::CylinderDesc{arrow_cfg_.tip_radius_m, 0.0f, arrow_cfg_.tip_length_m};
+        vis3d::Pose tip_pose{};
+        float offset = arrow_cfg_.line_length_m + (arrow_cfg_.tip_length_m * 0.5f);
+        tip_pose.t = vis3d::Vec3{axis_dir.x * offset, axis_dir.y * offset, axis_dir.z * offset};
+        tip_pose.q = align_z_to_dir(axis_dir);
+        tip.origin = tip_pose;
+        tip.color = color;
+        shape.parts.push_back(tip);
+        return shape;
+    };
+    vis3d::ComplexShape arrow_shape{};
+    // X axis - red
+    vis3d::ComplexShape xshape = axis_shape(vis3d::Vec3{1.f, 0.f, 0.f}, vis3d::Color{255, 0, 0, 255});
+    arrow_shape.parts.insert(arrow_shape.parts.end(), xshape.parts.begin(), xshape.parts.end());
+    // Y axis - green
+    vis3d::ComplexShape yshape = axis_shape(vis3d::Vec3{0.f, 1.f, 0.f}, vis3d::Color{0, 255, 0, 255});
+    arrow_shape.parts.insert(arrow_shape.parts.end(), yshape.parts.begin(), yshape.parts.end());
+    // Z axis - blue
+    vis3d::ComplexShape zshape = axis_shape(vis3d::Vec3{0.f, 0.f, 1.f}, vis3d::Color{0, 0, 255, 255});
+    arrow_shape.parts.insert(arrow_shape.parts.end(), zshape.parts.begin(), zshape.parts.end());
+    arrow_resource_ = helper_->registerResource(arrow_shape);
     computeAdjacency();
     resources_registered_ = true;
     return true;
@@ -266,6 +328,22 @@ inline bool RobotVisualization::createVisualization() {
         bool added = helper_->addObject(resources_[i], pose, id);
         ok = ok && added;
         objects_[i] = id;
+    }
+    if (arrow_resource_.id != 0) {
+        vis3d::Pose pose{};
+        vis3d::ObjectId id{};
+        
+        bool added = helper_->addObject(arrow_resource_, pose, id);
+        ok = ok && added;
+        tcp_arrow_object_ = id;
+        
+        added = helper_->addObject(arrow_resource_, pose, id);
+        ok = ok && added;
+        tfc_arrow_object_ = id;
+
+        added = helper_->addObject(arrow_resource_, pose, id);
+        ok = ok && added;
+        base_arrow_object_ = id;
     }
     helper_->sendUpdate();
     objects_created_ = ok;
@@ -329,6 +407,33 @@ inline bool RobotVisualization::updateVisualization(std::span<const double> join
     return true;
 }
 
+inline vis3d::Pose convertPoseToVis3D(const ri::robot_control::Pose& pose_in) {
+    vis3d::Pose pose{};
+    pose.t = vis3d::Vec3{static_cast<float>(pose_in.position.x),
+                         static_cast<float>(pose_in.position.y),
+                         static_cast<float>(pose_in.position.z)};
+    pose.q = vis3d::Quat{static_cast<float>(pose_in.orientation.x),
+                         static_cast<float>(pose_in.orientation.y),
+                         static_cast<float>(pose_in.orientation.z),
+                         static_cast<float>(pose_in.orientation.w)}.normalized();
+    return pose;
+}
+
+inline bool RobotVisualization::updateTcpPose(const ri::robot_control::Pose& base_pose,
+                                             const ri::robot_control::Pose& flange_pose,
+                                             const ri::robot_control::Pose& end_effector_pose) {
+    if (!objects_created_ || tcp_arrow_object_.id == 0 || tfc_arrow_object_.id == 0 || base_arrow_object_.id == 0) {
+        return false;
+    }
+
+    helper_->updateObject(base_arrow_object_, convertPoseToVis3D(base_pose));
+    helper_->updateObject(tfc_arrow_object_, convertPoseToVis3D(flange_pose));
+    helper_->updateObject(tcp_arrow_object_, convertPoseToVis3D(end_effector_pose));
+
+    helper_->sendUpdate();
+    return true;
+}
+
 inline void RobotVisualization::removeVisualization() {
     if (!objects_created_) {
         return;
@@ -338,6 +443,18 @@ inline void RobotVisualization::removeVisualization() {
             continue;
         }
         helper_->removeObject(id);
+    }
+    if (tcp_arrow_object_.id != 0) {
+        helper_->removeObject(tcp_arrow_object_);
+        tcp_arrow_object_ = vis3d::ObjectId{0};
+    }
+    if (tfc_arrow_object_.id != 0) {
+        helper_->removeObject(tfc_arrow_object_);
+        tfc_arrow_object_ = vis3d::ObjectId{0};
+    }
+    if (base_arrow_object_.id != 0) {
+        helper_->removeObject(base_arrow_object_);
+        base_arrow_object_ = vis3d::ObjectId{0};
     }
     helper_->sendUpdate();
     objects_created_ = false;

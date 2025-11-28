@@ -516,18 +516,6 @@ void RobotModuleKassow::updateVisualization(const helpers::robot_interface::Stat
         return;
     }
 
-    log(logging::LogType::INFO, "Pose update: x=" + std::to_string(status_message_buffered_.current_pose.position.x) +
-        " y=" + std::to_string(status_message_buffered_.current_pose.position.y) +
-        " z=" + std::to_string(status_message_buffered_.current_pose.position.z) + 
-        " joints=[" + std::to_string(status_message_buffered_.joint_positions[0]) + ", " +
-        std::to_string(status_message_buffered_.joint_positions[1]) + ", " +
-        std::to_string(status_message_buffered_.joint_positions[2]) + ", " +
-        std::to_string(status_message_buffered_.joint_positions[3]) + ", " +
-        std::to_string(status_message_buffered_.joint_positions[4]) + ", " +
-        std::to_string(status_message_buffered_.joint_positions[5]) + ", " +
-        std::to_string(status_message_buffered_.joint_positions[6]) + "]"
-    );
-
     std::lock_guard<std::mutex> lock(vis3d_mutex_);
     if (!visualization_announced_)
     {
@@ -541,4 +529,9 @@ void RobotModuleKassow::updateVisualization(const helpers::robot_interface::Stat
     }
 
     robot_visualization_->updateVisualization(std::span<const double>(status_message_buffered_.joint_positions));
+    robot_visualization_->updateTcpPose(
+        status_message_buffered_.base_pose,
+        status_message_buffered_.flange_pose,
+        status_message_buffered_.end_effector_pose
+    );
 }
