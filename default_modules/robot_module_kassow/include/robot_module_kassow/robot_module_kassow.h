@@ -5,6 +5,11 @@
 #include "module_helpers/activation_wrapper/activable_module.h"
 #include "robot_module_kassow/rpc/rpc_transport.h"
 
+#include "module_helpers/robot_interface/features/robot_control/messages.h"
+#include "module_helpers/visualization_3d_interface/visualization_helper.h"
+
+#include "robot_visualization.h"
+
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -54,6 +59,8 @@ namespace aergo::default_modules::robot_module_kassow
         void forwardStatus(const aergo::module::helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob);
         void forwardFinished(const aergo::module::helpers::robot_interface::FinishedMessage& finished, std::span<const std::byte> blob);
 
+        void updateVisualization(const aergo::module::helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob);
+
         class LoggerAdapter : public aergo::robot::kassow::rpc::RpcLogger
         {
         public:
@@ -84,5 +91,10 @@ namespace aergo::default_modules::robot_module_kassow
 
         std::atomic<bool> activated_;
         std::mutex activation_mutex_;
+
+        aergo::module::helpers::robot_interface::robot_control::status_messages::deserialization::StatusMessage status_message_buffered_;
+        std::unique_ptr<aergo::module::helpers::visualization_3d_interface::VisualizationHelper> visualization_helper_;
+        std::unique_ptr<robot_vis::RobotVisualization> robot_visualization_;
+        std::mutex vis3d_mutex_;
     };
 }

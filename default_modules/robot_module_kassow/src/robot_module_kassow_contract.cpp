@@ -6,6 +6,7 @@
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_helpers/activation_wrapper/activation_wrapper.h"
 #include "module_helpers/parameter_description/parameter_description.h"
+#include "module_helpers/visualization_3d_interface/message_types.h"
 
 #define MODULE_A_API_VERSION 2
 
@@ -16,12 +17,14 @@ using namespace aergo::module;
 
 static constexpr communication_channel::Producer kassow_publish_producers[] = {
     aergo::module::helpers::robot_interface::robot_interface_status_producer,
-    aergo::module::helpers::robot_interface::robot_interface_finished_producer
+    aergo::module::helpers::robot_interface::robot_interface_finished_producer,
+    aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_publish_producer
 };
 
 static constexpr communication_channel::Producer kassow_response_producers[] = {
     aergo::module::helpers::robot_interface::robot_interface_response_producer,
-    aergo::module::helpers::activation_wrapper::message_types::activation_response_producer
+    aergo::module::helpers::activation_wrapper::message_types::activation_response_producer,
+    aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_response_producer
 };
 
 static constexpr ModuleInfo module_info = {

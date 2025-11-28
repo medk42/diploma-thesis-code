@@ -1,6 +1,8 @@
 #include "robot_module_kassow/robot_module_kassow.h"
 
 #include "module_helpers/robot_interface/message_types_definitions.h"
+#include "module_helpers/robot_interface/features/robot_control/messages.h"
+#include "module_helpers/serialization_helper/serialization_helper.h"
 
 #include <nlohmann/json.hpp>
 
@@ -12,7 +14,10 @@
 
 using namespace aergo::default_modules::robot_module_kassow;
 using namespace aergo::module;
+using namespace aergo::module::helpers::robot_interface;
+using namespace robot_control;
 using json = nlohmann::json;
+namespace vis3d = aergo::module::helpers::visualization_3d_interface;
 
 
 void RobotModuleKassow::LoggerAdapter::log(aergo::robot::kassow::rpc::RpcLogType type, const char* message) const noexcept
@@ -73,6 +78,20 @@ RobotModuleKassow::RobotModuleKassow(const char* data_path,
         return;
     }
 
+    visualization_helper_ = std::make_unique<vis3d::VisualizationHelper>(this);
+    if (!visualization_helper_->valid())
+    {
+        log(logging::LogType::ERROR, "Failed to initialize 3D visualization helper");
+        return;
+    }
+
+    robot_visualization_ = std::make_unique<robot_vis::RobotVisualization>(visualization_helper_.get());
+    if (!robot_visualization_->registerResources())
+    {
+        log(logging::LogType::ERROR, "Failed to register robot visualization resources");
+        return;
+    }
+
     rpc_client_->setStatusCallback([this](const helpers::robot_interface::StatusMessage& msg, std::span<const std::byte> blob)
     {
         forwardStatus(msg, blob);
@@ -96,14 +115,21 @@ void* RobotModuleKassow::query_capability(const std::type_info& id) noexcept
 
 IModule::IngressDecision RobotModuleKassow::onIngress(ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier identifier, const message::MessageHeader&, QueueStatus queue_status) noexcept
 {
-    if (kind == ProcessingType::REQUEST && local_channel_id == response_channel_id_)
+    if (kind == ProcessingType::REQUEST)
     {
-        if (queue_status != QueueStatus::NORMAL)
+        if (local_channel_id == response_channel_id_)
         {
-            log(logging::LogType::WARNING, "Kassow robot module dropping request due to request queue full: " + std::to_string(identifier.producer_module_id_) + "/" + std::to_string(identifier.producer_channel_id_));
-            return IngressDecision::DROP;
+            if (queue_status != QueueStatus::NORMAL)
+            {
+                log(logging::LogType::WARNING, "Kassow robot module dropping request due to request queue full: " + std::to_string(identifier.producer_module_id_) + "/" + std::to_string(identifier.producer_channel_id_));
+                return IngressDecision::DROP;
+            }
+            return IngressDecision::ACCEPT;
         }
-        return IngressDecision::ACCEPT;
+        else if (local_channel_id == visualization_helper_->getResponseProducerChannel())
+        {
+            return IngressDecision::ACCEPT; // accept all visualization requests
+        }
     }
     return IngressDecision::DROP;
 }
@@ -115,6 +141,12 @@ void RobotModuleKassow::processMessage(uint32_t, ChannelIdentifier, message::Mes
 
 ResponseData RobotModuleKassow::processRequest(uint32_t response_producer_id, ChannelIdentifier, message::MessageHeader message) noexcept
 {
+    if (response_producer_id == visualization_helper_->getResponseProducerChannel())
+    {
+        std::lock_guard<std::mutex> lock(vis3d_mutex_);
+        return visualization_helper_->processVisualizationRequest(message);
+    }
+
     if (response_producer_id != response_channel_id_)
     {
         log(logging::LogType::WARNING, "Request received on unknown response channel, dropping");
@@ -416,6 +448,8 @@ void RobotModuleKassow::forwardStatus(const helpers::robot_interface::StatusMess
         return;
     }
 
+    updateVisualization(status, blob);
+
     message::SharedDataBlob blob_copy;
     if (!blob.empty())
     {
@@ -463,4 +497,41 @@ void RobotModuleKassow::forwardFinished(const helpers::robot_interface::Finished
     {
         sendMessage(finished_publish_id_, message::MessageHeader::Message(&finished_copy));
     }
+}
+
+
+void RobotModuleKassow::updateVisualization(const helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob)
+{
+    if (status.feature != helpers::robot_interface::RobotFeature::ROBOT_CONTROL)
+    {
+        return; // Only process visualization updates from robot control feature
+    }
+
+    status_messages::deserialization::BufferReader reader(blob.data(), blob.size());
+    if (!status_messages::deserialization::deserializeStatusMessage(reader, status_message_buffered_))
+    {
+        log(logging::LogType::WARNING, "Failed to deserialize status message for visualization update");
+        return;
+    }
+
+    log(logging::LogType::INFO, "Pose update: x=" + std::to_string(status_message_buffered_.current_pose.position.x) +
+        " y=" + std::to_string(status_message_buffered_.current_pose.position.y) +
+        " z=" + std::to_string(status_message_buffered_.current_pose.position.z) + 
+        " joints=[" + std::to_string(status_message_buffered_.joint_positions[0]) + ", " +
+        std::to_string(status_message_buffered_.joint_positions[1]) + ", " +
+        std::to_string(status_message_buffered_.joint_positions[2]) + ", " +
+        std::to_string(status_message_buffered_.joint_positions[3]) + ", " +
+        std::to_string(status_message_buffered_.joint_positions[4]) + ", " +
+        std::to_string(status_message_buffered_.joint_positions[5]) + ", " +
+        std::to_string(status_message_buffered_.joint_positions[6]) + "]"
+    );
+
+    std::lock_guard<std::mutex> lock(vis3d_mutex_);
+    if (!robot_visualization_->isVisualizationCreated())
+    {
+        visualization_helper_->announce();
+        robot_visualization_->createVisualization();
+    }
+
+    robot_visualization_->updateVisualization(std::span<const double>(status_message_buffered_.joint_positions));
 }

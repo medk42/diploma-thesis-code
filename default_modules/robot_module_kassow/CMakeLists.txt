@@ -11,7 +11,17 @@ add_library(${MODULE_NAME} MODULE ${PROJECT_SOURCES})
 
 find_package(nlohmann_json CONFIG REQUIRED)
 
-target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___robot_interface kassow_rpc helpers___activation_wrapper nlohmann_json::nlohmann_json)
+target_link_libraries(${MODULE_NAME} PRIVATE 
+    module_common 
+    kassow_rpc 
+    
+    helpers___robot_interface 
+    helpers___activation_wrapper 
+    helpers___serialization_helper
+    helpers___visualization_3d_interface
+
+    nlohmann_json::nlohmann_json 
+)
 
 target_include_directories(${MODULE_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
