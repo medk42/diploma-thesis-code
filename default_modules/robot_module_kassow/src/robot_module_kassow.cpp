@@ -4,6 +4,8 @@
 #include "module_helpers/robot_interface/features/robot_control/messages.h"
 #include "module_helpers/serialization_helper/serialization_helper.h"
 
+#include "robot_module_kassow/kr2_robot_models/a810.h"
+
 #include <nlohmann/json.hpp>
 
 #include <chrono>
@@ -86,7 +88,12 @@ RobotModuleKassow::RobotModuleKassow(const char* data_path,
     }
 
     robot_visualization_ = std::make_unique<robot_vis::RobotVisualization>(visualization_helper_.get());
-    if (!robot_visualization_->registerResources())
+    if (!robot_visualization_->registerResources(
+        vis3d::Color { 0x21, 0x21, 0x21, 0xFF },
+        robot_vis::robot_model::a810::kRootLink,
+        robot_vis::robot_model::a810::kJoints,
+        robot_vis::robot_model::a810::kCylinders
+    ))
     {
         log(logging::LogType::ERROR, "Failed to register robot visualization resources");
         return;
@@ -528,7 +535,10 @@ void RobotModuleKassow::updateVisualization(const helpers::robot_interface::Stat
         robot_visualization_->createVisualization();
     }
 
-    robot_visualization_->updateVisualization(std::span<const double>(status_message_buffered_.joint_positions));
+    robot_visualization_->updateRobotVisualization(
+        std::span<const double>(status_message_buffered_.joint_positions)
+    );
+
     robot_visualization_->updateTcpPose(
         status_message_buffered_.base_pose,
         status_message_buffered_.flange_pose,
