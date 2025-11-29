@@ -457,7 +457,10 @@ void RobotModuleKassow::forwardStatus(const helpers::robot_interface::StatusMess
         return;
     }
 
-    updateVisualization(status, blob);
+    if (status.feature == helpers::robot_interface::RobotFeature::ROBOT_CONTROL)
+    {
+        handleRobotControlStatus(status, blob);
+    }
 
     message::SharedDataBlob blob_copy;
     if (!blob.empty())
@@ -509,19 +512,20 @@ void RobotModuleKassow::forwardFinished(const helpers::robot_interface::Finished
 }
 
 
-void RobotModuleKassow::updateVisualization(const helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob)
+void RobotModuleKassow::handleRobotControlStatus(const helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob)
 {
-    if (status.feature != helpers::robot_interface::RobotFeature::ROBOT_CONTROL)
-    {
-        return; // Only process visualization updates from robot control feature
-    }
-
     status_messages::deserialization::BufferReader reader(blob.data(), blob.size());
     if (!status_messages::deserialization::deserializeStatusMessage(reader, status_message_buffered_))
     {
         log(logging::LogType::WARNING, "Failed to deserialize status message for visualization update");
         return;
     }
+
+    if (status_message_buffered_.status == RobotStatus::ERROR && last_error_message_ != status_message_buffered_.error_msg)
+    {
+        log(logging::LogType::ERROR, "Robot reported ERROR status: " + status_message_buffered_.error_msg);
+    }
+    last_error_message_ = std::move(status_message_buffered_.error_msg);
 
     std::lock_guard<std::mutex> lock(vis3d_mutex_);
     if (!visualization_announced_)

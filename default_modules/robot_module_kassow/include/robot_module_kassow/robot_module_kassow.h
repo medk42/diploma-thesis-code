@@ -59,7 +59,7 @@ namespace aergo::default_modules::robot_module_kassow
         void forwardStatus(const aergo::module::helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob);
         void forwardFinished(const aergo::module::helpers::robot_interface::FinishedMessage& finished, std::span<const std::byte> blob);
 
-        void updateVisualization(const aergo::module::helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob);
+        void handleRobotControlStatus(const aergo::module::helpers::robot_interface::StatusMessage& status, std::span<const std::byte> blob);
 
         class LoggerAdapter : public aergo::robot::kassow::rpc::RpcLogger
         {
@@ -93,6 +93,7 @@ namespace aergo::default_modules::robot_module_kassow
         std::mutex activation_mutex_;
 
         aergo::module::helpers::robot_interface::robot_control::status_messages::deserialization::StatusMessage status_message_buffered_;
+        std::string last_error_message_;
         std::unique_ptr<aergo::module::helpers::visualization_3d_interface::VisualizationHelper> visualization_helper_;
         std::unique_ptr<robot_vis::RobotVisualization> robot_visualization_;
         std::mutex vis3d_mutex_;
