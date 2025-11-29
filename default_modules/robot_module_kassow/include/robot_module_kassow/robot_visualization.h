@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 #include <cmath>
+#include <cstdint>
 
 #include "kr2_robot_models/structs.h"
 
@@ -57,6 +58,7 @@ namespace aergo::default_modules::robot_module_kassow::robot_vis {
             std::string_view root_link,
             std::span<const robot_model::JointDesc> joints,
             std::span<const vis3d::CylinderDesc> cylinders,
+            vis3d::Color trajectory_color = vis3d::Color{ 0xff, 0x6b, 0xf0, 0xFF },
             ArrowConfig arrow_cfg = ArrowConfig{}
         );
 
@@ -72,6 +74,8 @@ namespace aergo::default_modules::robot_module_kassow::robot_vis {
             const ri::robot_control::Pose& flange_pose,
             const ri::robot_control::Pose& end_effector_pose
         );
+
+        bool updateTrajectory(const ri::robot_control::Vector3& trajectory_point, uint16_t history_length = 1000);
 
         // Remove all objects from scene.
         void removeVisualization();
@@ -101,6 +105,11 @@ namespace aergo::default_modules::robot_module_kassow::robot_vis {
         vis3d::ObjectId tcp_arrow_object_{0};
         vis3d::ObjectId tfc_arrow_object_{0};
         vis3d::ObjectId base_arrow_object_{0};
+
+        vis3d::ObjectId trajectory_object_{0};
+        uint16_t currently_stored_trajectory_length_{0};
+        ri::robot_control::Vector3 last_trajectory_point_{};
+        vis3d::Color trajectory_color_{};
 
         bool resources_registered_{false};
         bool objects_created_{false};

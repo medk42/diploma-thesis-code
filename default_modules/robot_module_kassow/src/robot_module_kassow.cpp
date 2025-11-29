@@ -544,4 +544,9 @@ void RobotModuleKassow::updateVisualization(const helpers::robot_interface::Stat
         status_message_buffered_.flange_pose,
         status_message_buffered_.end_effector_pose
     );
+
+    robot_visualization_->updateTrajectory(
+        status_message_buffered_.end_effector_pose.position,
+        1000  // keep last 1000 points
+    );
 }

@@ -138,6 +138,7 @@ bool RobotVisualization::registerResources(
     std::string_view root_link,
     std::span<const robot_model::JointDesc> joints,
     std::span<const vis3d::CylinderDesc> cylinders,
+    vis3d::Color trajectory_color,
     ArrowConfig arrow_cfg
 ) {
     if (resources_registered_ || helper_ == nullptr || !helper_->valid())
@@ -250,6 +251,7 @@ bool RobotVisualization::registerResources(
 
     arrow_resource_ = helper_->registerResource(arrow_shape);
 
+    trajectory_color_ = trajectory_color;
 
     resources_registered_ = true;
 
@@ -384,13 +386,18 @@ bool RobotVisualization::updateRobotVisualization(std::span<const double> joint_
 }
 
 
+vis3d::Vec3 convertVec3ToVis3D(const ri::robot_control::Vector3& vec_in) {
+    return vis3d::Vec3{
+        .x = static_cast<float>(vec_in.x),
+        .y = static_cast<float>(vec_in.y),
+        .z = static_cast<float>(vec_in.z)
+    };
+}
+
+
 vis3d::Pose convertPoseToVis3D(const ri::robot_control::Pose& pose_in) {
     return vis3d::Pose{
-        .t = vis3d::Vec3{
-            .x = static_cast<float>(pose_in.position.x),
-            .y = static_cast<float>(pose_in.position.y),
-            .z = static_cast<float>(pose_in.position.z)
-        },
+        .t = convertVec3ToVis3D(pose_in.position),
         .q = vis3d::Quat{
             .x = static_cast<float>(pose_in.orientation.x),
             .y = static_cast<float>(pose_in.orientation.y),
@@ -418,6 +425,67 @@ bool RobotVisualization::updateTcpPose(
     helper_->sendUpdate();
 
     return true;
+}
+
+
+bool RobotVisualization::updateTrajectory(const ri::robot_control::Vector3& trajectory_point, uint16_t history_length)
+{
+    auto last_traj_pt = last_trajectory_point_;
+    last_trajectory_point_ = trajectory_point;
+
+    if (currently_stored_trajectory_length_ == 0)
+    {
+        currently_stored_trajectory_length_ = 1;
+        return true;
+    }
+    else if (currently_stored_trajectory_length_ == 1)
+    {
+        if (!helper_->addTrajectory(
+            {
+                convertVec3ToVis3D(last_traj_pt),
+                convertVec3ToVis3D(trajectory_point)
+            }, 
+            trajectory_color_, 
+            false, 
+            trajectory_object_
+        ))
+        {
+            trajectory_object_ = vis3d::ObjectId{0};
+            currently_stored_trajectory_length_ = 0;
+            return false;
+        }
+        else
+        {
+            currently_stored_trajectory_length_ = 2;
+            return true;
+        }
+    }
+    else
+    {
+        if (std::abs(last_traj_pt.x - trajectory_point.x) < 1e-6 &&
+            std::abs(last_traj_pt.y - trajectory_point.y) < 1e-6 &&
+            std::abs(last_traj_pt.z - trajectory_point.z) < 1e-6)
+        {
+            return true; // no change
+        }
+
+        if (!helper_->updateTrajectory(
+            trajectory_object_, 
+            { convertVec3ToVis3D(trajectory_point) }, 
+            (currently_stored_trajectory_length_ < history_length) ? 0 : 1
+        ))
+        {
+            return false;
+        }
+        else
+        {
+            if (currently_stored_trajectory_length_ < history_length)
+            {
+                currently_stored_trajectory_length_ += 1;
+            }
+            return true;
+        }
+    }
 }
 
 
@@ -451,6 +519,8 @@ void RobotVisualization::removeVisualization() {
         helper_->removeObject(base_arrow_object_);
         base_arrow_object_ = vis3d::ObjectId{0};
     }
+
+    helper_->removeTrajectory(trajectory_object_);
 
     helper_->sendUpdate();
     objects_created_ = false;
