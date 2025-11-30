@@ -30,6 +30,8 @@ namespace aergo::module::helpers::serialization_helper::deserialization
 ///    Finished messages shall be sent after a long-running move command has completed (successfully or with failure).
 namespace aergo::module::helpers::robot_interface::robot_control
 {
+    using BufferReader = aergo::module::helpers::serialization_helper::deserialization::BufferReader;
+
     /// @brief Major protocol version of robot control messages.
     inline constexpr std::uint8_t ROBOT_CONTROL_MAJOR_VERSION = 1;
 
