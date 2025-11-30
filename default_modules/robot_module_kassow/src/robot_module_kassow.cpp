@@ -491,7 +491,7 @@ void RobotModuleKassow::forwardFinished(const helpers::robot_interface::Finished
     }
 
     message::SharedDataBlob blob_copy;
-    if (blob.empty())
+    if (!blob.empty())
     {
         blob_copy = allocator_->allocateFromData(blob);
         if (!blob_copy.valid())
