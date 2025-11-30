@@ -52,10 +52,54 @@ namespace aergo::module::helpers::synchronous_request_helper
 
         inline virtual ~SynchronousRequestHelper() = default;
 
+        /// @brief Check if this helper handles ingress desision for the given processing type and channel.
+        /// Usage:
+        /// ... onIngress(...) {
+        ///         if (synchronous_request_helper.handlesIngress(kind, local_channel_id, src)) {
+        ///             return synchronous_request_helper.onIngress(kind, msg, queue_status);
+        ///         }
+        ///         // handle other messages/requests/responses
+        ///     }
+        /// @param kind 
+        /// @param local_channel_id 
+        /// @param src 
+        /// @return 
         bool handlesIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src) const noexcept;
+
+        /// @brief Handle ingress messages for the given processing type and channel.
+        /// Usage:
+        /// ... onIngress(...) {
+        ///         if (synchronous_request_helper.handlesIngress(kind, local_channel_id, src)) {
+        ///             return synchronous_request_helper.onIngress(kind, msg, queue_status);
+        ///         }
+        ///         // handle other messages/requests/responses
+        ///     }
+        /// @param kind 
+        /// @param msg 
+        /// @param queue_status 
+        /// @return 
         aergo::module::IModule::IngressDecision onIngress(aergo::module::IModule::ProcessingType kind, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept;
 
+        /// @brief Check if this helper handles responses for the given request consumer channel and source.
+        /// Usage:
+        /// ... processResponse(...) {
+        ///         if (synchronous_request_helper.handlesResponse(request_consumer_id, src)) {
+        ///             synchronous_request_helper.processResponse(message);
+        ///             return;
+        ///         }
+        ///         // handle other responses
+        ///     }
         bool handlesResponse(uint32_t request_consumer_id, ChannelIdentifier src) const noexcept;
+
+        /// @brief Process response message for synchronous request.
+        /// Usage:
+        /// ... processResponse(...) {
+        ///         if (synchronous_request_helper.handlesResponse(request_consumer_id, src)) {
+        ///             synchronous_request_helper.processResponse(message);
+        ///             return;
+        ///         }
+        ///         // handle other responses
+        ///     }
         void processResponse(message::MessageHeader message) noexcept;
         
         /// @brief Send a synchronous request and wait for response or timeout (blocking call until response, timeout or asynchronous cancel call).
@@ -88,7 +132,7 @@ namespace aergo::module::helpers::synchronous_request_helper
         RequestResult sendSynchronousRequest(
             ReqEnumT request_type,
             Treq& request_data,
-            std::optional<std::span<ByteT>> blob_data,
+            std::span<ByteT> blob_data,
             Tresp& response_data,
             std::vector<std::vector<std::byte>>* response_blobs = nullptr,
             aergo::module::IAllocator* allocator = nullptr,
@@ -179,7 +223,7 @@ namespace aergo::module::helpers::synchronous_request_helper
     template <typename ReqEnumT>
     void SynchronousRequestHelper<ReqEnumT>::processResponse(message::MessageHeader message) noexcept
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::mutex> lock(mutex_);
 
         if (request_pending_ && pending_request_id_ == message.id_)
         {
@@ -216,7 +260,7 @@ namespace aergo::module::helpers::synchronous_request_helper
     RequestResult SynchronousRequestHelper<ReqEnumT>::sendSynchronousRequest(
         ReqEnumT request_type,
         Treq& request_data,
-        std::optional<std::span<ByteT>> blob_data,
+        std::span<ByteT> blob_data,
         Tresp& response_data,
         std::vector<std::vector<std::byte>>* response_blobs,
         aergo::module::IAllocator* allocator,
@@ -227,7 +271,7 @@ namespace aergo::module::helpers::synchronous_request_helper
         static_assert(std::is_trivially_copyable_v<Tresp>, "Tresp must be trivially copyable");
         static_assert(sizeof(ByteT) == 1, "ByteT must be a byte type (size 1)");
 
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::mutex> lock(mutex_);
 
         if (request_pending_)
         {
@@ -249,7 +293,7 @@ namespace aergo::module::helpers::synchronous_request_helper
         const auto& channel_info = it->second;
 
         aergo::module::message::SharedDataBlob request_blob;
-        bool with_blob = blob_data.has_value();
+        bool with_blob = blob_data.size() > 0;
         if (with_blob)
         {
             if (allocator == nullptr)
@@ -258,8 +302,8 @@ namespace aergo::module::helpers::synchronous_request_helper
                 return RequestResult::ALLOC_FAILED;
             }
 
-            request_blob = allocator->allocate(blob_data->size());
-            if (!request_blob.valid() || request_blob.size() != blob_data->size())
+            request_blob = allocator->allocateFromData(blob_data);
+            if (!request_blob.valid())
             {
                 base_module_ref_.log(aergo::module::logging::LogType::ERROR, "SynchronousRequestHelper: sendSynchronousRequest failed - allocator failed to allocate memory for request blob.");
                 return RequestResult::ALLOC_FAILED;
@@ -347,7 +391,7 @@ namespace aergo::module::helpers::synchronous_request_helper
 
             for (uint64_t i = 0; i < response_data_->blob_count_; ++i)
             {
-                const aergo::module::message::SharedDataBlob& resp_blob = response_data_->blobs_[i];
+                aergo::module::message::SharedDataBlob& resp_blob = response_data_->blobs_[i];
                 if (resp_blob.valid() && resp_blob.size() > 0)
                 {
                     std::vector<std::byte> blob_data_vector(resp_blob.size());
