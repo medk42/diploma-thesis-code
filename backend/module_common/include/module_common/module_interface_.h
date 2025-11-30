@@ -269,7 +269,7 @@ namespace aergo::module
             static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
 
             auto blob = allocate(static_cast<uint64_t>(data.size()));
-            if (!blob.valid() || blob.size() != data.size())
+            if (!blob.valid() || blob.size() < data.size())
             {
                 return message::SharedDataBlob(); // allocation failed, return invalid blob
             }
