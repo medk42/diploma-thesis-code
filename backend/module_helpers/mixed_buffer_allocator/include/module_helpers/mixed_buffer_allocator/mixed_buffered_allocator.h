@@ -23,7 +23,7 @@ namespace aergo::module::helpers::mixed_buffer_allocator
         /// @return New allocator or nullptr on failure.
         static std::unique_ptr<MixedBufferedAllocator> create(aergo::module::BaseModule* base_module, uint64_t slot_size_bytes, uint32_t number_of_slots);
 
-        ~MixedBufferedAllocator() override = default;
+        ~MixedBufferedAllocator() override;
 
         /// @brief Allocate "number_of_bytes" bytes of shared memory. If number_of_bytes is less than or equal to slot_size_bytes,
         /// allocation is attempted from the static buffered allocator first, otherwise (or on failure) from the dynamic allocator.
@@ -39,11 +39,18 @@ namespace aergo::module::helpers::mixed_buffer_allocator
         virtual void removeOwner(ISharedData* data) noexcept override {}
 
     private:
-        MixedBufferedAllocator(BaseModule::AllocatorPtr static_allocator, BaseModule::AllocatorPtr dynamic_allocator, uint64_t static_slot_size_bytes)
-            : static_allocator_(std::move(static_allocator)), dynamic_allocator_(std::move(dynamic_allocator)), static_slot_size_bytes_(static_slot_size_bytes) {}
+        MixedBufferedAllocator(BaseModule::AllocatorPtr static_allocator, BaseModule::AllocatorPtr dynamic_allocator, uint64_t static_slot_size_bytes, uint32_t number_of_slots)
+            : static_allocator_(std::move(static_allocator)), dynamic_allocator_(std::move(dynamic_allocator)), static_slot_size_bytes_(static_slot_size_bytes), number_of_slots_(number_of_slots) {}
 
         BaseModule::AllocatorPtr static_allocator_;
         BaseModule::AllocatorPtr dynamic_allocator_;
         uint64_t static_slot_size_bytes_;
+        uint32_t number_of_slots_;
+
+        uint64_t allocated_from_static_ = 0;                 // allocations served from static buffered allocator
+        uint64_t allocated_from_dynamic_exhaustion_ = 0;     // allocations served from dynamic allocator due to static exhaustion
+        uint64_t allocated_from_dynamic_large_request_ = 0;  // allocations served from dynamic allocator due to large request
+        uint64_t allocation_failures_ = 0;                   // total allocation failures (both static and dynamic failed to allocate)
+        uint64_t max_allocated_size_ = 0;                    // maximum allocated size
     };
 }
