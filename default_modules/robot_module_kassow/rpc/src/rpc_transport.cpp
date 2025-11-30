@@ -556,6 +556,7 @@ namespace aergo::robot::kassow::rpc
         {
             if (!socket_.recvAll(reinterpret_cast<uint8_t*>(payload.data()), header.payload_size, timeout, logger_))
             {
+                log(RpcLogType::ERROR, "Failed to receive RPC frame payload");
                 return false;
             }
         }
@@ -563,6 +564,7 @@ namespace aergo::robot::kassow::rpc
         {
             if (!socket_.recvAll(reinterpret_cast<uint8_t*>(blob.data()), header.blob_size, timeout, logger_))
             {
+                log(RpcLogType::ERROR, "Failed to receive RPC frame blob");
                 return false;
             }
         }
