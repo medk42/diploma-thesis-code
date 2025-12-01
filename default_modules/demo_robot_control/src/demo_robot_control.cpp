@@ -337,7 +337,7 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::runProgram(
             response,
             &response_blobs,
             mixed_allocator_.get(),
-            500 // timeout ms
+            100 // timeout ms
         );
 
         if (sync_result != sync_req::RequestResult::SUCCESS)
