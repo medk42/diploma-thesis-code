@@ -1100,7 +1100,8 @@ void ProgramTree::onCutCommand()
 
     // keep existing_usecases_list_, parameters_container_ and existing_usecase_parameter_widgets_ in sync
     existing_usecases_list_->removeCommand(selected_index);
-    parameters_container_->removeWidget(existing_usecase_parameter_widgets_[selected_index]);
+    parameters_container_->setCurrentIndex(static_cast<int>(selected_index + 1)); // switch to the page of the removed usecase to remove it
+    parameters_container_->removeWidget(parameters_container_->currentWidget());
     existing_usecase_parameter_widgets_.erase(existing_usecase_parameter_widgets_.begin() + selected_index);
 
     parameters_container_->setCurrentIndex(0); // show empty page after removal
