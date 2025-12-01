@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <vector>
+#include <numbers>
 
 using namespace aergo::default_modules::demo_robot_control;
 using namespace aergo::module;
@@ -227,7 +228,7 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::createCommandFromPa
         command_json["target_positions"].push_back(joint_positions);
     }
 
-    double deg_to_rad = M_PI / 180.0;
+    double deg_to_rad = std::numbers::pi / 180.0;
     command_json["joint_speed_rad"] = std::get<double>(advanced_parameter_values[0][0].value_) * deg_to_rad;
     command_json["joint_acceleration_rad"] = std::get<double>(advanced_parameter_values[1][0].value_) * deg_to_rad;
 
@@ -293,7 +294,7 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::runProgram(
     const double joint_speed_rad = command_json["joint_speed_rad"].get<double>();
     const double joint_acceleration_rad = command_json["joint_acceleration_rad"].get<double>();
 
-    double deg_to_rad = M_PI / 180.0;
+    double deg_to_rad = std::numbers::pi / 180.0;
     if (joint_speed_rad <= 1 * deg_to_rad || joint_speed_rad > 225.0 * deg_to_rad)
     {
         return std::unexpected(uw::helper::ErrorInfo::WithDetails(2, "DemoRobotControl: 'joint_speed_rad' must be in range [1, 225 degrees], got " + std::to_string(joint_speed_rad / deg_to_rad) + " degrees."));
@@ -309,7 +310,7 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::runProgram(
         std::string pos_str = "DemoRobotControl: Moving to target positions:\n";
         for (size_t i = 0; i < joint_positions.size(); ++i)
         {
-            pos_str += "\tJ" + std::to_string(i + 1) + ": " + std::to_string(joint_positions[i] * (180.0 / M_PI)) + " deg;\n";
+            pos_str += "\tJ" + std::to_string(i + 1) + ": " + std::to_string(joint_positions[i] * (180.0 / std::numbers::pi)) + " deg;\n";
         }
         log(logging::LogType::INFO, pos_str);
         

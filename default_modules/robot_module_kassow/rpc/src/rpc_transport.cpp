@@ -17,6 +17,7 @@
 using socket_len_t = int;
 using socket_send_recv_t = int;
 static constexpr int INVALID_SOCKET_FD = INVALID_SOCKET;
+#undef ERROR
 #elif defined(__APPLE__)
 #include <arpa/inet.h>
 #include <libkern/OSByteOrder.h>
