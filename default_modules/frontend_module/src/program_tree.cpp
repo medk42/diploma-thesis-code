@@ -1330,19 +1330,19 @@ void ProgramTree::handleButtonStates()
     bool all_existing_usecases_valid = existing_usecases_list_->allCommandsHaveStatus(ProgramCommand::Status::Normal);
     size_t command_count = existing_usecases_list_->commandCount();
 
-    if (program_state_opt == current_running_program_state_ && 
+    if (program_state_opt == program_state_unsafe_.current_running_program_state_ && 
         all_existing_usecases_valid == all_existing_usecases_valid_ &&
         command_count == last_existing_usecase_count_) 
     {
         return; // no change
     }
 
-    if (program_state_opt.has_value() && program_state_opt == ut::ProgramInstance::ProgramState::STOPPED && program_state_opt != current_running_program_state_)
+    if (program_state_opt.has_value() && program_state_opt == ut::ProgramInstance::ProgramState::STOPPED && program_state_opt != program_state_unsafe_.current_running_program_state_)
     {
         handleProgramStopped();
     }
     
-    current_running_program_state_ = program_state_opt;
+    program_state_unsafe_.current_running_program_state_ = program_state_opt;
     all_existing_usecases_valid_ = all_existing_usecases_valid;
     last_existing_usecase_count_ = command_count;
 

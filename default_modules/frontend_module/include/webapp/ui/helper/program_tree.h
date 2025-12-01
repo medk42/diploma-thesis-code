@@ -19,6 +19,7 @@
 #include <atomic>
 #include <filesystem>
 #include <expected>
+#include <optional>
 
 #include <Wt/WContainerWidget.h>
 #include <Wt/WStackedWidget.h>
@@ -45,6 +46,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         ut::uw::helper::ErrorInfo generate_error_info_; // error info from generation of command data JSON
         bool generate_successful_ = false; // whether generation of command data JSON was successful
         size_t generate_usecase_index = 0; // index of existing usecase being generated
+
+        std::optional<ut::ProgramInstance::ProgramState> current_running_program_state_{ std::nullopt }; // current running program state, to detect changes
 
         std::unique_ptr<helpers::async_helpers::AsyncTask<std::optional<std::string>>> save_program_task_; // async task for saving program to file
         std::string save_file_path_;
@@ -186,7 +189,6 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         bool all_existing_usecases_valid_{ false };
         size_t last_existing_usecase_count_{ 0 };
-        std::optional<ut::ProgramInstance::ProgramState> current_running_program_state_{ std::nullopt };
         Wt::Signal<ProgramTreeButtonState> onButtonStateChanged_; // emitted when button states change
     };
 }
