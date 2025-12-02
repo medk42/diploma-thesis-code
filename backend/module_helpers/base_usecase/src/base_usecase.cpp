@@ -342,6 +342,24 @@ void BaseUsecase::handleControlRequests(bool allow_pause, bool allow_stop)
 
 
 
+std::tuple<bool, bool> BaseUsecase::checkControlRequests()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    auto thread_id = std::this_thread::get_id();
+    auto it = program_statuses_.find(thread_id);
+    if (it == program_statuses_.end())
+    {
+        log(logging::LogType::ERROR, "checkControlRequests called from unknown thread: " + std::to_string(std::hash<std::thread::id>{}(thread_id)));
+        return {false, false}; // no status found for this thread
+    }
+    auto& program_status = it->second;
+
+    return {program_status.pause_requested_, program_status.stop_requested_};
+}
+
+
+
 BaseUsecase::UsecaseStatus* BaseUsecase::getStatusForIdUnsafe(uint64_t task_id)
 {
     auto it = task_id_to_thread_id_.find(task_id);

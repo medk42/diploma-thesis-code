@@ -11,6 +11,7 @@
 #include <thread>
 #include <exception>
 #include <condition_variable>
+#include <tuple>
 
 namespace aergo::module::helpers::base_usecase
 {
@@ -74,6 +75,10 @@ namespace aergo::module::helpers::base_usecase
         /// @param allow_pause 
         /// @param allow_stop 
         void handleControlRequests(bool allow_pause, bool allow_stop);
+
+        /// @brief Check if pause or stop has been requested for the current program.
+        /// @return Tuple of (pause_requested, stop_requested)
+        std::tuple<bool, bool> checkControlRequests();
 
         /// @brief Validate if the provided parameters JSON is valid and can be started.
         /// @return {} if parameters are valid, std::unexpected(ErrorInfo) otherwise
