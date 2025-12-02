@@ -391,7 +391,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
             "  track.style.touchAction='none';"
             "})();";
 
-            app->doJavaScript(js);
+            track_->doJavaScript(js);
         }
 
     protected:
