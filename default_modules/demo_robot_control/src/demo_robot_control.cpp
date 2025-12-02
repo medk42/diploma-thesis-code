@@ -354,10 +354,64 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::runProgram(
 
         log(logging::LogType::INFO, "DemoRobotControl: Robot action " + std::to_string(response.action_id) + " finished successfully.");
 
-        running_action_id_ = response.action_id;
+        uint64_t action_id = response.action_id;
+        running_action_id_ = action_id;
+        bool stopping = false;
         while (running_action_id_.has_value())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (stopping)
+            {
+                continue;
+            }
+            
+            auto [pause_requested, stop_requested] = checkControlRequests();
+            if (stop_requested)
+            {
+                log(logging::LogType::INFO, "DemoRobotControl: Stop requested, cancelling robot action " + std::to_string(action_id) + ".");
+
+                ri::Request cancel_request
+                {
+                    .req_type = ri::ReqType::UPDATE_ACTION,
+                    .feature = ri::RobotFeature::ROBOT_CONTROL,
+                    .action_id = action_id
+                };
+
+                rc::update::requests::serialization::moveRequest(
+                    request_data,
+                    rc::update::requests::MoveRequest::CancelMovement
+                );
+
+                sync_result = sync_request_helper_->sendSynchronousRequest(
+                    RequestType::ROBOT_REQUEST,
+                    cancel_request,
+                    std::span<std::byte>(request_data),
+                    response,
+                    &response_blobs,
+                    mixed_allocator_.get(),
+                    100 // timeout ms
+                );
+
+                if (sync_result != sync_req::RequestResult::SUCCESS)
+                {
+                    return std::unexpected(uw::helper::ErrorInfo::WithDetails(7, "DemoRobotControl: Synchronous request to cancel robot action failed, error code: " + std::to_string(static_cast<uint8_t>(sync_result))));
+                }
+
+                if (response.resp_type == ri::RespType::SUCCESS)
+                {
+                    log(logging::LogType::INFO, "DemoRobotControl: Robot action " + std::to_string(action_id) + " cancelled successfully.");
+                    stopping = true;
+                    continue;
+                }
+                else if (response.resp_type == ri::RespType::NOT_IN_PROGRESS)
+                {
+                    log(logging::LogType::WARNING, "DemoRobotControl: Robot action " + std::to_string(action_id) + " could not be cancelled because it was not in progress.");
+                }
+                else
+                {
+                    return std::unexpected(uw::helper::ErrorInfo::WithDetails(8, "DemoRobotControl: Robot responded with failure to cancel action, response type: " + std::to_string(static_cast<uint8_t>(response.resp_type))));
+                }
+            }
         }
         if (last_action_result_.has_value())
         {
@@ -368,6 +422,7 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::runProgram(
             }
             last_action_result_.reset();
         }
+        handleControlRequests(true, true);
     }
     
 
