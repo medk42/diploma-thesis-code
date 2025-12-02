@@ -154,6 +154,7 @@ void DemoRobotControl::processMessage(uint32_t subscribe_consumer_id, ChannelIde
         
         if (running_action_id_.has_value() && *running_action_id_ == finished_msg.action_id)
         {
+            last_action_result_ = std::make_tuple(finished_msg.success, err_msg);
             // clear running action ID
             running_action_id_.reset();
         }
@@ -357,6 +358,15 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::runProgram(
         while (running_action_id_.has_value())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (last_action_result_.has_value())
+        {
+            const auto& [success, message] = *last_action_result_;
+            if (!success)
+            {
+                return std::unexpected(uw::helper::ErrorInfo::WithDetails(6, "DemoRobotControl: Robot action failed with error: " + (message.empty() ? std::string("UNKNOWN_ERROR") : message)));
+            }
+            last_action_result_.reset();
         }
     }
     

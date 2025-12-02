@@ -8,6 +8,8 @@
 
 #include <expected>
 #include <optional>
+#include <tuple>
+#include <string>
 
 namespace aergo::default_modules::demo_robot_control
 {
@@ -68,5 +70,6 @@ namespace aergo::default_modules::demo_robot_control
         uint32_t robot_finished_channel_;
 
         std::optional<uint64_t> running_action_id_;
+        std::optional<std::tuple<bool, std::string>> last_action_result_; // success, message
     };
 }
