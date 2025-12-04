@@ -10,7 +10,7 @@ add_library(${LIB_NAME} STATIC ${PROJECT_SOURCES})
 
 target_include_directories(${LIB_NAME} PUBLIC include)
 
-target_link_libraries(${LIB_NAME} PRIVATE helpers___serialization_helper)
+target_link_libraries(${LIB_NAME} PUBLIC helpers___serialization_helper)
 
 if (TARGET module_common) # we only need module_common for message_types_definitions.h, we can avoid the dependency otherwise (use in external robot modules)
     target_link_libraries(${LIB_NAME} PUBLIC module_common)

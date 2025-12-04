@@ -69,7 +69,7 @@ namespace aergo::module::helpers::robot_interface
 
     /// @brief Structure of a robot interface response message.
     /// There are several types of responses: FEATURE_NOT_SUPPORTED, NOT_IN_PROGRESS, DATA_INVALID, SUCCESS_IN_PROGRESS, SUCCESS, and FAILURE.
-    ///     FEATURE_NOT_SUPPORTED is used to indicate that the requested feature is not supported by the robot interface (for START_ACTION requests).
+    ///     FEATURE_NOT_SUPPORTED is used to indicate that the requested feature is not supported by the robot interface (for START_ACTION and UPDATE_ACTION requests).
     ///     NOT_IN_PROGRESS is used to indicate that there is no such action in progress (unknown action_id) (for UPDATE_ACTION requests).
     ///     DATA_INVALID is used to indicate that the data blob is invalid or malformed for the requested feature/action.
     ///     SUCCESS_IN_PROGRESS is used to indicate that the action has been started successfully and is ongoing (for START_ACTION requests).

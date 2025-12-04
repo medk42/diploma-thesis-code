@@ -3,6 +3,7 @@
 #include "structs.h"
 
 #include "module_helpers/robot_interface/cpp17_utils.h"
+#include "module_helpers/serialization_helper/serialization_helper.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -10,13 +11,7 @@
 #include <string>
 #include <variant>
 
-// Forward declaration of BufferReader so we don't pull in the helper here.
-namespace aergo::module::helpers::serialization_helper::deserialization
-{
-    class BufferReader;
-}
-
-/// @brief Implemenation of robot control feature.
+/// @brief Implementation of robot control feature.
 /// Start requests include move commands (move joint, move linear, move arc, move trajectory) and get robot specs request.
 ///    Move commands shall initiate robot movement and return immediately with SuccessInProgress response (with action_id) if movement started successfully, no response data.
 ///       If movement could not be started, Failure response is returned with optional error message in response data.
@@ -60,7 +55,7 @@ namespace aergo::module::helpers::robot_interface::robot_control
                 ///    [u8 version][u8 type=MoveJoint]
                 ///    [u8 joint_count][joint_count * f64 joint_targets]
                 ///    [f64 speed][f64 acceleration]
-                /// @param joint_targets The target joint positions to move to.
+                /// @param joint_targets The target joint positions to move to, in radians.
                 /// @param speed The speed to move at, in rad/s.
                 /// @param acceleration The acceleration to use, in rad/s^2.
                 /// @return A serialized request message.
