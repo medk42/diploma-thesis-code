@@ -306,6 +306,12 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
             uint64_t timestamp_ns = message.timestamp_ns_; // capture timestamp for logging inside lambda if needed
             bool success = message.success_; // capture success flag for logging inside lambda if needed
 
+            if (!frontend_state_.active_app_)
+            {
+                log(aergo::module::logging::LogType::WARNING, "No active frontend app to process usecase tree response.");
+                return;
+            }
+
             // Process the response in the Wt server thread - with frontend_state_ lock and UI lock held
             w_server_->post(frontend_state_.active_app_->sessionId(), [this, source_channel, message_copy, blobs_copy, message_id, timestamp_ns, success]() {
                 std::unique_lock<std::mutex> lock(frontend_state_.mutex_);
