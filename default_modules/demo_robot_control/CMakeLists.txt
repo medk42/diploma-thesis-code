@@ -5,6 +5,7 @@ set(REQUIRED_HELPER_LIBS
     helpers___robot_interface
     helpers___mixed_buffer_allocator
     helpers___synchronous_request_helper
+    helpers___robot_wrapper
 )
 
 # gather sources (updates when files change)

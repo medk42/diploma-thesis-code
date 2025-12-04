@@ -17,96 +17,12 @@ namespace rc = ri::robot_control;
 using json = nlohmann::json;
 
 
-DemoRobotControl::DemoRobotControl(
-    const char* data_path, 
-    aergo::module::ICore* core, 
-    aergo::module::InputChannelMapInfo channel_map_info, 
-    const aergo::module::logging::ILogger* logger, 
-    uint64_t module_id, 
-    const aergo::module::ModuleInfo* module_info,
-    bool supports_multi_program,
-    bool supports_pause,
-    bool supports_stop
-)  : BaseUsecase(
-        data_path, core, channel_map_info, 
-        logger, module_id, module_info,
-        supports_multi_program, supports_pause, supports_stop
-    )
-{
-
-    if (!getRequestChannelByName(ri::robot_interface_request_consumer.channel_type_identifier_, robot_request_channel_))
-    {
-        log(logging::LogType::ERROR, "DemoRobotControl: Failed to get robot request channel.");
-        return;
-    }
-
-    if (!getSubscribeChannelByName(ri::robot_interface_status_consumer.channel_type_identifier_, robot_status_channel_))
-    {
-        log(logging::LogType::ERROR, "DemoRobotControl: Failed to get robot status subscribe channel.");
-        return;
-    }
-
-    if (!getSubscribeChannelByName(ri::robot_interface_finished_consumer.channel_type_identifier_, robot_finished_channel_))
-    {
-        log(logging::LogType::ERROR, "DemoRobotControl: Failed to get robot finished subscribe channel.");
-        return;
-    }
-
-    mixed_allocator_ = std::move(
-        aergo::module::helpers::mixed_buffer_allocator::MixedBufferedAllocator::create(
-            this,
-            128,  // slot size bytes
-            16    // number of slots
-        )
-    );
-
-    if (!mixed_allocator_)
-    {
-        log(logging::LogType::ERROR, "DemoRobotControl: Failed to create mixed buffered allocator.");
-        return;
-    }
-
-    auto channel_info = getRequestChannelInfo(robot_request_channel_);
-    if (channel_info.channel_identifier_count_ != 1)
-    {
-        log(logging::LogType::ERROR, "DemoRobotControl: Robot request channel must be mapped to exactly one module.");
-        return;
-    }
-
-    std::map<RequestType, sync_req::RequestChannelInfo> request_type_to_channel = {
-        { 
-            RequestType::ROBOT_REQUEST, 
-            {
-                .local_channel_id_ = robot_request_channel_,
-                .target_channel_ = channel_info.channel_identifier_[0]
-            }
-        }
-    };
-
-    sync_request_helper_ = std::make_unique<sync_req::SynchronousRequestHelper<RequestType>>(
-        request_type_to_channel, *(static_cast<BaseModule*>(this))
-    );
-
-
-    valid_ = true;
-}
-
 
 aergo::module::IModule::IngressDecision DemoRobotControl::onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept
 {
-    if (kind == IModule::ProcessingType::RESPONSE)
+    if (robot_wrapper_.handlesIngress(kind, local_channel_id, src))
     {
-        log(logging::LogType::INFO, "DemoRobotControl: onIngress, response received on channel " + std::to_string(local_channel_id) + " from module " + std::to_string(src.producer_module_id_) + ", channel " + std::to_string(src.producer_channel_id_) + ".");
-    }
-
-    if (sync_request_helper_->handlesIngress(kind, local_channel_id, src))
-    {
-        return sync_request_helper_->onIngress(kind, msg, queue_status);
-    }
-    if (kind == IModule::ProcessingType::MESSAGE && local_channel_id == robot_finished_channel_)
-    {
-        // always accept robot finished messages
-        return IModule::IngressDecision::ACCEPT;
+        return robot_wrapper_.onIngress(kind, msg, queue_status);
     }
 
     // push all other messages to BaseUsecase for decision
@@ -116,11 +32,9 @@ aergo::module::IModule::IngressDecision DemoRobotControl::onIngress(aergo::modul
 
 void DemoRobotControl::processResponse(uint32_t request_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    log(logging::LogType::INFO, "DemoRobotControl: processResponse called on channel " + std::to_string(request_consumer_id) + " from module " + std::to_string(source_channel.producer_module_id_) + ", channel " + std::to_string(source_channel.producer_channel_id_) + ".");
-
-    if (sync_request_helper_->handlesResponse(request_consumer_id, source_channel))
+    if (robot_wrapper_.handlesResponse(request_consumer_id, source_channel))
     {
-        sync_request_helper_->processResponse(message);
+        robot_wrapper_.processResponse(message);
         return;
     }
 
@@ -130,43 +44,9 @@ void DemoRobotControl::processResponse(uint32_t request_consumer_id, ChannelIden
 
 void DemoRobotControl::processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept
 {
-    if (subscribe_consumer_id == robot_finished_channel_)
-    {
-        // process robot finished message
-        ri::FinishedMessage finished_msg;
-        if (!message.readAs(finished_msg))
-        {
-            log(logging::LogType::ERROR, "DemoRobotControl: Failed to read robot finished message.");
-            return;
-        }
-        log(logging::LogType::INFO, "DemoRobotControl: Received robot finished message for action ID " + std::to_string(finished_msg.action_id) + ", success: " + std::to_string(finished_msg.success) + ", blobs: " + std::to_string(message.blob_count_) + ".");
-        std::string err_msg;
-        if (message.blob_count_ != 0)
-        {
-            rc::BufferReader reader(message.blobs_[0].data(), message.blobs_[0].size());
-            rc::common::deserialization::deserializeErrorMessage(reader, err_msg);
-        }
+    robot_wrapper_.processMessage(subscribe_consumer_id, message);
 
-        log(
-            finished_msg.success ? logging::LogType::INFO : logging::LogType::ERROR, 
-            finished_msg.success ? "DemoRobotControl: Robot action " + std::to_string(finished_msg.action_id) + " finished successfully." : ("DemoRobotControl: Robot action " + std::to_string(finished_msg.action_id) + " finished with error: " + (err_msg.empty() ? std::string("UNKNOWN_ERROR") : err_msg))
-        );
-        
-        if (running_action_id_.has_value() && *running_action_id_ == finished_msg.action_id)
-        {
-            last_action_result_ = std::make_tuple(finished_msg.success, err_msg);
-            // clear running action ID
-            running_action_id_.reset();
-        }
-        else
-        {
-            log(logging::LogType::WARNING, "DemoRobotControl: Received finished message for unknown action ID, received: " + std::to_string(finished_msg.action_id) + " expected: " + (running_action_id_.has_value() ? std::to_string(*running_action_id_) : "NONE"));
-        }
-
-        return;
-    }
-
-    // pass all other messages to BaseUsecase
+    // pass all messages also to BaseUsecase
     BaseUsecase::processMessage(subscribe_consumer_id, source_channel, message);
 }
 
@@ -315,113 +195,42 @@ std::expected<void, uw::helper::ErrorInfo> DemoRobotControl::runProgram(
         }
         log(logging::LogType::INFO, pos_str);
         
-        ri::Request joint_move_request
-        {
-            .req_type = ri::ReqType::START_ACTION,
-            .feature = ri::RobotFeature::ROBOT_CONTROL,
-            .action_id = 0 // not used for START_ACTION
-        };
-
-        std::vector<std::byte> request_data;
-        rc::start::requests::serialization::moveJoint(
-            request_data,
-            Span<const double>(joint_positions.data(), joint_positions.size()),
+        rc::MoveRequestResult res = robot_wrapper_.moveJoint(
+            joint_positions,
             joint_speed_rad,
-            joint_acceleration_rad
+            joint_acceleration_rad,
+            false // false == async
         );
 
-        ri::Response response;
-        std::vector<std::vector<std::byte>> response_blobs;
-        sync_req::RequestResult sync_result = sync_request_helper_->sendSynchronousRequest(
-            RequestType::ROBOT_REQUEST,
-            joint_move_request,
-            std::span<std::byte>(request_data),
-            response,
-            &response_blobs,
-            mixed_allocator_.get(),
-            100 // timeout ms
-        );
-
-        if (sync_result != sync_req::RequestResult::SUCCESS)
+        if (!res.success_)
         {
-            return std::unexpected(uw::helper::ErrorInfo::WithDetails(4, "DemoRobotControl: Synchronous request to move joints failed, error code: " + std::to_string(static_cast<uint8_t>(sync_result))));
+            return std::unexpected(uw::helper::ErrorInfo::WithDetails(4, "DemoRobotControl: Failed to send move joint command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)));
         }
-
-        if (response.resp_type != ri::RespType::SUCCESS_IN_PROGRESS)
-        {
-            return std::unexpected(uw::helper::ErrorInfo::WithDetails(5, "DemoRobotControl: Robot responded with failure to move joints, response type: " + std::to_string(static_cast<uint8_t>(response.resp_type))));
-        }
-
-        log(logging::LogType::INFO, "DemoRobotControl: Robot action " + std::to_string(response.action_id) + " finished successfully.");
-
-        uint64_t action_id = response.action_id;
-        running_action_id_ = action_id;
-        bool stopping = false;
-        while (running_action_id_.has_value())
+        
+        bool cancel_requested = false;
+        while (robot_wrapper_.isActionActive(res.action_id_))
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            if (stopping)
+
+            if (cancel_requested)
             {
-                continue;
+                continue; // already requested cancel, just wait for action to end
             }
-            
+
             auto [pause_requested, stop_requested] = checkControlRequests();
             if (stop_requested)
             {
-                log(logging::LogType::INFO, "DemoRobotControl: Stop requested, cancelling robot action " + std::to_string(action_id) + ".");
+                log(logging::LogType::INFO, "DemoRobotControl: Stop requested, cancelling robot action " + std::to_string(res.action_id_) + ".");
 
-                ri::Request cancel_request
+                rc::MoveRequestResult cancel_res = robot_wrapper_.cancelAction(res.action_id_);
+                if (!cancel_res.success_)
                 {
-                    .req_type = ri::ReqType::UPDATE_ACTION,
-                    .feature = ri::RobotFeature::ROBOT_CONTROL,
-                    .action_id = action_id
-                };
-
-                rc::update::requests::serialization::moveRequest(
-                    request_data,
-                    rc::update::requests::MoveRequest::CancelMovement
-                );
-
-                sync_result = sync_request_helper_->sendSynchronousRequest(
-                    RequestType::ROBOT_REQUEST,
-                    cancel_request,
-                    std::span<std::byte>(request_data),
-                    response,
-                    &response_blobs,
-                    mixed_allocator_.get(),
-                    100 // timeout ms
-                );
-
-                if (sync_result != sync_req::RequestResult::SUCCESS)
-                {
-                    return std::unexpected(uw::helper::ErrorInfo::WithDetails(7, "DemoRobotControl: Synchronous request to cancel robot action failed, error code: " + std::to_string(static_cast<uint8_t>(sync_result))));
+                    return std::unexpected(uw::helper::ErrorInfo::WithDetails(5, "DemoRobotControl: Failed to send cancel command to robot for action " + std::to_string(res.action_id_) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_)));
                 }
-
-                if (response.resp_type == ri::RespType::SUCCESS)
-                {
-                    log(logging::LogType::INFO, "DemoRobotControl: Robot action " + std::to_string(action_id) + " cancelled successfully.");
-                    stopping = true;
-                    continue;
-                }
-                else if (response.resp_type == ri::RespType::NOT_IN_PROGRESS)
-                {
-                    log(logging::LogType::WARNING, "DemoRobotControl: Robot action " + std::to_string(action_id) + " could not be cancelled because it was not in progress.");
-                }
-                else
-                {
-                    return std::unexpected(uw::helper::ErrorInfo::WithDetails(8, "DemoRobotControl: Robot responded with failure to cancel action, response type: " + std::to_string(static_cast<uint8_t>(response.resp_type))));
-                }
+                cancel_requested = true;
             }
         }
-        if (last_action_result_.has_value())
-        {
-            const auto& [success, message] = *last_action_result_;
-            if (!success)
-            {
-                return std::unexpected(uw::helper::ErrorInfo::WithDetails(6, "DemoRobotControl: Robot action failed with error: " + (message.empty() ? std::string("UNKNOWN_ERROR") : message)));
-            }
-            last_action_result_.reset();
-        }
+
         handleControlRequests(true, true);
     }
     
