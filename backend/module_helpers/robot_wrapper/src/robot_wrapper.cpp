@@ -71,6 +71,11 @@ RobotWrapper::RobotWrapper(BaseModule &base_module, uint32_t sync_request_timeou
 
 bool RobotWrapper::handlesIngress(IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src) const noexcept
 {
+    if (kind == IModule::ProcessingType::MESSAGE && 
+        (local_channel_id == robot_status_channel_ || local_channel_id == robot_finished_channel_))
+    {
+        return true;
+    }
     return sync_request_helper_->handlesIngress(kind, local_channel_id, src);
 }
 
@@ -285,6 +290,11 @@ MoveRequestResult RobotWrapper::moveCommon(std::span<const std::byte> request_da
     uint64_t action_id = response.action_id;
     if (blocking)
     {
+        if (sync_action_ids_.find(action_id) != sync_action_ids_.end())
+        {
+            base_module_.log(logging::LogType::WARNING, "RobotWrapper: Duplicate action ID received for blocking move: " +  std::to_string(action_id));
+        }
+
         sync_action_ids_[action_id] = std::nullopt; // track as blocking action
         cv_.wait(lock, [this, action_id]() {
             auto it = sync_action_ids_.find(action_id);
@@ -300,12 +310,17 @@ MoveRequestResult RobotWrapper::moveCommon(std::span<const std::byte> request_da
         }
         else
         {
-            async_action_ids_.insert(action_id); // track as async action
             return MoveRequestResult{ false, "RobotWrapper: Action ID not found after blocking wait.", 0 };
         }
     }
     else // non-blocking, return immediately with action ID
     {
+        if (async_action_ids_.find(action_id) != async_action_ids_.end())
+        {
+            base_module_.log(logging::LogType::WARNING, "RobotWrapper: Duplicate action ID received for async move: " +  std::to_string(action_id));
+        }
+
+        async_action_ids_.insert(action_id); // track as async action
         return MoveRequestResult{ true, {}, action_id };
     }
 }
