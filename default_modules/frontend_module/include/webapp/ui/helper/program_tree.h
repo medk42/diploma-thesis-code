@@ -114,6 +114,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         void showStateSaving();
         void closeSaveProgramDialog();
+
+        void closeSaveProgramOverwriteDialog();
         
         void showStateLoading();
         void closeLoadProgramDialog();
@@ -179,6 +181,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         ReusableDialog* reload_usecase_dialog_{ nullptr };
         ReusableDialog* new_program_dialog_{ nullptr };
         ReusableDialog* save_program_dialog_{ nullptr };
+        ReusableDialog* save_program_overwrite_dialog_{ nullptr };
         ReusableDialog* load_program_dialog_{ nullptr };
         FileDialog* program_file_dialog_{ nullptr };
 

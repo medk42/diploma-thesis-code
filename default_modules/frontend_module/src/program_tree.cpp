@@ -829,6 +829,16 @@ void ProgramTree::closeLoadProgramDialog()
 }
 
 
+void ProgramTree::closeSaveProgramOverwriteDialog()
+{
+    if (save_program_overwrite_dialog_ != nullptr)
+    {
+        removeWidget(save_program_overwrite_dialog_);
+        save_program_overwrite_dialog_ = nullptr;
+    }
+}
+
+
 void ProgramTree::showStateSaving()
 {
     closeSaveProgramDialog();
@@ -858,7 +868,7 @@ void ProgramTree::saveStateToFile(const std::filesystem::path& file_path, bool o
     if (!overwrite_confirmed && std::filesystem::exists(file_path))
     {
         // ask for confirmation
-        save_program_dialog_ = addWidget(std::make_unique<ReusableDialog>(
+        save_program_overwrite_dialog_ = addWidget(std::make_unique<ReusableDialog>(
             "Confirm Overwrite", 
             "The selected file already exists. Do you want to overwrite it?",
             std::vector<ButtonDescription>{
@@ -867,8 +877,8 @@ void ProgramTree::saveStateToFile(const std::filesystem::path& file_path, bool o
             }
         ));
 
-        save_program_dialog_->onButtonClicked().connect([this, file_path](size_t button_id) {
-            closeSaveProgramDialog();
+        save_program_overwrite_dialog_->onButtonClicked().connect([this, file_path](size_t button_id) {
+            closeSaveProgramOverwriteDialog();
             if (button_id == 1) // Overwrite
             {
                 saveStateToFile(file_path, true);
