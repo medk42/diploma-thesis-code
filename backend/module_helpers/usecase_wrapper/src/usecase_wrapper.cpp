@@ -304,6 +304,7 @@ bool UsecaseWrapper::validateParameterList(const aergo::module::ModuleInfo* modu
     {
         if (only_custom_allowed && param.type_ != p_desc::ParameterType::CUSTOM)
         {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: Parameter type validation failed - only CUSTOM type allowed; parameter name: " + param.param_name_);
             return false;
         }
         if (param.type_ == p_desc::ParameterType::CUSTOM)
@@ -311,20 +312,24 @@ bool UsecaseWrapper::validateParameterList(const aergo::module::ModuleInfo* modu
             if (param.custom_channel_type_ == helpers::parameter_description::CustomChannelType::SUBSCRIBE 
              && param.custom_channel_id_ > module_info->subscribe_consumer_count_)
             {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: Parameter custom channel validation failed - subscribe channel id out of range; parameter name: " + param.param_name_);
                 return false;
             }
             if (param.custom_channel_type_ == helpers::parameter_description::CustomChannelType::REQUEST 
              && param.custom_channel_id_ > module_info->request_consumer_count_)
             {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: Parameter custom channel validation failed - request channel id out of range; parameter name: " + param.param_name_);
                 return false;
             }
         }
         if (!only_custom_allowed && param.type_ == p_desc::ParameterType::CUSTOM)
         {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: Parameter type validation failed - CUSTOM type not allowed; parameter name: " + param.param_name_);
             return false;
         }
         if (default_values_required && !p_desc::string_conversions::parseDefaultValue(param).has_value())
         {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: Parameter default value validation failed - default value required; parameter name: " + param.param_name_);
             return false;
         }
     }
