@@ -64,6 +64,8 @@ namespace aergo::default_modules::demo_robot_control
         ) override;
         
     private:
+        std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id);
+
         rc::RobotWrapper robot_wrapper_;
     };
 }
