@@ -1,4 +1,12 @@
 set(MODULE_NAME camera_module)
+set(REQUIRED_HELPER_LIBS
+    module_common 
+    helpers___activation_wrapper 
+    helpers___camera_messages
+    opencv_core 
+    opencv_videoio 
+    nlohmann_json::nlohmann_json
+)
 
 # Find OpenCV
 find_package(OpenCV 4 REQUIRED core videoio)
@@ -17,7 +25,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 add_library(${MODULE_NAME} MODULE ${PROJECT_SOURCES})
 
 # Link with libraries needed by this module
-target_link_libraries(${MODULE_NAME} PRIVATE module_common helpers___activation_wrapper opencv_core opencv_videoio nlohmann_json::nlohmann_json)
+target_link_libraries(${MODULE_NAME} PRIVATE ${REQUIRED_HELPER_LIBS})
 
 # Add include directories
 target_include_directories(${MODULE_NAME} PRIVATE

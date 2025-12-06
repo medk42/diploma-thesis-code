@@ -153,7 +153,7 @@ void CameraModule::captureLoop()
             continue;
         }
 
-        message::SharedDataBlob frame_blob = frame_allocator_->allocate(frame_header_.width_ * frame_header_.height_ * 3);
+        message::SharedDataBlob frame_blob = frame_allocator_->allocate(cm::headerSizeForImages(1) + image_header_.width_ * image_header_.height_ * 3);
         if (!frame_blob.valid())
         {
             log(aergo::module::logging::LogType::WARNING, "Failed to allocate memory for frame");
@@ -161,26 +161,40 @@ void CameraModule::captureLoop()
             continue;
         }
 
-        cv::Mat frame(frame_header_.height_, frame_header_.width_, CV_8UC3, frame_blob.data());
-        if (!cap_->read(frame))
+        if (!cm::writeBlobHeader(reinterpret_cast<std::byte*>(frame_blob.data()), frame_blob.size(), frame_blob_header_))
         {
+            log(aergo::module::logging::LogType::WARNING, "Failed to write blob header for frame");
+            continue;
+        }
+
+        if (!cm::writeImageHeader(reinterpret_cast<std::byte*>(frame_blob.data()), frame_blob.size(), 0, image_header_))
+        {
+            log(aergo::module::logging::LogType::WARNING, "Failed to write image header for frame");
+            continue;
+        }
+
+        cv::Mat frame(image_header_.height_, image_header_.width_, CV_8UC3, frame_blob.data() + image_header_.data_offset_, frame_blob_header_.stride_);
+        if (!cap_->read(frame))
+        {   
             log(aergo::module::logging::LogType::WARNING, "Failed to read frame from camera");
             continue;
         }
-        if (frame.data != frame_blob.data() || frame.empty() || frame.type() != CV_8UC3 || frame.step != frame.cols * 3 || frame.cols != frame_header_.width_ || frame.rows != frame_header_.height_)
+        if (frame.empty() || frame.type() != CV_8UC3 || frame.step != frame.cols * 3 || frame.cols != image_header_.width_ || frame.rows != image_header_.height_)
         {
             log(aergo::module::logging::LogType::WARNING, "Capture mismatch, skipping frame");
             continue;
         }
 
+        cm::CameraMessage camera_msg;
+
         message::MessageHeader msg {
-            .data_ = reinterpret_cast<uint8_t*>(&frame_header_),
-            .data_len_ = sizeof(frame_header_),
+            .data_ = reinterpret_cast<uint8_t*>(&camera_msg),
+            .data_len_ = sizeof(camera_msg),
             .blobs_ = &frame_blob,
             .blob_count_ = 1
         };
 
-        // log(aergo::module::logging::LogType::INFO, "MODULE,CAMERA,PUBLISH,INFO=\"" + std::to_string(frame_header_.width_) + "x" + std::to_string(frame_header_.height_) + "\"");
+        // log(aergo::module::logging::LogType::INFO, "MODULE,CAMERA,PUBLISH,INFO=\"" + std::to_string(image_header_.width_) + "x" + std::to_string(image_header_.height_) + "\"");
 
         sendMessage(0, msg); // publish on channel 0
 
@@ -210,23 +224,32 @@ bool CameraModule::openCamera(int64_t camera_index)
         return false; // failed to read from camera, return with valid_ = false
     }
 
-    if (probe.empty() || probe.type() != CV_8UC3 || probe.step != probe.cols * 3)
+    if (probe.empty() || probe.type() != CV_8UC3 || probe.step != probe.cols * 3 || probe.channels() != 3 || probe.cols <= 0 || probe.rows <= 0)
     {
         log(aergo::module::logging::LogType::ERROR, "Frame from camera is not a valid 3-channel BGR image");
         return false; // empty frame, return with valid_ = false
     }
 
-    frame_header_ = {
-        .width_ = (uint16_t)probe.cols,
-        .height_ = (uint16_t)probe.rows
+    size_t blob_header_size = cm::headerSizeForImages(1);
+
+    image_header_ = {
+        .width_ = static_cast<uint32_t>(probe.cols),
+        .height_ = static_cast<uint32_t>(probe.rows),
+        .data_offset_ = blob_header_size
     };
 
-    log(aergo::module::logging::LogType::INFO, "Camera frame size: " + std::to_string(frame_header_.width_) + "x" + std::to_string(frame_header_.height_));
+    frame_blob_header_ = {
+        .stride_ = image_header_.width_ * 3,
+        .format_ = cm::ImageFormat::BGR8,
+        .image_count_ = 1
+    };
 
-    uint64_t expected_size = frame_header_.width_ * frame_header_.height_ * 3;
+    log(aergo::module::logging::LogType::INFO, "Camera frame size: " + std::to_string(image_header_.width_) + "x" + std::to_string(image_header_.height_));
+
+    uint64_t expected_size = image_header_.width_ * image_header_.height_ * 3;
     if (expected_size != probe.total() * probe.elemSize())
     {
-        std::string size_comparison = std::to_string(frame_header_.width_) + " * " + std::to_string(frame_header_.height_) + " * 3   !=  " + std::to_string(probe.total()) + " * " + std::to_string(probe.elemSize());
+        std::string size_comparison = std::to_string(image_header_.width_) + " * " + std::to_string(image_header_.height_) + " * 3   !=  " + std::to_string(probe.total()) + " * " + std::to_string(probe.elemSize());
         log(aergo::module::logging::LogType::ERROR, "Frame size from camera does not match expected size: " + size_comparison);
         return false; // frame size does not match expected size, return with valid_ = false
     }
@@ -237,7 +260,7 @@ bool CameraModule::openCamera(int64_t camera_index)
         return false; // frame dimensions exceed maximum supported size, return with valid_ = false
     }
 
-    frame_allocator_ = createBufferAllocator(expected_size, 30); // buffer for 30 frames
+    frame_allocator_ = createBufferAllocator(blob_header_size + expected_size, 30); // buffer for 30 frames
     if (!frame_allocator_)
     {
         log(aergo::module::logging::LogType::ERROR, "Failed to create frame allocator");

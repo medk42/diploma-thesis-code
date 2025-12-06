@@ -1,9 +1,8 @@
 #pragma once
 
-#include "message_structure.h"
-
 #include "module_common/base_module.h"
 #include "module_helpers/activation_wrapper/activable_module.h"
+#include "module_helpers/camera_messages/messages.h"
 
 #include <memory>
 #include <thread>
@@ -13,6 +12,8 @@
 
 namespace aergo::default_modules::camera_module
 {
+    namespace cm = aergo::module::helpers::camera_messages;
+
     class CameraModule : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule
     {
     public:
@@ -65,7 +66,9 @@ namespace aergo::default_modules::camera_module
 
         std::unique_ptr<cv::VideoCapture> cap_;
 
-        ImageHeader frame_header_;
+        cm::BlobHeader frame_blob_header_;
+        cm::ImageHeader image_header_;
+
         AllocatorPtr frame_allocator_;
 
         std::thread capture_thread_;

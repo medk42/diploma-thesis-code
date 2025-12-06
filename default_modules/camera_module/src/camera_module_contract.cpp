@@ -5,6 +5,7 @@
 
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_helpers/activation_wrapper/activation_wrapper.h"
+#include "module_helpers/camera_messages/messages.h"
 
 
 #define MODULE_A_API_VERSION 2
@@ -16,11 +17,7 @@ static_assert(MODULE_A_API_VERSION == PLUGIN_API_VERSION,
 using namespace aergo::module;
 
 static constexpr communication_channel::Producer camera_module_publish_producers[] = {
-    { 
-        .channel_type_identifier_ = "image_bgr/v1:struct{width:uint16,height:uint16}+blob{width*height*3}",
-        .display_name_ = "Camera Frame", 
-        .display_description_ = "Frame captured from the camera in 8-bit BGR format with 3 channels"
-    }
+    aergo::module::helpers::camera_messages::camera_image_producer
 };
 
 static constexpr communication_channel::Producer camera_module_response_producers[] = {
@@ -30,7 +27,7 @@ static constexpr communication_channel::Producer camera_module_response_producer
 static constexpr ModuleInfo module_info = {
     .module_type_identifier_ = "camera_module",
     .display_name_ = "Camera Input Module",
-    .display_description_ = "Module captures raw camera data from a connected camera using OpenCV and publishes it as BGR image frames.",
+    .display_description_ = "Module captures raw camera data from a connected camera using OpenCV and publishes it as image frames.",
     .publish_producers_ = camera_module_publish_producers,
     .publish_producer_count_ = std::size(camera_module_publish_producers),
     .response_producers_ = camera_module_response_producers,
