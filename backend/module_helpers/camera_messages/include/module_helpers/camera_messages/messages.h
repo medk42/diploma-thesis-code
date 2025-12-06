@@ -141,6 +141,35 @@ namespace aergo::module::helpers::camera_messages
     }
 
 
+    /// @brief Validate that the blob data contains valid headers and image data fits in blob size.
+    /// If true, all headers and images can be safely read.
+    /// @return true if valid, false otherwise.
+    inline bool isBlobValid(std::byte* data, size_t size)
+    {
+        BlobHeader blob_header;
+        if (!readBlobHeader(data, size, blob_header))
+        {
+            return false;
+        }
+
+        for (size_t i = 0; i < blob_header.image_count_; ++i)
+        {
+            ImageHeader image_header;
+            if (!readImageHeader(data, size, i, image_header))
+            {
+                return false;
+            }
+            // check that image data fits in blob
+            if (image_header.data_offset_ + (image_header.height_ * blob_header.stride_) > size)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
     static constexpr aergo::module::communication_channel::Producer camera_image_producer
     {
         .channel_type_identifier_ = "camera_image/v1:struct{version:uint64,timestamp_us:int64}+blob{BlobHeader+image_count*ImageHeader+image_data}",

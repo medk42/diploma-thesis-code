@@ -1,12 +1,12 @@
 #include "frontend_module.h"
 
-#include "message_structure.h"
 #include "module_common/module_contract.h"
 #include "module_common/dll_module_wrapper.h"
 
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_helpers/visualization_3d_interface/message_types.h"
 #include "module_helpers/usecase_wrapper/message_types.h"
+#include "module_helpers/camera_messages/messages.h"
 
 
 #define MODULE_API_VERSION 2
@@ -27,9 +27,9 @@ static constexpr communication_channel::Consumer web_visualization_module_reques
 static constexpr communication_channel::Consumer web_visualization_module_subscribe_consumers[] = {
     communication_channel::Consumer {
         .count_ = communication_channel::Consumer::Count::AUTO_ALL,
-        .channel_type_identifier_ = aergo::default_modules::frontend_module::message_types::image_bgr_channel_type,
-        .display_name_ = "Camera Feed",
-        .display_description_ = "Subscribe to camera image feed in BGR format.",
+        .channel_type_identifier_ = aergo::module::helpers::camera_messages::camera_image_consumer.channel_type_identifier_,
+        .display_name_ = aergo::module::helpers::camera_messages::camera_image_consumer.display_name_,
+        .display_description_ = aergo::module::helpers::camera_messages::camera_image_consumer.display_description_,
         .prioritized_ = false,
         .message_queue_capacity_ = 1
     },

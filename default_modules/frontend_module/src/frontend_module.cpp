@@ -2,8 +2,8 @@
 
 
 #include "webapp/frontend_app.h"
-#include "message_structure.h"
 
+#include "module_helpers/camera_messages/messages.h"
 
 #include <filesystem>
 #include <fstream>
@@ -17,6 +17,7 @@
 
 using namespace aergo::default_modules::frontend_module;
 using namespace aergo::module;
+namespace cm = aergo::module::helpers::camera_messages;
 
 
 
@@ -36,7 +37,7 @@ FrontendModule::FrontendModule(const char* data_path, ICore* core, InputChannelM
         return;
     }
 
-    if (!getSubscribeChannelByName(message_types::image_bgr_channel_type, camera_subscribe_channel_id_))
+    if (!getSubscribeChannelByName(cm::camera_image_consumer.channel_type_identifier_, camera_subscribe_channel_id_))
     {
         log(aergo::module::logging::LogType::ERROR, "Failed to find camera image subscribe channel.");
         return;
@@ -213,14 +214,46 @@ void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdent
         if (source_channel.producer_module_id_ != frontend_state_.camera_module_id_)
             return;
 
-        if (message.data_ == nullptr || message.data_len_ != sizeof(message_types::ImageHeader))
+        cm::CameraMessage cam_msg;
+        if (!message.readAs<cm::CameraMessage>(cam_msg))
+        {
+            log(aergo::module::logging::LogType::WARNING, "Failed to read camera message header.");
             return;
+        }
 
-        auto img_header = reinterpret_cast<message_types::ImageHeader*>(message.data_);
-        if (message.blobs_ == nullptr || message.blob_count_ != 1 || !message.blobs_[0].valid() || message.blobs_[0].size() != img_header->width_ * img_header->height_ * 3)
+        if (message.blobs_ == nullptr || message.blob_count_ < 1 || !message.blobs_[0].valid())
+        {
+            log(aergo::module::logging::LogType::WARNING, "Camera message missing image blob.");
             return;
+        }
 
-        cv::Mat img(img_header->height_, img_header->width_, CV_8UC3, message.blobs_[0].data());
+        auto& blob = message.blobs_[0];
+
+        if (!cm::isBlobValid(reinterpret_cast<std::byte*>(blob.data()), blob.size()))
+        {
+            log(aergo::module::logging::LogType::WARNING, "Camera blob is not valid.");
+            return;
+        }
+
+        cm::BlobHeader blob_header;
+        cm::ImageHeader img_header;
+        if (!cm::readBlobHeader(reinterpret_cast<std::byte*>(blob.data()), blob.size(), blob_header)
+        ||  !cm::readImageHeader(reinterpret_cast<std::byte*>(blob.data()), blob.size(), 0, img_header)
+        ||  blob_header.image_count_ < 1)
+        {
+            log(aergo::module::logging::LogType::WARNING, "Camera blob headers are not valid.");
+            return;
+        }
+        
+        int mat_type = (blob_header.format_ == cm::ImageFormat::BGR8) ? CV_8UC3 :
+                       (blob_header.format_ == cm::ImageFormat::BGRA8) ? CV_8UC4 : -1;
+        if (mat_type == -1)
+        {
+            log(aergo::module::logging::LogType::WARNING, "Unsupported camera image format in blob.");
+            return;
+        }
+
+        cv::Mat img(img_header.height_, img_header.width_, mat_type, blob.data() + img_header.data_offset_, blob_header.stride_);
         std::vector<uint8_t> jpeg;
         std::vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 80 };
 
