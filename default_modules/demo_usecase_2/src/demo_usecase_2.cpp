@@ -1,6 +1,6 @@
 #include "demo_usecase_2.h"
-#include "message_structure.h"
 #include "module_helpers/usecase_wrapper/serialization_helper.h"
+#include "module_helpers/camera_messages/messages.h"
 
 #include "websocketpp/base64.hpp"
 
@@ -12,6 +12,7 @@ using namespace aergo::module;
 using namespace aergo::module::helpers::usecase_wrapper;
 
 using json = nlohmann::json;
+namespace cm = aergo::module::helpers::camera_messages;
 
 
 std::expected<void, uw::helper::ErrorInfo> DemoUsecase2::createCommandFromParameters(
@@ -24,39 +25,39 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase2::createCommandFromParame
     nlohmann::json& out_command_json
 )
 {
-    std::vector<ImageHeader> image_headers;
+    std::vector<cm::CameraMessage> camera_messages;
     std::vector<std::vector<uint8_t>> image_blobs;
 
     for (const auto& value : auto_parameter_values[0])
     {
-        ImageHeader image_header;
+        cm::CameraMessage camera_message;
         std::vector<std::vector<uint8_t>> blobs;
 
-        if (!readMessageDataAs(value.value_, image_header, &blobs))
+        if (!readMessageDataAs(value.value_, camera_message, &blobs))
         {
             return std::unexpected(uw::helper::ErrorInfo::WithDetails(1, "DemoUsecase2: Failed to read camera image from auto parameters."));
         }
 
-        if (blobs.size() != 1)
+        if (blobs.size() < 1)
         {
-            return std::unexpected(uw::helper::ErrorInfo::WithDetails(2, "DemoUsecase2: Expected exactly one blob per image."));
+            return std::unexpected(uw::helper::ErrorInfo::WithDetails(2, "DemoUsecase2: Expected at least one blob per image."));
         }
 
-        image_headers.push_back(image_header);
+        camera_messages.push_back(camera_message);
         image_blobs.emplace_back(std::move(blobs[0])); // only one blob per image
     }
 
     json command_json;
     
-    command_json["image_count"] = static_cast<int64_t>(image_headers.size());
+    command_json["image_count"] = static_cast<int64_t>(camera_messages.size());
     command_json["images"] = json::array();
-    for (size_t i = 0; i < image_headers.size(); ++i)
+    for (size_t i = 0; i < camera_messages.size(); ++i)
     {
         const auto& data = image_blobs[i];
 
         json image_json;
-        image_json["width"] = image_headers[i].width_;
-        image_json["height"] = image_headers[i].height_;
+        image_json["version"] = camera_messages[i].version_;
+        image_json["timestamp_us"] = camera_messages[i].timestamp_us_;
         image_json["image_data"] = websocketpp::base64_encode(reinterpret_cast<unsigned char const*>(data.data()), data.size());
 
         command_json["images"].push_back(image_json);
@@ -89,12 +90,12 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase2::validateParameters(cons
 
     for (const auto& image_json : command_json["images"])
     {
-        if (!image_json.contains("width") || !image_json["width"].is_number_integer())
+        if (!image_json.contains("version") || !image_json["version"].is_number_integer())
         {
             return std::unexpected(uw::helper::ErrorInfo::WithDetails(5, "DemoUsecase2: each image must contain 'width' integer."));
         }
 
-        if (!image_json.contains("height") || !image_json["height"].is_number_integer())
+        if (!image_json.contains("timestamp_us") || !image_json["timestamp_us"].is_number_integer())
         {
             return std::unexpected(uw::helper::ErrorInfo::WithDetails(6, "DemoUsecase2: each image must contain 'height' integer."));
         }
@@ -126,11 +127,11 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase2::runProgram(
 
     for (const auto& image_json : command_json["images"])
     {
-        const int64_t width = image_json["width"].get<int64_t>();
-        const int64_t height = image_json["height"].get<int64_t>();
+        const int64_t version = image_json["version"].get<int64_t>();
+        const int64_t timestamp_us = image_json["timestamp_us"].get<int64_t>();
         const std::string image_data_base64 = image_json["image_data"].get<std::string>();
 
-        log(logging::LogType::INFO, "    DemoUsecase2: Processing image of size " + std::to_string(width) + "x" + std::to_string(height) + ", base64 size: " + std::to_string(image_data_base64.size()));
+        log(logging::LogType::INFO, "    DemoUsecase2: Processing image of version " + std::to_string(version) + ", from timestamp " + std::to_string(timestamp_us) + "us, base64 size: " + std::to_string(image_data_base64.size()));
         
         if (!simulated)
         {
@@ -140,13 +141,28 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase2::runProgram(
             // Decode base64 (not used further in this demo)
             std::string image_data_decoded = websocketpp::base64_decode(image_data_base64);
             log(logging::LogType::INFO, "        DemoUsecase2: Decoded image data size: " + std::to_string(image_data_decoded.size()));
-            double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0;
-            for (int64_t h = 0; h < height; ++h)
+
+            cm::BlobHeader blob_header;
+            cm::ImageHeader image_header;
+            if (!cm::readBlobHeader(reinterpret_cast<std::byte*>(image_data_decoded.data()), image_data_decoded.size(), blob_header))
             {
-                for (int64_t w = 0; w < width; ++w)
+                return std::unexpected(uw::helper::ErrorInfo::WithDetails(9, "DemoUsecase2: Failed to read BlobHeader from decoded image data."));
+            }
+            if (!cm::readImageHeader(reinterpret_cast<std::byte*>(image_data_decoded.data()), image_data_decoded.size(), 0, image_header))
+            {
+                return std::unexpected(uw::helper::ErrorInfo::WithDetails(10, "DemoUsecase2: Failed to read ImageHeader from decoded image data."));
+            }
+
+            log(logging::LogType::INFO, "        DemoUsecase2: Image size: " + std::to_string(image_header.width_) + "x" + std::to_string(image_header.height_) + ", data offset: " + std::to_string(image_header.data_offset_) + ", stride: " + std::to_string(blob_header.stride_) + ", format: " + std::to_string(static_cast<uint32_t>(blob_header.format_)));
+            log(logging::LogType::INFO, "        DemoUsecase2: Calculating mean color...");
+
+            double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0;
+            for (int64_t h = 0; h < image_header.height_; ++h)
+            {
+                for (int64_t w = 0; w < image_header.width_; ++w)
                 {
-                    size_t index = h * width + w;
-                    size_t str_index = index * 3; // assuming 3 bytes per pixel (RGB)
+                    size_t index = h * image_header.width_ + w;
+                    size_t str_index = image_header.data_offset_ + index * 3; // assuming 3 bytes per pixel (RGB)
                     if (str_index + 2 < image_data_decoded.size())
                     {
                         sum_b += static_cast<unsigned char>(image_data_decoded[str_index]);
@@ -155,13 +171,13 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase2::runProgram(
                     }
                     else
                     {
-                        return std::unexpected(uw::helper::ErrorInfo::WithDetails(9, "DemoUsecase2: Decoded image data size is smaller than expected, calculated " + std::to_string(width * height * 3) + ", actual " + std::to_string(image_data_decoded.size()) + "."));
+                        return std::unexpected(uw::helper::ErrorInfo::WithDetails(9, "DemoUsecase2: Decoded image data size is smaller than expected, calculated " + std::to_string(image_header.width_ * image_header.height_ * 3 + image_header.data_offset_) + ", actual " + std::to_string(image_data_decoded.size()) + "."));
                     }
                 }
             }
-            double mean_r = sum_r / (width * height);
-            double mean_g = sum_g / (width * height);
-            double mean_b = sum_b / (width * height);
+            double mean_r = sum_r / (image_header.width_ * image_header.height_);
+            double mean_g = sum_g / (image_header.width_ * image_header.height_);
+            double mean_b = sum_b / (image_header.width_ * image_header.height_);
             log(logging::LogType::INFO, "        DemoUsecase2: Mean color - R: " + std::to_string(mean_r) + ", G: " + std::to_string(mean_g) + ", B: " + std::to_string(mean_b));
         }
         else

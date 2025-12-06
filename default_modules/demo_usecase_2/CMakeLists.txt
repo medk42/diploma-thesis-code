@@ -14,7 +14,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 add_library(${MODULE_NAME} MODULE ${PROJECT_SOURCES})
 
 # Link with libraries needed by this module
-target_link_libraries(${MODULE_NAME} PRIVATE helpers___usecase_wrapper helpers___base_usecase helpers___base64)
+target_link_libraries(${MODULE_NAME} PRIVATE helpers___usecase_wrapper helpers___base_usecase  helpers___camera_messages helpers___base64)
 
 # Add include directories
 target_include_directories(${MODULE_NAME} PRIVATE

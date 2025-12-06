@@ -1,9 +1,9 @@
 #include "module_common/module_contract.h"
 #include "demo_usecase_2.h"
-#include "message_structure.h"
 #include "module_helpers/usecase_wrapper/usecase_wrapper.h"
 #include "module_common/dll_module_wrapper.h"
 #include "module_helpers/usecase_wrapper/message_types.h"
+#include "module_helpers/camera_messages/messages.h"
 
 #define LOCAL_MODULE_API_VERSION 2
 
@@ -15,14 +15,7 @@ using namespace aergo::default_modules::demo_usecase_2;
 using namespace aergo::module::helpers::usecase_wrapper;
 
 static constexpr communication_channel::Consumer subscribe_consumers[] = {
-    { 
-        .count_ = communication_channel::Consumer::Count::SINGLE,
-        .channel_type_identifier_ = image_publish_producer_channel_type,
-        .display_name_ = "BGR Image",
-        .display_description_ = "BGR image data from camera in blob format",
-        .prioritized_ = false,
-        .message_queue_capacity_ = 1 // no need for queueing, only latest image is used
-    }
+    aergo::module::helpers::camera_messages::camera_image_consumer
 };
 
 static constexpr communication_channel::Producer response_producers[] = {
