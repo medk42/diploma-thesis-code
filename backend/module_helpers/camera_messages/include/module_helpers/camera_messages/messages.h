@@ -63,6 +63,20 @@ namespace aergo::module::helpers::camera_messages
         uint32_t height_;      // Height of the image in pixels
         uint64_t data_offset_; // Offset to the image data within the blob
     };
+    
+    
+    inline size_t bytesPerPixel(ImageFormat format) noexcept
+    {
+        switch (format)
+        {
+            case ImageFormat::BGR8:
+                return 3;
+            case ImageFormat::BGRA8:
+                return 4;
+            default:
+                return 0;
+        }
+    }
 
 
     /// @brief Calculate header size for given number of images in the blob.
@@ -160,7 +174,7 @@ namespace aergo::module::helpers::camera_messages
                 return false;
             }
             // check that image data fits in blob
-            if (image_header.data_offset_ + (image_header.height_ * blob_header.stride_) > size)
+            if (image_header.data_offset_ + ((image_header.height_ - 1) * blob_header.stride_) + image_header.width_ * bytesPerPixel(blob_header.format_) > size)
             {
                 return false;
             }
