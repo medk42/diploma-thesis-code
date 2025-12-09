@@ -1307,6 +1307,21 @@ void FrontendApp::requestAddRemoveListEntry(ui::ActivationUi::ModuleSingleParame
         return;
     }
 
+    auto& value_list = frontend_state_->known_running_modules_activation_data_[param.running_module_id_].parameter_values_[param.parameter_id_];
+    if (add)
+    {
+        value_list.insert(value_list.begin() + param.list_id_, ui::helper::value_t {}); // insert default value at position
+    }
+    else
+    {
+        if (param.list_id_ >= value_list.size())
+        {
+            base_module_->log(aergo::module::logging::LogType::ERROR, "Invalid list_id in remove list entry callback");
+            return;
+        }
+        value_list.erase(value_list.begin() + param.list_id_); // remove value at position
+    }
+
     message_types::Request add_list_request {
         .request_type_ = add ? message_types::ReqType::LIST_ADD : message_types::ReqType::LIST_REMOVE,
         .parameter_type_ = params_list[param.parameter_id_].type_,
