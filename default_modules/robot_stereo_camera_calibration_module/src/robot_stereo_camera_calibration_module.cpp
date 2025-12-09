@@ -105,9 +105,7 @@ bool RobotStereoCameraCalibrationModule::activate(
         return false;
     }
 
-    activation_running_ = true;
-    activation_total_ = samples.size();
-    activation_processed_ = 0;
+    activation_progress_.store(ActivationProgress::RUNNING(0, static_cast<uint16_t>(samples.size())), std::memory_order_relaxed);
 
     std::ostringstream board_info;
     board_info << "RobotStereoCameraCalibration: Charuco board requirements - "
@@ -122,28 +120,29 @@ bool RobotStereoCameraCalibrationModule::activate(
         if (cancel_flag.load(std::memory_order_relaxed))
         {
             cancelled.store(true, std::memory_order_relaxed);
-            activation_running_ = false;
+            activation_progress_.store(ActivationProgress::NOT_RUNNING(), std::memory_order_relaxed);
+            log(logging::LogType::INFO, "RobotStereoCameraCalibration: activation cancelled.");
             return false;
         }
 
         ParsedSampleView view;
         if (!parseSample(samples[i], view, i))
         {
-            activation_running_ = false;
+            activation_progress_.store(ActivationProgress::NOT_RUNNING(), std::memory_order_relaxed);
             return false;
         }
 
         if (!validateAndLogSample(view, i))
         {
-            activation_running_ = false;
+            activation_progress_.store(ActivationProgress::NOT_RUNNING(), std::memory_order_relaxed);
             return false;
         }
 
-        activation_processed_ = i + 1;
+        activation_progress_.store(ActivationProgress::RUNNING(static_cast<uint16_t>(i + 1), static_cast<uint16_t>(samples.size())), std::memory_order_relaxed);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    activation_running_ = false;
+    activation_progress_.store(ActivationProgress::NOT_RUNNING(), std::memory_order_relaxed);
     activated_ = true;
     return true;
 }
@@ -160,7 +159,7 @@ bool RobotStereoCameraCalibrationModule::deactivate(const std::atomic<bool>& /*c
     }
 
     activated_ = false;
-    activation_running_ = false;
+    activation_progress_.store(ActivationProgress::NOT_RUNNING(), std::memory_order_relaxed);
     return true;
 }
 
@@ -222,23 +221,21 @@ bool RobotStereoCameraCalibrationModule::load(aergo::module::ISerializableModule
 
 aergo::module::helpers::activation_wrapper::message_types::ProgressData RobotStereoCameraCalibrationModule::getActivationProgress()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
     using ProgressData = aergo::module::helpers::activation_wrapper::message_types::ProgressData;
     using ProgressType = aergo::module::helpers::activation_wrapper::message_types::ProgressType;
 
-    if (!activation_running_ || activation_total_ == 0)
+    ActivationProgress progress = activation_progress_.load(std::memory_order_relaxed);
+
+    if (!progress.running || progress.total_samples == 0)
     {
         return { .progress_type_ = ProgressType::NONE, .progress_max_int_ = 0, .progress_current_value_double_ = 0.0, .progress_current_value_int_ = 0 };
     }
 
-    uint32_t max_int = static_cast<uint32_t>(activation_total_);
-    uint32_t current_int = static_cast<uint32_t>(std::min(activation_processed_, activation_total_));
-
     return {
         .progress_type_ = ProgressType::INT,
-        .progress_max_int_ = max_int,
+        .progress_max_int_ = progress.total_samples,
         .progress_current_value_double_ = 0.0,
-        .progress_current_value_int_ = current_int
+        .progress_current_value_int_ = std::min(progress.total_samples, progress.processed_samples)
     };
 }
 

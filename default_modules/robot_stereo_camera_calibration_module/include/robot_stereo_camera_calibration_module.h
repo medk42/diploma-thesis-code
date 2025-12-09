@@ -84,6 +84,16 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
             size_t blob_size{0};
         };
 
+        struct ActivationProgress
+        {
+            bool running{false};
+            uint16_t total_samples{0};
+            uint16_t processed_samples{0};
+
+            static ActivationProgress RUNNING(uint16_t processed, uint16_t total) { return ActivationProgress{ .running = true, .total_samples = total, .processed_samples = processed}; }
+            static ActivationProgress NOT_RUNNING() { return ActivationProgress{ .running = false, .total_samples = 0, .processed_samples = 0}; }
+        };
+
         bool parseSample(const std::vector<uint8_t>& raw, ParsedSampleView& out_view, size_t sample_index) noexcept;
         bool validateAndLogSample(const ParsedSampleView& view, size_t sample_index) noexcept;
         bool buildImageView(const cm::BlobHeader& blob_header, const cm::ImageHeader& img_header, int mat_type, const uint8_t* blob_data, cv::Mat& out_mat) noexcept;
@@ -93,8 +103,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
 
         std::mutex mutex_;
         bool activated_{false};
-        bool activation_running_{false};
-        size_t activation_total_{0};
-        size_t activation_processed_{0};
+
+        std::atomic<ActivationProgress> activation_progress_{};
     };
 }
