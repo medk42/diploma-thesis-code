@@ -4,3 +4,4 @@ binaries
 settings.json
 .vscode/c_cpp_properties.json
 CMakeUserPresets.json
+.clangd
