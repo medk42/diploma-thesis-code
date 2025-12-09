@@ -6,6 +6,7 @@
 
 using namespace aergo::default_modules::camera_pose_injector_module;
 using namespace aergo::module;
+namespace cph = aergo::module::helpers::camera_pose_helper;
 
 CameraPoseInjectorModule::CameraPoseInjectorModule(
     const char* data_path,
@@ -28,7 +29,7 @@ CameraPoseInjectorModule::CameraPoseInjectorModule(
         return;
     }
 
-    if (!getPublishChannelByName(camera_with_pose_publish_producer.channel_type_identifier_, publish_channel_))
+    if (!getPublishChannelByName(cph::camera_with_pose_publish_producer.channel_type_identifier_, publish_channel_))
     {
         log(logging::LogType::ERROR, "CameraPoseInjector: failed to resolve publish channel.");
         return;
@@ -163,7 +164,7 @@ void CameraPoseInjectorModule::handleCameraMessage(const aergo::module::message:
         return;
     }
 
-    CameraWithFlangePose fused_message{
+    cph::CameraWithFlangePose fused_message{
         .camera_header = camera_header,
         .flange_pose = pose_opt.value()
     };

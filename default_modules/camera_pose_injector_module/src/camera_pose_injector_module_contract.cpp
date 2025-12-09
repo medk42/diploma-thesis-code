@@ -1,5 +1,4 @@
 #include "camera_pose_injector_module.h"
-#include "message_structure.h"
 
 #include "module_common/module_contract.h"
 #include "module_common/dll_module_wrapper.h"
@@ -13,9 +12,10 @@ static_assert(MODULE_A_API_VERSION == PLUGIN_API_VERSION,
 
 using namespace aergo::module;
 using namespace aergo::default_modules::camera_pose_injector_module;
+namespace cph = aergo::module::helpers::camera_pose_helper;
 
 static constexpr communication_channel::Producer camera_pose_injector_publish_producers[] = {
-    camera_with_pose_publish_producer
+    cph::camera_with_pose_publish_producer
 };
 
 static constexpr communication_channel::Consumer camera_pose_injector_subscribe_consumers[] = {

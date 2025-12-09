@@ -1,7 +1,7 @@
 #pragma once
 
 #include "module_common/base_module.h"
-#include "message_structure.h"
+#include "module_helpers/camera_pose_helper/message_structure.h"
 
 #include <mutex>
 #include <optional>
@@ -9,6 +9,7 @@
 namespace aergo::default_modules::camera_pose_injector_module
 {
     namespace cm = aergo::module::helpers::camera_messages;
+    namespace cph = aergo::module::helpers::camera_pose_helper;
     namespace ri = aergo::module::helpers::robot_interface;
     namespace rc = ri::robot_control;
 

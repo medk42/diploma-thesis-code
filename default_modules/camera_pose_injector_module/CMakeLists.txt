@@ -1,6 +1,7 @@
 set(MODULE_NAME camera_pose_injector_module)
 set(REQUIRED_HELPER_LIBS
     module_common
+    helpers___camera_pose_helper
     helpers___camera_messages
     helpers___robot_interface
 )

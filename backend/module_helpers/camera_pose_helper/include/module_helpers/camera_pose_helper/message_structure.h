@@ -4,7 +4,7 @@
 #include "module_helpers/camera_messages/messages.h"
 #include "module_helpers/robot_interface/features/robot_control/structs.h"
 
-namespace aergo::default_modules::camera_pose_injector_module
+namespace aergo::module::helpers::camera_pose_helper
 {
     namespace cm = aergo::module::helpers::camera_messages;
     namespace rc = aergo::module::helpers::robot_interface::robot_control;
