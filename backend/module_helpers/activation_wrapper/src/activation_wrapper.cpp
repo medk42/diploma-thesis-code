@@ -115,7 +115,7 @@ aergo::module::ResponseData ActivationWrapper::processRequest(uint32_t response_
 
         auto* request = reinterpret_cast<message_types::Request*>(message.data_);
 
-        if (request->request_type_ == message_types::ReqType::SET_VALUE && request->parameter_type_ != ParameterType::CUSTOM)
+        if (request->request_type_ == message_types::ReqType::SET_VALUE)
         {
             if (message.blob_count_ != 1 || message.blobs_ == nullptr || !message.blobs_[0].valid())
             {
