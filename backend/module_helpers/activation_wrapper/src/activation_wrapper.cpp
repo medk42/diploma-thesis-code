@@ -203,15 +203,17 @@ aergo::module::IModule::IngressDecision ActivationWrapper::onIngress(aergo::modu
         return module_ref_->onIngress(kind, local_channel_id, src, msg, queue_status);
     }
 
-    std::lock_guard<std::mutex> lock(mutex_);  // accessing message_wait_, we need synchronization
+    if (message_wait_.expected_.load(std::memory_order_relaxed)) { // quick check to filter out unnecessary locking
+        std::lock_guard<std::mutex> lock(mutex_);  // accessing message_wait_, we need synchronization
 
-    if (message_wait_.expected_.load(std::memory_order_acquire))
-    {
-        auto& param = parameters_->getParameters()[message_wait_.param_id_];
-        if ((kind == aergo::module::IModule::ProcessingType::MESSAGE && param.custom_channel_type_ == CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == local_channel_id) ||
-            (kind == aergo::module::IModule::ProcessingType::RESPONSE && param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == local_channel_id))
+        if (message_wait_.expected_.load(std::memory_order_acquire))
         {
-            return aergo::module::IModule::IngressDecision::ACCEPT;
+            auto& param = parameters_->getParameters()[message_wait_.param_id_];
+            if ((kind == aergo::module::IModule::ProcessingType::MESSAGE && param.custom_channel_type_ == CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == local_channel_id) ||
+                (kind == aergo::module::IModule::ProcessingType::RESPONSE && param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == local_channel_id))
+            {
+                return aergo::module::IModule::IngressDecision::ACCEPT;
+            }
         }
     }
 
