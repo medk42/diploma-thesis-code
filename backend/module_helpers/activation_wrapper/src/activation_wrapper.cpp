@@ -1082,7 +1082,8 @@ bool ActivationWrapper::load(ISerializableModule::SaveData data) noexcept
         for (size_t j = 0; j < values_data.size(); ++j)
         {
             auto& single_value_data = values_data[j];
-            if (!single_value_data.is_array())
+            if ((type != ParameterType::CUSTOM && !single_value_data.is_array())
+            || (type == ParameterType::CUSTOM && !single_value_data.is_string()))
             {
                 return false; // invalid non-CUSTOM value
             }
