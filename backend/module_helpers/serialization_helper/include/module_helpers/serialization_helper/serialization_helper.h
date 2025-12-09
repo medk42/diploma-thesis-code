@@ -80,6 +80,18 @@ namespace aergo::module::helpers::serialization_helper
                 return true;
             }
 
+            /// @brief Advance by size bytes and return pointer to the beginning of that region (no copy). Returns nullptr if out of bounds.
+            void* advance(size_t size)
+            {
+                if (pos_ + size > size_)
+                {
+                    return nullptr;
+                }
+                const std::byte* current = data_ + pos_;
+                pos_ += size;
+                return const_cast<std::byte*>(current);
+            }
+
         private:
             const std::byte* data_{ nullptr };
             size_t size_{ 0 };
