@@ -1158,7 +1158,7 @@ bool FrontendApp::parseParameterValues(const std::vector<uint8_t>& data_blob, Ac
             return false;
         }
 
-        if ((!param.as_list_ && list_size != 1) || (param.as_list_ && (list_size < param.list_size_min_ || list_size > param.list_size_max_)))
+        if ((!param.as_list_ && list_size != 1) || (param.as_list_ && (list_size < param.list_size_min_ || (param.list_size_max_ != 0 && list_size > param.list_size_max_))))
         {
             base_module_->log(aergo::module::logging::LogType::ERROR, "Value count mismatch in parseParameterValues for parameter: " + param.param_name_);
             return false;

@@ -707,7 +707,7 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
         return {response, {}};
     }
 
-    if (param_value.size() >= static_cast<size_t>(param.list_size_max_))
+    if (param.list_size_max_ != 0 && param_value.size() >= static_cast<size_t>(param.list_size_max_))
     {
         response.result_ = message_types::Result::FAIL;
         return {response, {}};
@@ -849,7 +849,7 @@ bool ActivationWrapper::areParametersValid()
 
         if (param.as_list_)
         {
-            if (param_value.size() < static_cast<size_t>(param.list_size_min_) || param_value.size() > static_cast<size_t>(param.list_size_max_)) 
+            if (param_value.size() < static_cast<size_t>(param.list_size_min_) || (param.list_size_max_ != 0 && param_value.size() > static_cast<size_t>(param.list_size_max_))) 
                 return false;
         }
         else
