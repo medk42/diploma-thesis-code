@@ -4,10 +4,12 @@
 
 #include "calib/charuco_board_model.h"
 #include "calib/charuco_detector.h"
+#include "calib/intrinsics_calibrator.h"
 
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
 
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module;
@@ -68,6 +70,28 @@ namespace
 
         return K;
     }
+
+    CharucoDetection make_synthetic_detection(const CharucoBoardModel& board,
+                                              const cv::Mat& K,
+                                              const cv::Mat& D,
+                                              const cv::Vec3d& rvec,
+                                              const cv::Vec3d& tvec,
+                                              const cv::Size& imageSize)
+    {
+        CharucoDetection det;
+        const auto corners3d = board.board()->getChessboardCorners();
+
+        det.ids.reserve(corners3d.size());
+        for (int i = 0; i < static_cast<int>(corners3d.size()); ++i)
+        {
+            det.ids.push_back(i);
+        }
+
+        cv::projectPoints(corners3d, rvec, tvec, K, D, det.corners2d);
+        det.imageSize = imageSize;
+        det.ok = true;
+        return det;
+    }
 }
 
 void demo_detect(const CharucoBoardModel& board, const cv::Mat& img, const CameraIntrinsics& KL)
@@ -111,6 +135,47 @@ void demo_detect(const CharucoBoardModel& board, const cv::Mat& img, const Camer
     }
 }
 
+void demo_intrinsics_calibration(const CharucoBoardModel& board, const CameraIntrinsics& K_true)
+{
+    std::cout << "[demo_intrinsics] Generating synthetic detections for calibration demo..." << std::endl;
+
+    std::vector<CharucoDetection> detections;
+    detections.reserve(12);
+
+    // Create several synthetic views with varying poses
+    for (int i = 0; i < 12; ++i)
+    {
+        const double ang = 0.05 * i;
+        cv::Vec3d rvec(ang, ang * 0.5, ang * 0.2);
+        cv::Vec3d tvec(0.05 * i, 0.01 * i, 0.8 + 0.02 * i);
+        detections.push_back(make_synthetic_detection(board, K_true.K, K_true.D, rvec, tvec, K_true.imageSize));
+    }
+
+    IntrinsicsCalibrator calib;
+    auto result = calib.calibrate(detections, board, K_true.imageSize);
+
+    std::cout << "[demo_intrinsics] ok=" << (result.ok ? "true" : "false") << "\n";
+    if (!result.ok)
+    {
+        std::cout << "[demo_intrinsics] reason: " << result.message << "\n";
+        return;
+    }
+
+    std::cout << "[demo_intrinsics] RMS: " << result.rms << "\n";
+    std::cout << "[demo_intrinsics] Used views: " << result.usedViewIndices.size() << "\n";
+    std::cout << "[demo_intrinsics] K:\n" << result.intr.K << "\n";
+    std::cout << "[demo_intrinsics] D:\n" << result.intr.D << "\n";
+
+    if (!result.perViewRms.empty())
+    {
+        std::cout << "[demo_intrinsics] Per-view RMS:\n";
+        for (size_t i = 0; i < result.perViewRms.size(); ++i)
+        {
+            std::cout << "  view " << i << ": " << result.perViewRms[i] << "\n";
+        }
+    }
+}
+
 
 int main()
 {
@@ -140,6 +205,7 @@ int main()
     const CameraIntrinsics K = make_demo_intrinsics(demoImg.size());
 
     demo_detect(board, demoImg, K);
+    demo_intrinsics_calibration(board, K);
 
     return 0;
 }
