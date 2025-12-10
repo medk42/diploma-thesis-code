@@ -1,4 +1,5 @@
 #include "calib/charuco_board_model.h"
+#include "calib/charuco_defaults.h"
 
 namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
 {
@@ -11,6 +12,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             params_.squareLength,
             params_.markerLength,
             dict_);
+        board_->setLegacyPattern(defaults::charucoboard::LEGACY_PATTERN);
     }
 
     CharucoBoardModel CharucoBoardModel::Create(const Params& p)

@@ -5,18 +5,36 @@
 #include "calib/charuco_board_model.h"
 #include "calib/charuco_detector.h"
 #include "calib/intrinsics_calibrator.h"
+#include "calib/stereo_calibrator.h"
 
-#include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <opencv2/aruco.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <string>
 
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module;
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib;
 
 namespace
 {
+    using nlohmann::json;
+
+    struct DemoSample
+    {
+        int frame_index{-1};
+        cv::Mat img_left;
+        cv::Mat img_right;
+        Pose robot_pose{};
+        Pose camera_pose{};
+        std::string path_left;
+        std::string path_right;
+    };
+
     CharucoBoardModel make_demo_board()
     {
         CharucoBoardModel::Params bp{
@@ -29,169 +47,125 @@ namespace
         return CharucoBoardModel::Create(bp);
     }
 
-    cv::Mat make_demo_image(const CharucoBoardModel& board,
-                             const cv::Size& size,
-                             const std::filesystem::path& path)
+    Pose parse_pose(const json& j)
     {
-        cv::Mat img;
-        board.board()->generateImage(size, img, 20, 1);
+        Pose p{};
+        p.position.x = j["position"]["x"].get<double>();
+        p.position.y = j["position"]["y"].get<double>();
+        p.position.z = j["position"]["z"].get<double>();
+        p.orientation.x = j["orientation"]["x"].get<double>();
+        p.orientation.y = j["orientation"]["y"].get<double>();
+        p.orientation.z = j["orientation"]["z"].get<double>();
+        p.orientation.w = j["orientation"]["w"].get<double>();
+        return p;
+    }
 
-        if (!path.empty())
+    std::vector<DemoSample> load_demo_samples(const std::filesystem::path& base_path)
+    {
+        std::vector<DemoSample> samples;
+        const auto poses_path = base_path / "poses.jsonl";
+        std::ifstream ifs(poses_path);
+        if (!ifs)
         {
-            const auto absPath = std::filesystem::absolute(path);
-            if (cv::imwrite(absPath.string(), img))
+            std::cout << "[load_demo_samples] Failed to open " << poses_path << std::endl;
+            return samples;
+        }
+
+        std::string line;
+        while (std::getline(ifs, line))
+        {
+            if (line.empty())
             {
-                std::cout << "[demo_detect] Saved demo image to " << absPath.string()
-                          << " (" << img.cols << "x" << img.rows << ")" << std::endl;
+                continue;
             }
-            else
+
+            json j;
+            try
             {
-                std::cout << "[demo_detect] Failed to save demo image to " << absPath.string() << std::endl;
+                j = json::parse(line);
             }
+            catch (const std::exception& e)
+            {
+                std::cout << "[load_demo_samples] JSON parse error: " << e.what() << std::endl;
+                continue;
+            }
+
+            DemoSample s;
+            s.frame_index = j.value("frame_index", -1);
+
+            const auto left_rel = j["files"]["left"].get<std::string>();
+            const auto right_rel = j["files"]["right"].get<std::string>();
+            s.path_left = (base_path / left_rel).string();
+            s.path_right = (base_path / right_rel).string();
+
+            s.robot_pose = parse_pose(j["robot_pose_world"]);
+            s.camera_pose = parse_pose(j["camera_pose_world_est"]);
+
+            s.img_left = cv::imread(s.path_left, cv::IMREAD_COLOR);
+            s.img_right = cv::imread(s.path_right, cv::IMREAD_COLOR);
+
+            if (s.img_left.empty() || s.img_right.empty())
+            {
+                std::cout << "[load_demo_samples] Failed to read images for frame " << s.frame_index << std::endl;
+                continue;
+            }
+
+            samples.push_back(std::move(s));
         }
 
-        return img;
+        return samples;
     }
 
-    CameraIntrinsics make_demo_intrinsics(const cv::Size& imageSize)
-    {
-        CameraIntrinsics K;
-
-        const double fx = 900.0;
-        const double fy = 900.0;
-        const double cx = static_cast<double>(imageSize.width) / 2.0;
-        const double cy = static_cast<double>(imageSize.height) / 2.0;
-
-        K.K = (cv::Mat_<double>(3, 3) << fx, 0.0, cx,
-                                         0.0, fy, cy,
-                                         0.0, 0.0, 1.0);
-        K.D = cv::Mat::zeros(1, 5, CV_64F);
-        K.imageSize = imageSize;
-
-        return K;
-    }
-
-    CharucoDetection make_synthetic_detection(const CharucoBoardModel& board,
-                                              const cv::Mat& K,
-                                              const cv::Mat& D,
-                                              const cv::Vec3d& rvec,
-                                              const cv::Vec3d& tvec,
-                                              const cv::Size& imageSize)
-    {
-        CharucoDetection det;
-        const auto corners3d = board.board()->getChessboardCorners();
-
-        det.ids.reserve(corners3d.size());
-        for (int i = 0; i < static_cast<int>(corners3d.size()); ++i)
-        {
-            det.ids.push_back(i);
-        }
-
-        cv::projectPoints(corners3d, rvec, tvec, K, D, det.corners2d);
-        det.imageSize = imageSize;
-        det.ok = true;
-        return det;
-    }
-}
-
-void demo_detect(const CharucoBoardModel& board, const cv::Mat& img, const CameraIntrinsics& KL)
-{
-    std::cout << "[demo_detect] Starting detection on image " << img.cols << "x" << img.rows << std::endl;
-
-    CharucoDetector::Params dp;
-    CharucoDetector det(board, dp);
-
-    CharucoDetection d = det.detect(img);
-
-    std::cout << "[demo_detect] ok=" << d.ok
-              << ", aruco markers=" << d.markerIds.size()
-              << ", charuco corners=" << d.ids.size()
-              << ", rejected=" << d.rejectedCandidates.size()
-              << std::endl;
-
-    if (!d.markerIds.empty())
-    {
-        const size_t n = std::min<size_t>(d.markerIds.size(), 4);
-        std::cout << "[demo_detect] First marker ids: ";
-        for (size_t i = 0; i < n; ++i)
-        {
-            std::cout << d.markerIds[i] << (i + 1 == n ? "" : ", ");
-        }
-        std::cout << std::endl;
-    }
-
-    cv::Vec3d rvec, tvec;
-    const bool pose_ok = det.estimateBoardPose(d, KL, rvec, tvec);
-    if (pose_ok)
-    {
-        std::cout << "[demo_detect] Pose estimated (T_cam<-board): rvec=["
-                  << rvec[0] << ", " << rvec[1] << ", " << rvec[2] << "]"
-                  << ", tvec=[" << tvec[0] << ", " << tvec[1] << ", " << tvec[2] << "]"
-                  << std::endl;
-    }
-    else
-    {
-        std::cout << "[demo_detect] Pose estimation skipped/failed (need enough corners + intrinsics)." << std::endl;
-    }
-}
-
-void demo_intrinsics_calibration(const CharucoBoardModel& board, const CameraIntrinsics& K_true)
-{
-    std::cout << "[demo_intrinsics] Generating synthetic detections for calibration demo..." << std::endl;
-
-    std::vector<CharucoDetection> detections;
-    detections.reserve(12);
-
-    // Create several synthetic views with varying poses
-    for (int i = 0; i < 12; ++i)
-    {
-        const double ang = 0.05 * i;
-        cv::Vec3d rvec(ang, ang * 0.5, ang * 0.2);
-        cv::Vec3d tvec(0.05 * i, 0.01 * i, 0.8 + 0.02 * i);
-        detections.push_back(make_synthetic_detection(board, K_true.K, K_true.D, rvec, tvec, K_true.imageSize));
-    }
-
-    IntrinsicsCalibrator calib;
-    auto result = calib.calibrate(detections, board, K_true.imageSize);
-
-    std::cout << "[demo_intrinsics] ok=" << (result.ok ? "true" : "false") << "\n";
-    if (!result.ok)
-    {
-        std::cout << "[demo_intrinsics] reason: " << result.message << "\n";
-        return;
-    }
-
-    std::cout << "[demo_intrinsics] RMS: " << result.rms << "\n";
-    std::cout << "[demo_intrinsics] Used views: " << result.usedViewIndices.size() << "\n";
-    std::cout << "[demo_intrinsics] K:\n" << result.intr.K << "\n";
-    std::cout << "[demo_intrinsics] D:\n" << result.intr.D << "\n";
-
-    if (!result.perViewRms.empty())
-    {
-        std::cout << "[demo_intrinsics] Per-view RMS:\n";
-        for (size_t i = 0; i < result.perViewRms.size(); ++i)
-        {
-            std::cout << "  view " << i << ": " << result.perViewRms[i] << "\n";
-        }
-    }
 }
 
 
 int main()
 {
-    Pose base_from_flange{
-        {0.1, 0.2, 0.3},
-        {0.0, 0.0, 0.0, 1.0}
-    };
+    const auto demo_base = std::filesystem::current_path() / "demo_data";
+    auto samples = load_demo_samples(demo_base);
+    std::cout << "[main] Loaded " << samples.size() << " samples from " << demo_base << std::endl;
 
-    const SE3 T = pose_utils::toSE3(base_from_flange);
-    const SE3 T_inv = pose_utils::invert(T);
-    const SE3 identity = pose_utils::compose(T, T_inv);
-    const Pose round_trip = pose_utils::toPose(T);
+    const bool show_images = false;
 
-    std::cout << "Round-trip position: (" << round_trip.position.x << ", "
-              << round_trip.position.y << ", " << round_trip.position.z << ")\n";
-    std::cout << "Identity R(0,0): " << identity.R(0, 0) << "\n";
+    for (const auto& s : samples)
+    {
+        const SE3 Twr = pose_utils::toSE3(s.robot_pose);  // world <- robot
+        const SE3 Twc = pose_utils::toSE3(s.camera_pose); // world <- camera
+        const SE3 Tcw = pose_utils::invert(Twc);          // camera <- world
+        const SE3 Tcr = pose_utils::compose(Tcw, Twr);    // camera <- robot
+        const Quaternion qcr = pose_utils::rToQuat(Tcr.R);
+
+        std::cout << "Frame " << s.frame_index
+                  << " | left: " << s.img_left.cols << "x" << s.img_left.rows
+                  << " | right: " << s.img_right.cols << "x" << s.img_right.rows
+                  << "\n  Robot pose pos=(" << s.robot_pose.position.x << ", "
+                  << s.robot_pose.position.y << ", " << s.robot_pose.position.z << ")"
+                  << " ori=(" << s.robot_pose.orientation.x << ", "
+                  << s.robot_pose.orientation.y << ", "
+                  << s.robot_pose.orientation.z << ", "
+                  << s.robot_pose.orientation.w << ")"
+                  << "\n  Camera pose pos=(" << s.camera_pose.position.x << ", "
+                  << s.camera_pose.position.y << ", " << s.camera_pose.position.z << ")"
+                  << " ori=(" << s.camera_pose.orientation.x << ", "
+                  << s.camera_pose.orientation.y << ", "
+                  << s.camera_pose.orientation.z << ", "
+                  << s.camera_pose.orientation.w << ")"
+                  << "\n  Camera<-Robot t=(" << Tcr.t[0] << ", " << Tcr.t[1] << ", " << Tcr.t[2] << ")"
+                  << " q=(" << qcr.x << ", " << qcr.y << ", " << qcr.z << ", " << qcr.w << ")"
+                  << "\n";
+
+        if (show_images)
+        {
+            cv::imshow("left", s.img_left);
+            cv::imshow("right", s.img_right);
+            cv::waitKey(0);
+        }
+    }
+
+    if (samples.empty())
+    {
+        return 0;
+    }
 
     std::cout << "Charuco defaults: rows=" << defaults::charucoboard::ROW_COUNT
               << ", cols=" << defaults::charucoboard::COL_COUNT
@@ -199,13 +173,91 @@ int main()
               << ", marker=" << defaults::charucoboard::MARKER_LENGTH << "\n";
 
     const auto board = make_demo_board();
-    const cv::Size demoSize{1280, 720};
-    const auto imagePath = std::filesystem::current_path() / "demo_charuco.png";
-    const cv::Mat demoImg = make_demo_image(board, demoSize, imagePath);
-    const CameraIntrinsics K = make_demo_intrinsics(demoImg.size());
 
-    demo_detect(board, demoImg, K);
-    demo_intrinsics_calibration(board, K);
+    CharucoDetector detector(board);
+    std::vector<CharucoDetection> viewsL;
+    std::vector<CharucoDetection> viewsR;
+    viewsL.reserve(samples.size());
+    viewsR.reserve(samples.size());
+
+    const bool show_overlays = false;
+
+    for (const auto& s : samples)
+    {
+        CharucoDetection dl = detector.detect(s.img_left);
+        CharucoDetection dr = detector.detect(s.img_right);
+
+        viewsL.push_back(dl);
+        viewsR.push_back(dr);
+
+        if (show_overlays)
+        {
+            cv::Mat grayL, grayR;
+            cv::cvtColor(s.img_left, grayL, cv::COLOR_BGR2GRAY);
+            cv::cvtColor(s.img_right, grayR, cv::COLOR_BGR2GRAY);
+
+            cv::Mat visL, visR;
+            cv::cvtColor(grayL, visL, cv::COLOR_GRAY2BGR);
+            cv::cvtColor(grayR, visR, cv::COLOR_GRAY2BGR);
+
+            cv::aruco::drawDetectedMarkers(visL, dl.markerCorners, dl.markerIds);
+            cv::aruco::drawDetectedMarkers(visR, dr.markerCorners, dr.markerIds);
+
+            cv::aruco::drawDetectedCornersCharuco(visL, dl.corners2d, dl.ids, cv::Scalar(0, 255, 0));
+            cv::aruco::drawDetectedCornersCharuco(visR, dr.corners2d, dr.ids, cv::Scalar(0, 255, 0));
+
+            cv::imshow("left_overlay", visL);
+            cv::imshow("right_overlay", visR);
+            cv::waitKey(0);
+        }
+    }
+
+    IntrinsicsCalibrator intrCalib;
+    const cv::Size imgSize = samples.front().img_left.size();
+    auto resL = intrCalib.calibrate(viewsL, board, imgSize);
+    auto resR = intrCalib.calibrate(viewsR, board, imgSize);
+
+    std::cout << "[intrinsics left] ok=" << resL.ok << ", rms=" << resL.rms << ", views=" << resL.usedViewIndices.size() << "\n";
+    if (resL.ok)
+    {
+        std::cout << "[intrinsics left] K:\n" << resL.intr.K << "\n";
+        std::cout << "[intrinsics left] D:\n" << resL.intr.D << "\n";
+    }
+    else
+    {
+        std::cout << "[intrinsics left] reason: " << resL.message << "\n";
+    }
+
+    std::cout << "[intrinsics right] ok=" << resR.ok << ", rms=" << resR.rms << ", views=" << resR.usedViewIndices.size() << "\n";
+    if (resR.ok)
+    {
+        std::cout << "[intrinsics right] K:\n" << resR.intr.K << "\n";
+        std::cout << "[intrinsics right] D:\n" << resR.intr.D << "\n";
+    }
+    else
+    {
+        std::cout << "[intrinsics right] reason: " << resR.message << "\n";
+    }
+
+    if (resL.ok && resR.ok)
+    {
+        StereoCalibrator::Params sp;
+        sp.computeRectification = true;
+        StereoCalibrator stereo(sp);
+        auto sres = stereo.calibrate(viewsL, viewsR, board, resL.intr, resR.intr);
+
+        std::cout << "[stereo] ok=" << sres.ok << ", rms=" << sres.rms << "\n";
+        if (sres.ok)
+        {
+            std::cout << "[stereo] R:\n" << cv::Mat(sres.extr.R_RL) << "\n";
+            std::cout << "[stereo] t:\n" << cv::Mat(sres.extr.t_RL) << "\n";
+            std::cout << "[stereo] mean Sampson=" << sres.meanSampson << ", median=" << sres.medianSampson << "\n";
+        }
+        else
+        {
+            std::cout << "[stereo] reason: " << sres.message << "\n";
+        }
+    }
 
     return 0;
 }

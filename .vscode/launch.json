@@ -130,7 +130,7 @@
             "program": "${workspaceFolder}/build-core-windows/default_modules/robot_stereo_camera_calibration_module/Debug/robot_stereo_camera_calibration_module_tests.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build-core-windows/default_modules/robot_stereo_camera_calibration_module/Debug",
+            "cwd": "${workspaceFolder}/default_modules/robot_stereo_camera_calibration_module/tests",
             "environment": [],
             "console": "integratedTerminal",
             "preLaunchTask": "Project: Build and Install"
