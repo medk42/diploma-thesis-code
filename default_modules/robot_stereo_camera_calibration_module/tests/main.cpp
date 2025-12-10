@@ -6,6 +6,7 @@
 #include "calib/charuco_detector.h"
 #include "calib/intrinsics_calibrator.h"
 #include "calib/stereo_calibrator.h"
+#include "calib/handeye_calibrator.h"
 
 #include <filesystem>
 #include <iostream>
@@ -252,6 +253,46 @@ int main()
             std::cout << "[stereo] R:\n" << cv::Mat(sres.extr.R_RL) << "\n";
             std::cout << "[stereo] t:\n" << cv::Mat(sres.extr.t_RL) << "\n";
             std::cout << "[stereo] mean Sampson=" << sres.meanSampson << ", median=" << sres.medianSampson << "\n";
+
+            // Hand-eye calibration using left camera
+            std::vector<Pose> base_from_flange;
+            std::vector<cv::Vec3d> rvec_tc;
+            std::vector<cv::Vec3d> tvec_tc;
+            base_from_flange.reserve(samples.size());
+            rvec_tc.reserve(samples.size());
+            tvec_tc.reserve(samples.size());
+
+            for (size_t i = 0; i < samples.size(); ++i)
+            {
+                cv::Vec3d rvec, tvec;
+                if (detector.estimateBoardPose(viewsL[i], resL.intr, rvec, tvec))
+                {
+                    base_from_flange.push_back(samples[i].robot_pose);
+                    rvec_tc.push_back(rvec);
+                    tvec_tc.push_back(tvec);
+                }
+            }
+
+            std::cout << "[handeye] usable pairs: " << base_from_flange.size() << "\n";
+            if (base_from_flange.size() >= 2)
+            {
+                HandEyeCalibrator he;
+                auto heres = he.run(base_from_flange, rvec_tc, tvec_tc);
+                std::cout << "[handeye] ok=" << heres.ok << "\n";
+                if (heres.ok)
+                {
+                    std::cout << "[handeye] camL<-flange R:\n" << cv::Mat(heres.cam_from_flange.R) << "\n";
+                    std::cout << "[handeye] camL<-flange t:\n" << cv::Mat(heres.cam_from_flange.t) << "\n";
+
+                    auto camR_from_flange = HandEyeCalibrator::composeRightFromLeft(sres.extr, heres.cam_from_flange);
+                    std::cout << "[handeye] camR<-flange R:\n" << cv::Mat(camR_from_flange.R) << "\n";
+                    std::cout << "[handeye] camR<-flange t:\n" << cv::Mat(camR_from_flange.t) << "\n";
+                }
+                else
+                {
+                    std::cout << "[handeye] reason: " << heres.message << "\n";
+                }
+            }
         }
         else
         {
