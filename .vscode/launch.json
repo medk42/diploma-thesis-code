@@ -124,6 +124,18 @@
             "preLaunchTask": "Project: Build and Install"
         },
         {
+            "name": "robot_stereo_camera_calibration_module_tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-core-windows/default_modules/robot_stereo_camera_calibration_module/Debug/robot_stereo_camera_calibration_module_tests.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build-core-windows/default_modules/robot_stereo_camera_calibration_module/Debug",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Project: Build and Install"
+        },
+        {
             "name": "aruco_test",
             "type": "cppdbg",
             "request": "launch",

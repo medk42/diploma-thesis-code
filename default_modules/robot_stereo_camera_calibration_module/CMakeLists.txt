@@ -5,11 +5,13 @@ set(REQUIRED_HELPER_LIBS
     helpers___camera_messages
     helpers___camera_pose_helper
     opencv_core
+    opencv_calib3d
+    opencv_aruco
     nlohmann_json::nlohmann_json
 )
 
 # Find OpenCV
-find_package(OpenCV 4 REQUIRED core)
+find_package(OpenCV 4 REQUIRED core calib3d aruco)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # add JSON library
@@ -44,6 +46,17 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
     POSITION_INDEPENDENT_CODE ON
 )
+
+add_executable(${MODULE_NAME}_tests
+    ${PROJECT_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/main.cpp
+)
+
+target_include_directories(${MODULE_NAME}_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(${MODULE_NAME}_tests PRIVATE ${REQUIRED_HELPER_LIBS})
 
 
 install(TARGETS "${MODULE_NAME}" DESTINATION ${CMAKE_SOURCE_DIR}/binaries/modules)
