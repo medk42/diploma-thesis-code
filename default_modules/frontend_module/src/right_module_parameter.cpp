@@ -43,12 +43,12 @@ RightModuleParameter::RightModuleParameter(ParameterDescription parameter_descri
             can_add_ = false;
         }
         list_add_button_->clicked().connect([this]() {
-            addListItem();
+            addListItem(true);
         });
 
         for (size_t i = 0; i < parameter_description_.list_size_min_; ++i)
         {
-            addListItemWidget(list_container_);
+            addListItemWidget(list_container_, false);
         }
 
         for (auto& remove_text : list_item_remove_texts_)
@@ -65,7 +65,7 @@ RightModuleParameter::RightModuleParameter(ParameterDescription parameter_descri
 
 
 
-bool RightModuleParameter::addListItem()
+bool RightModuleParameter::addListItem(bool emit_event)
 {
     if (!parameter_description_.as_list_)
         return false;
@@ -73,7 +73,7 @@ bool RightModuleParameter::addListItem()
     if (parameter_description_.list_size_max_ != 0 && list_container_->count() >= parameter_description_.list_size_max_)
         return false;
 
-    addListItemWidget(list_container_);
+    addListItemWidget(list_container_, emit_event);
     updateListButtonsVisibility();
     return true;
 }
@@ -146,7 +146,7 @@ void RightModuleParameter::updateListButtonsVisibility()
 
 
 
-void RightModuleParameter::addListItemWidget(Wt::WContainerWidget* parent)
+void RightModuleParameter::addListItemWidget(Wt::WContainerWidget* parent, bool emit_event)
 {
     auto param_wrap = list_container_->addWidget(std::make_unique<Wt::WContainerWidget>());
     param_wrap->setStyleClass("list-item");
@@ -170,7 +170,7 @@ void RightModuleParameter::addListItemWidget(Wt::WContainerWidget* parent)
     });
     list_item_remove_texts_.push_back(remove_text);
 
-    if (widget)
+    if (widget && emit_event)
     {
         onValueAdded_.emit(parameter_widgets_.size() - 1, widget->value());
     }

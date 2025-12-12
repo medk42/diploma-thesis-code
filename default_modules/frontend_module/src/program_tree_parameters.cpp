@@ -162,7 +162,7 @@ bool ProgramTreeParameters::setAllValues(const std::vector<std::vector<p_desc::P
     auto set_values = [](RightModuleParameter* parameter_widget, const std::vector<p_desc::ParameterValueOpt>& values) -> bool {
         for (size_t i = parameter_widget->listSize(); i < values.size(); ++i) // grow list if needed
         {
-            if (!parameter_widget->addListItem())
+            if (!parameter_widget->addListItem(true))
                 return false; // could not add item
         }
         for (size_t i = parameter_widget->listSize(); i > values.size(); --i) // shrink list if needed

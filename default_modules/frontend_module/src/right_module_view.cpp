@@ -137,7 +137,7 @@ bool RightModuleView::addListItem(size_t section_id, size_t param_id)
         return false;
 
     auto& param = parameters_[section_id][param_id];
-    bool result = param->addListItem();
+    bool result = param->addListItem(false);
     if (result && parameters_valid_ && !param->hasValue(param->listSize() - 1))
     {
         parameters_valid_ = false; // definitely invalid now

@@ -24,7 +24,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         bool isList() { return parameter_description_.as_list_; }
 
         size_t listSize() const { return parameter_widgets_.size(); }
-        bool addListItem(); // returns true if added (successful), false if not (max size reached)
+        bool addListItem(bool emit_event); // returns true if added (successful), false if not (max size reached)
         bool removeListItem(size_t index); // returns true if removed (successful), false if not (min size reached or invalid index)
 
         bool hasValue(size_t index = 0) { return index < parameter_widgets_.size() ? parameter_widgets_[index]->hasValue() : false; }
@@ -40,7 +40,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         IParamInput* getRawParameterWidget(size_t index = 0) { return index < parameter_widgets_.size() ? parameter_widgets_[index] : nullptr; } // for direct access to the widget (e.g. for setting focus), may return nullptr if index invalid
 
     private:
-        void addListItemWidget(Wt::WContainerWidget* parent);
+        void addListItemWidget(Wt::WContainerWidget* parent, bool emit_event);
         IParamInput* addParameterWidget(Wt::WContainerWidget* parent);
         void updateListButtonsVisibility();
 
