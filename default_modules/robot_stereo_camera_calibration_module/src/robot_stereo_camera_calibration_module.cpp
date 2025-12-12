@@ -286,17 +286,84 @@ bool RobotStereoCameraCalibrationModule::isActivated()
 
 aergo::module::ISerializableModule::SaveData RobotStereoCameraCalibrationModule::save() noexcept
 {
+    std::lock_guard<std::mutex> lock(mutex_);
     ISerializableModule::SaveData data;
-    data.success_ = true;
-    data.supports_saving_ = false;
+    data.supports_saving_ = true;
     data.schema_version_ = 1;
-    data.json_header_.clear();
+
+    std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+    if (!calibrator_)
+    {
+        data.success_ = true;
+        json j;
+        j["calibrator_present"] = false;
+        data.json_header_ = j.dump();
+        return data;
+    }
+
+    if (!calibrator_->valid())
+    {
+        log(logging::LogType::ERROR, "RobotStereoCameraCalibration: save failed because calibration is not valid.");
+        data.success_ = false;
+        return data;
+    }
+
+    json j;
+    j["calibrator_present"] = true;
+    j["calibration"] = calibrator_->saveJson();
+    data.json_header_ = j.dump();
+    data.success_ = true;
     return data;
 }
 
 
 bool RobotStereoCameraCalibrationModule::load(aergo::module::ISerializableModule::SaveData data) noexcept
 {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!data.supports_saving_ || data.schema_version_ != 1)
+    {
+        log(logging::LogType::ERROR, "RobotStereoCameraCalibration: unsupported save data.");
+        return false;
+    }
+
+    json j;
+    try
+    {
+        j = json::parse(data.json_header_);
+    }
+    catch (const std::exception& e)
+    {
+        log(logging::LogType::ERROR, std::string("RobotStereoCameraCalibration: failed to parse save data: ") + e.what());
+        std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+        calibrator_.reset();
+        return false;
+    }
+
+    std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+    calibrator_.reset();
+
+    const bool present = j.value("calibrator_present", false);
+    if (!present)
+    {
+        return true;
+    }
+
+    if (!j.contains("calibration"))
+    {
+        log(logging::LogType::ERROR, "RobotStereoCameraCalibration: save data missing calibration payload.");
+        return false;
+    }
+
+    auto calib_ptr = std::make_unique<calib::StereoRigCalibrator>();
+    auto res = calib_ptr->loadJson(j["calibration"]);
+    if (!res.has_value())
+    {
+        log(logging::LogType::ERROR, std::string("RobotStereoCameraCalibration: failed to load calibration: ") + res.error());
+        return false;
+    }
+
+    calibrator_ = std::move(calib_ptr);
     return true;
 }
 
