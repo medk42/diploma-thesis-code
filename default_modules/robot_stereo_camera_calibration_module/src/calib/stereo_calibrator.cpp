@@ -178,11 +178,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         res.meanSampson = stats.first;
         res.medianSampson = stats.second;
 
-        if (prm_.computeRectification)
-        {
-            rectify(KL, KR, res.extr, KL.imageSize, prm_.rectifyAlpha, res.RL_rect, res.RR_rect, res.PL, res.PR, res.Q);
-        }
-
         res.ok = true;
         return res;
     }
@@ -220,29 +215,5 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         const double median = dists[dists.size() / 2];
 
         return {mean, median};
-    }
-
-    void StereoCalibrator::rectify(const CameraIntrinsics& KL, const CameraIntrinsics& KR,
-                                   const StereoExtrinsics& RL,
-                                   const cv::Size& imageSize,
-                                   double alpha,
-                                   cv::Mat& RL_rect, cv::Mat& RR_rect, cv::Mat& PL,
-                                   cv::Mat& PR, cv::Mat& Q) const
-    {
-        cv::stereoRectify(
-            KL.K,
-            KL.D,
-            KR.K,
-            KR.D,
-            imageSize,
-            RL.R_RL,
-            RL.t_RL,
-            RL_rect,
-            RR_rect,
-            PL,
-            PR,
-            Q,
-            cv::CALIB_ZERO_DISPARITY,
-            alpha);
     }
 }

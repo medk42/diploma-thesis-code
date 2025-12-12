@@ -18,8 +18,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             int minSharedCharucoCorners{10};
             int minPairs{8};
             bool fixIntrinsics{true};
-            bool computeRectification{false};
-            double rectifyAlpha{0.0};
         };
 
         struct Pair
@@ -41,8 +39,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             double meanSampson{-1.0};
             double medianSampson{-1.0};
 
-            cv::Mat RL_rect, RR_rect, PL, PR, Q;
-
             std::vector<int> usedPairIndices;
             bool ok{false};
             std::string message;
@@ -56,6 +52,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
                          const CameraIntrinsics& KL,
                          const CameraIntrinsics& KR) const;
 
+    private:
         std::vector<Pair> buildPairs(const std::vector<CharucoDetection>& viewsL,
                                      const std::vector<CharucoDetection>& viewsR,
                                      const CharucoBoardModel& board) const;
@@ -63,14 +60,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         std::pair<double, double> epipolarStats(const std::vector<Pair>& pairs,
                                                 const cv::Mat& F) const;
 
-        void rectify(const CameraIntrinsics& KL, const CameraIntrinsics& KR,
-                     const StereoExtrinsics& RL,
-                     const cv::Size& imageSize,
-                     double alpha,
-                     cv::Mat& RL_rect, cv::Mat& RR_rect, cv::Mat& PL,
-                     cv::Mat& PR, cv::Mat& Q) const;
-
-    private:
         Params prm_;
     };
 }

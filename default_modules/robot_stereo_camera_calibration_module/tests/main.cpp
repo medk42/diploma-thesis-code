@@ -252,7 +252,6 @@ int main()
     if (resL.ok && resR.ok)
     {
         StereoCalibrator::Params sp;
-        sp.computeRectification = true;
         StereoCalibrator stereo(sp);
         auto sres = stereo.calibrate(viewsL, viewsR, board, resL.intr, resR.intr);
 
@@ -339,8 +338,6 @@ int main()
                     rin.RL = sres.extr;
                     rin.camL_from_flange = T_LF;
 
-                    double pre_rmse_L = resL.rms;
-                    double pre_rmse_R = resR.rms;
                     auto rref = refiner.refine(rin);
                     std::cout << "[ceres] ok=" << rref.ok << " msg=" << rref.message << "\n";
                     std::cout << "[ceres] pre RMSE L=" << rref.initialReprojRmseL << " R=" << rref.initialReprojRmseR
@@ -354,6 +351,8 @@ int main()
                                   << "\n after:\n" << cv::Mat(rref.RL.R_RL) << "\n";
                         std::cout << "[ceres] camL<-flange t before=" << cv::Mat(T_LF.t).t()
                                   << " after=" << cv::Mat(rref.camL_from_flange.t).t() << "\n";
+                        std::cout << "[ceres] world<-board t=" << cv::Mat(rref.world_from_board.t).t() << "\n";
+                        std::cout << "[ceres] world<-board R:\n" << cv::Mat(rref.world_from_board.R) << "\n";
                     }
                 }
                 else

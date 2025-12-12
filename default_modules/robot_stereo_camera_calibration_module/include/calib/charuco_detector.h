@@ -32,8 +32,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             int adaptiveWinMax{23};
             int adaptiveWinStep{10};
             double minMarkerPerimeterRate{0.02};
-
             bool refineSubpix{true};
+
             cv::Size subpixWin{5, 5};
             int subpixMaxIters{50};
             double subpixEps{0.01};
