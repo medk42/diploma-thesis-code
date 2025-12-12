@@ -36,8 +36,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
     {
     }
 
-    std::vector<StereoCalibrator::Pair> StereoCalibrator::buildPairs(const std::vector<CharucoDetection>& viewsL,
-                                                                     const std::vector<CharucoDetection>& viewsR,
+    std::vector<StereoCalibrator::Pair> StereoCalibrator::buildPairs(const std::vector<CharucoDetector::Result>& viewsL,
+                                                                     const std::vector<CharucoDetector::Result>& viewsR,
                                                                      const CharucoBoardModel& board) const
     {
         std::vector<Pair> pairs;
@@ -109,8 +109,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         return pairs;
     }
 
-    StereoCalibrator::Result StereoCalibrator::calibrate(const std::vector<CharucoDetection>& viewsL,
-                                                         const std::vector<CharucoDetection>& viewsR,
+    StereoCalibrator::Result StereoCalibrator::calibrate(const std::vector<CharucoDetector::Result>& viewsL,
+                                                         const std::vector<CharucoDetector::Result>& viewsR,
                                                          const CharucoBoardModel& board,
                                                          const CameraIntrinsics& KL,
                                                          const CameraIntrinsics& KR) const

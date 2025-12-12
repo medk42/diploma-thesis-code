@@ -20,15 +20,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             bool fixIntrinsics{true};
         };
 
-        struct Pair
-        {
-            int index{-1};
-            std::vector<cv::Point3f> objPts;
-            std::vector<cv::Point2f> imgL;
-            std::vector<cv::Point2f> imgR;
-            std::vector<int> ids;
-        };
-
         struct Result
         {
             StereoExtrinsics extr;
@@ -46,15 +37,24 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
 
         explicit StereoCalibrator(const Params& p = Params());
 
-        Result calibrate(const std::vector<CharucoDetection>& viewsL,
-                         const std::vector<CharucoDetection>& viewsR,
+        Result calibrate(const std::vector<CharucoDetector::Result>& viewsL,
+                         const std::vector<CharucoDetector::Result>& viewsR,
                          const CharucoBoardModel& board,
                          const CameraIntrinsics& KL,
                          const CameraIntrinsics& KR) const;
 
     private:
-        std::vector<Pair> buildPairs(const std::vector<CharucoDetection>& viewsL,
-                                     const std::vector<CharucoDetection>& viewsR,
+        struct Pair
+        {
+            int index{-1};
+            std::vector<cv::Point3f> objPts;
+            std::vector<cv::Point2f> imgL;
+            std::vector<cv::Point2f> imgR;
+            std::vector<int> ids;
+        };
+
+        std::vector<Pair> buildPairs(const std::vector<CharucoDetector::Result>& viewsL,
+                                     const std::vector<CharucoDetector::Result>& viewsR,
                                      const CharucoBoardModel& board) const;
 
         std::pair<double, double> epipolarStats(const std::vector<Pair>& pairs,

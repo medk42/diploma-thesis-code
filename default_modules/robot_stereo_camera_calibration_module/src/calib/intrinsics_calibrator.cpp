@@ -11,7 +11,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
     {
     }
 
-    void IntrinsicsCalibrator::buildCharucoArrays(const std::vector<CharucoDetection>& views,
+    void IntrinsicsCalibrator::buildCharucoArrays(const std::vector<CharucoDetector::Result>& views,
                                                   const CharucoBoardModel& /*board*/,
                                                   std::vector<std::vector<cv::Point2f>>& allCorners,
                                                   std::vector<std::vector<int>>& allIds,
@@ -68,7 +68,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         return rms;
     }
 
-    IntrinsicsCalibrator::Result IntrinsicsCalibrator::calibrate(const std::vector<CharucoDetection>& views,
+    IntrinsicsCalibrator::Result IntrinsicsCalibrator::calibrate(const std::vector<CharucoDetector::Result>& views,
                                                                  const CharucoBoardModel& board,
                                                                  const cv::Size& imageSize) const
     {

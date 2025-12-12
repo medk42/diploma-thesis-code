@@ -16,9 +16,9 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         arucoDet_ = cv::aruco::ArucoDetector(model_.dictionary(), arucoParams_);
     }
 
-    CharucoDetection CharucoDetector::detect(const cv::Mat& img) const
+    CharucoDetector::Result CharucoDetector::detect(const cv::Mat& img) const
     {
-        CharucoDetection det;
+        CharucoDetector::Result det;
 
         if (img.empty())
         {
@@ -67,7 +67,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         return det;
     }
 
-    bool CharucoDetector::estimateBoardPose(const CharucoDetection& det,
+    bool CharucoDetector::estimateBoardPose(const CharucoDetector::Result& det,
                                             const CameraIntrinsics& K,
                                             cv::Vec3d& rvec, cv::Vec3d& tvec) const
     {

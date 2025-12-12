@@ -38,14 +38,14 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
 
         explicit IntrinsicsCalibrator(const Params& p = Params());
 
-        Result calibrate(const std::vector<CharucoDetection>& views,
+        Result calibrate(const std::vector<CharucoDetector::Result>& views,
                          const CharucoBoardModel& board,
                          const cv::Size& imageSize) const;
 
     private:
         Params prm_;
 
-        void buildCharucoArrays(const std::vector<CharucoDetection>& views,
+        void buildCharucoArrays(const std::vector<CharucoDetector::Result>& views,
                                 const CharucoBoardModel& board,
                                 std::vector<std::vector<cv::Point2f>>& allCorners,
                                 std::vector<std::vector<int>>& allIds,

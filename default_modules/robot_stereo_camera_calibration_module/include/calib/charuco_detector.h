@@ -10,19 +10,6 @@
 
 namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
 {
-    struct CharucoDetection
-    {
-        std::vector<int> ids;
-        std::vector<cv::Point2f> corners2d;
-
-        std::vector<int> markerIds;
-        std::vector<std::vector<cv::Point2f>> markerCorners;
-        std::vector<std::vector<cv::Point2f>> rejectedCandidates;
-
-        cv::Size imageSize{};
-        bool ok{false};
-    };
-
     class CharucoDetector
     {
     public:
@@ -42,11 +29,24 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             int minArucoMarkers{4};
         };
 
+        struct Result
+        {
+            std::vector<int> ids;
+            std::vector<cv::Point2f> corners2d;
+
+            std::vector<int> markerIds;
+            std::vector<std::vector<cv::Point2f>> markerCorners;
+            std::vector<std::vector<cv::Point2f>> rejectedCandidates;
+
+            cv::Size imageSize{};
+            bool ok{false};
+        };
+
         explicit CharucoDetector(const CharucoBoardModel& model, const Params& p = {});
 
-        CharucoDetection detect(const cv::Mat& img) const;
+        CharucoDetector::Result detect(const cv::Mat& img) const;
 
-        bool estimateBoardPose(const CharucoDetection& det,
+        bool estimateBoardPose(const CharucoDetector::Result& det,
                                const CameraIntrinsics& K,
                                cv::Vec3d& rvec, cv::Vec3d& tvec) const;
 

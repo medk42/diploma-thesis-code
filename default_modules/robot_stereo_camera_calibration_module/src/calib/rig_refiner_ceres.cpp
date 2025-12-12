@@ -328,7 +328,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             matToQuatWxyz(Tfw.R, q_fw);
             double t_fw[3] = { Tfw.t[0], Tfw.t[1], Tfw.t[2] };
 
-            const auto add_cam = [&](const CharucoDetection& det, bool is_right)
+            const auto add_cam = [&](const CharucoDetector::Result& det, bool is_right)
             {
                 if (!det.ok || det.ids.empty()) return;
                 for (size_t k = 0; k < det.ids.size(); ++k)

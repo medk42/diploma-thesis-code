@@ -183,8 +183,8 @@ int main()
     const auto board = make_demo_board();
 
     CharucoDetector detector(board);
-    std::vector<CharucoDetection> viewsL;
-    std::vector<CharucoDetection> viewsR;
+    std::vector<CharucoDetector::Result> viewsL;
+    std::vector<CharucoDetector::Result> viewsR;
     viewsL.reserve(samples.size());
     viewsR.reserve(samples.size());
 
@@ -192,8 +192,8 @@ int main()
 
     for (const auto& s : samples)
     {
-        CharucoDetection dl = detector.detect(s.img_left);
-        CharucoDetection dr = detector.detect(s.img_right);
+        CharucoDetector::Result dl = detector.detect(s.img_left);
+        CharucoDetector::Result dr = detector.detect(s.img_right);
 
         viewsL.push_back(dl);
         viewsR.push_back(dr);

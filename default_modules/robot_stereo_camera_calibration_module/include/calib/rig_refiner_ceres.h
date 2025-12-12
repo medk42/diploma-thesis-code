@@ -25,8 +25,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
 
         struct Input
         {
-            std::vector<CharucoDetection> viewsL;
-            std::vector<CharucoDetection> viewsR;
+            std::vector<CharucoDetector::Result> viewsL;
+            std::vector<CharucoDetector::Result> viewsR;
             std::vector<Pose> base_from_flange;
             CharucoBoardModel board;
             CameraIntrinsics KL;
