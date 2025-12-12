@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <thread>
 #include <limits>
+#include <stdexcept>
 
 #include "calib/pose_utils.h"
 
@@ -207,6 +208,96 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             for (double e : errs) s += e * e;
             return std::sqrt(s / static_cast<double>(errs.size()));
         }
+
+        inline double projectPointError(const Observation& o,
+                                        const CameraIntrinsics& Kcam,
+                                        const std::vector<double>& dist,
+                                        const double q_LF[4], const double t_LF[3],
+                                        const double q_RL[4], const double t_RL[3],
+                                        const double q_WB[4], const double t_WB[3])
+        {
+            // flange<-world
+            double q_FW[4] = { o.q_fw[0], o.q_fw[1], o.q_fw[2], o.q_fw[3] };
+            double t_FW[3] = { o.t_fw[0], o.t_fw[1], o.t_fw[2] };
+
+            double q_LW[4];
+            double t_LW[3];
+            composePose(q_LF, t_LF, q_FW, t_FW, q_LW, t_LW);
+
+            double q_CW[4];
+            double t_CW[3];
+            if (o.is_right)
+            {
+                composePose(q_RL, t_RL, q_LW, t_LW, q_CW, t_CW);
+            }
+            else
+            {
+                q_CW[0] = q_LW[0]; q_CW[1] = q_LW[1]; q_CW[2] = q_LW[2]; q_CW[3] = q_LW[3];
+                t_CW[0] = t_LW[0]; t_CW[1] = t_LW[1]; t_CW[2] = t_LW[2];
+            }
+
+            double Pw[3] = { o.Pw.x, o.Pw.y, o.Pw.z };
+            double Pw_w[3];
+            double q_WB_cur[4] = { q_WB[0], q_WB[1], q_WB[2], q_WB[3] };
+            double t_WB_cur[3] = { t_WB[0], t_WB[1], t_WB[2] };
+            ceres::QuaternionRotatePoint(q_WB_cur, Pw, Pw_w);
+            Pw_w[0] += t_WB_cur[0];
+            Pw_w[1] += t_WB_cur[1];
+            Pw_w[2] += t_WB_cur[2];
+
+            double Pc[3];
+            ceres::QuaternionRotatePoint(q_CW, Pw_w, Pc);
+            Pc[0] += t_CW[0];
+            Pc[1] += t_CW[1];
+            Pc[2] += t_CW[2];
+            if (Pc[2] <= 0) return std::numeric_limits<double>::quiet_NaN();
+
+            double x = Pc[0] / Pc[2];
+            double y = Pc[1] / Pc[2];
+            double r2 = x * x + y * y;
+            const int dlen = static_cast<int>(dist.size());
+            if (dlen > 5) throw std::runtime_error("projectPointError: distortion model with more than 5 coefficients not supported.");
+            double k1 = dlen > 0 ? dist[0] : 0.0;
+            double k2 = dlen > 1 ? dist[1] : 0.0;
+            double p1 = dlen > 2 ? dist[2] : 0.0;
+            double p2 = dlen > 3 ? dist[3] : 0.0;
+            double k3 = dlen > 4 ? dist[4] : 0.0;
+            double r4 = r2 * r2;
+            double r6 = r4 * r2;
+            double radial = 1.0 + k1 * r2 + k2 * r4 + k3 * r6;
+            double x_t = x * radial + 2.0 * p1 * x * y + p2 * (r2 + 2.0 * x * x);
+            double y_t = y * radial + 2.0 * p2 * x * y + p1 * (r2 + 2.0 * y * y);
+            double u_hat = Kcam.K.at<double>(0,0) * x_t + Kcam.K.at<double>(0,2);
+            double v_hat = Kcam.K.at<double>(1,1) * y_t + Kcam.K.at<double>(1,2);
+            double du = o.uv.x - u_hat;
+            double dv = o.uv.y - v_hat;
+            return std::sqrt(du * du + dv * dv);
+        }
+
+        inline std::pair<double, double> computeRmsePerCam(const std::vector<Observation>& obs,
+                                                           const CameraIntrinsics& KL,
+                                                           const CameraIntrinsics& KR,
+                                                           const std::vector<double>& distL,
+                                                           const std::vector<double>& distR,
+                                                           const double q_LF[4], const double t_LF[3],
+                                                           const double q_RL[4], const double t_RL[3],
+                                                           const double q_WB[4], const double t_WB[3])
+        {
+            std::vector<double> errsL, errsR;
+            errsL.reserve(obs.size());
+            errsR.reserve(obs.size());
+
+            for (const auto& o : obs)
+            {
+                const auto& Kc = o.is_right ? KR : KL;
+                const auto& Dc = o.is_right ? distR : distL;
+                double e = projectPointError(o, Kc, Dc, q_LF, t_LF, q_RL, t_RL, q_WB, t_WB);
+                if (std::isnan(e)) continue;
+                if (o.is_right) errsR.push_back(e); else errsL.push_back(e);
+            }
+
+            return { reprojRmse(errsL), reprojRmse(errsR) };
+        }
     } // namespace
 
     RigRefinerCeres::RigRefinerCeres(const Options& o)
@@ -347,6 +438,11 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         options.function_tolerance = 1e-12;
         options.parameter_tolerance = 1e-12;
 
+        // Compute initial RMSE before solving
+        auto initial_rmse = computeRmsePerCam(obs, in.KL, in.KR, distL, distR, q_LF, t_LF, q_RL, t_RL, q_WB, t_WB);
+        res.initialReprojRmseL = initial_rmse.first;
+        res.initialReprojRmseR = initial_rmse.second;
+
         ceres::Solver::Summary summary;
         ceres::Solve(options, &problem, &summary);
 
@@ -360,92 +456,9 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         res.world_from_board.R = quatToMat(q_WB);
         res.world_from_board.t = cv::Vec3d(t_WB[0], t_WB[1], t_WB[2]);
 
-        // Recompute reprojection RMSE
-        std::vector<double> errsL, errsR;
-        errsL.reserve(obs.size());
-        errsR.reserve(obs.size());
-
-        auto project = [&](const Observation& o)
-        {
-            const bool is_right = o.is_right;
-            const auto& K = is_right ? res.KR : res.KL;
-            const auto& D = is_right ? distR : distL;
-            // flange<-world
-            double q_FW[4] = { o.q_fw[0], o.q_fw[1], o.q_fw[2], o.q_fw[3] };
-            double t_FW[3] = { o.t_fw[0], o.t_fw[1], o.t_fw[2] };
-            double q_LW[4];
-            double t_LW[3];
-            double q_LF_cur[4] = { q_LF[0], q_LF[1], q_LF[2], q_LF[3] };
-            double t_LF_cur[3] = { t_LF[0], t_LF[1], t_LF[2] };
-            composePose(q_LF_cur, t_LF_cur, q_FW, t_FW, q_LW, t_LW);
-
-            double q_CW[4];
-            double t_CW[3];
-            if (is_right)
-            {
-                double q_RL_cur[4] = { q_RL[0], q_RL[1], q_RL[2], q_RL[3] };
-                double t_RL_cur[3] = { t_RL[0], t_RL[1], t_RL[2] };
-                composePose(q_RL_cur, t_RL_cur, q_LW, t_LW, q_CW, t_CW);
-            }
-            else
-            {
-                q_CW[0] = q_LW[0]; q_CW[1] = q_LW[1]; q_CW[2] = q_LW[2]; q_CW[3] = q_LW[3];
-                t_CW[0] = t_LW[0]; t_CW[1] = t_LW[1]; t_CW[2] = t_LW[2];
-            }
-
-            double Pw[3] = { o.Pw.x, o.Pw.y, o.Pw.z };
-            double Pw_w[3];
-            double q_WB_cur[4] = { q_WB[0], q_WB[1], q_WB[2], q_WB[3] };
-            double t_WB_cur[3] = { t_WB[0], t_WB[1], t_WB[2] };
-            ceres::QuaternionRotatePoint(q_WB_cur, Pw, Pw_w);
-            Pw_w[0] += t_WB_cur[0];
-            Pw_w[1] += t_WB_cur[1];
-            Pw_w[2] += t_WB_cur[2];
-
-            double Pc[3];
-            ceres::QuaternionRotatePoint(q_CW, Pw_w, Pc);
-            Pc[0] += t_CW[0];
-            Pc[1] += t_CW[1];
-            Pc[2] += t_CW[2];
-            if (Pc[2] <= 0) return std::numeric_limits<double>::quiet_NaN();
-
-            double x = Pc[0] / Pc[2];
-            double y = Pc[1] / Pc[2];
-            double r2 = x * x + y * y;
-            auto dvec = matToDist(K.D);
-            int dlen = static_cast<int>(dvec.size());
-            double k1 = dlen > 0 ? dvec[0] : 0.0;
-            double k2 = dlen > 1 ? dvec[1] : 0.0;
-            double p1 = dlen > 2 ? dvec[2] : 0.0;
-            double p2 = dlen > 3 ? dvec[3] : 0.0;
-            double k3 = dlen > 4 ? dvec[4] : 0.0;
-            double k4 = dlen > 5 ? dvec[5] : 0.0;
-            double k5 = dlen > 6 ? dvec[6] : 0.0;
-            double k6 = dlen > 7 ? dvec[7] : 0.0;
-            double r4 = r2 * r2;
-            double r6 = r4 * r2;
-            double r8 = r4 * r4;
-            double r10 = r8 * r2;
-            double r12 = r6 * r6;
-            double radial = 1.0 + k1 * r2 + k2 * r4 + k3 * r6 + k4 * r8 + k5 * r10 + k6 * r12;
-            double x_t = x * radial + 2.0 * p1 * x * y + p2 * (r2 + 2.0 * x * x);
-            double y_t = y * radial + 2.0 * p2 * x * y + p1 * (r2 + 2.0 * y * y);
-            double u_hat = K.K.at<double>(0,0) * x_t + K.K.at<double>(0,2);
-            double v_hat = K.K.at<double>(1,1) * y_t + K.K.at<double>(1,2);
-            double du = o.uv.x - u_hat;
-            double dv = o.uv.y - v_hat;
-            return std::sqrt(du * du + dv * dv);
-        };
-
-        for (const auto& o : obs)
-        {
-            double e = project(o);
-            if (std::isnan(e)) continue;
-            if (o.is_right) errsR.push_back(e); else errsL.push_back(e);
-        }
-
-        res.finalReprojRmseL = reprojRmse(errsL);
-        res.finalReprojRmseR = reprojRmse(errsR);
+        auto final_rmse = computeRmsePerCam(obs, res.KL, res.KR, distL, distR, q_LF, t_LF, q_RL, t_RL, q_WB, t_WB);
+        res.finalReprojRmseL = final_rmse.first;
+        res.finalReprojRmseR = final_rmse.second;
 
         // Stereo Sampson median
         {
@@ -504,6 +517,13 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
 
         res.ok = summary.termination_type == ceres::CONVERGENCE || summary.termination_type == ceres::USER_SUCCESS;
         res.message = summary.BriefReport();
+        if (res.ok)
+        {
+            res.message += " | initial RMSE L=" + std::to_string(initial_rmse.first) +
+                           " R=" + std::to_string(initial_rmse.second) +
+                           " -> final L=" + std::to_string(res.finalReprojRmseL) +
+                           " R=" + std::to_string(res.finalReprojRmseR);
+        }
         return res;
     }
 }

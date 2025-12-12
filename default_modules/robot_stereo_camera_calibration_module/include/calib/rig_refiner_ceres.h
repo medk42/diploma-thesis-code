@@ -19,7 +19,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             bool refineStereo{true};
             bool refineHandEye{true};
             bool estimateBoardInWorld{true};
-            int maxIters{20};
+            int maxIters{50};
             double huberDelta{1.0};
         };
 
@@ -43,6 +43,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             SE3 camL_from_flange;
             SE3 camR_from_flange;
             SE3 world_from_board;
+            double initialReprojRmseL{-1.0};
+            double initialReprojRmseR{-1.0};
             double finalReprojRmseL{-1.0};
             double finalReprojRmseR{-1.0};
             double medianSampson{-1.0};

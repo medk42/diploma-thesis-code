@@ -343,7 +343,7 @@ int main()
                     double pre_rmse_R = resR.rms;
                     auto rref = refiner.refine(rin);
                     std::cout << "[ceres] ok=" << rref.ok << " msg=" << rref.message << "\n";
-                    std::cout << "[ceres] pre RMSE L=" << pre_rmse_L << " R=" << pre_rmse_R
+                    std::cout << "[ceres] pre RMSE L=" << rref.initialReprojRmseL << " R=" << rref.initialReprojRmseR
                               << " | post RMSE L=" << rref.finalReprojRmseL
                               << " R=" << rref.finalReprojRmseR << "\n";
                     if (rref.ok)
