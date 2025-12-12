@@ -15,6 +15,8 @@
 #include <cstring>
 #include <sstream>
 #include <algorithm>
+#include <thread>
+#include <chrono>
 
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module;
 using namespace aergo::module;
@@ -137,12 +139,6 @@ bool RobotStereoCameraCalibrationModule::activate(
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    if (activated_)
-    {
-        log(logging::LogType::WARNING, "RobotStereoCameraCalibration: already activated.");
-        return true;
-    }
-
     if (parameter_values.size() != 1)
     {
         log(logging::LogType::ERROR, "RobotStereoCameraCalibration: expected exactly one activation parameter (stereo camera+pose samples).");
@@ -180,8 +176,86 @@ bool RobotStereoCameraCalibrationModule::activate(
         return false;
     }
 
-    log(logging::LogType::INFO, "RobotStereoCameraCalibration: parsed " + std::to_string(left_images.size()) + " stereo samples.");
-    activated_ = true;
+    // Instantiate calibrator under its own mutex to avoid concurrent activation.
+    {
+        std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+        if (calibrator_)
+        {
+            log(logging::LogType::ERROR, "RobotStereoCameraCalibration: calibration already running or completed; create a new module instance.");
+            return false;
+        }
+        calibrator_ = std::make_unique<calib::StereoRigCalibrator>();
+    }
+
+    std::atomic<bool> stop_thread{false};
+    std::thread cancel_thread([&]()
+    {
+        while (!stop_thread.load(std::memory_order_relaxed))
+        {
+            if (cancel_flag.load(std::memory_order_relaxed))
+            {
+                if (calibrator_)
+                {
+                    calibrator_->cancel();
+                }
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    });
+
+    auto res = calibrator_->runStereoRobotCalibration(
+        kBoardParams, kDetParams, kIntrParams, kStereoParams, kHandEyeParams, kRefineOpts,
+        left_images, right_images, poses);
+
+    stop_thread.store(true, std::memory_order_relaxed);
+    if (cancel_thread.joinable())
+    {
+        cancel_thread.join();
+    }
+
+    if (!res.has_value())
+    {
+        {
+            std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+            calibrator_.reset();
+        }
+
+        if (cancel_flag.load(std::memory_order_relaxed))
+        {
+            cancelled.store(true, std::memory_order_relaxed);
+        }
+
+        std::ostringstream oss_fail;
+        oss_fail << "RobotStereoCameraCalibration: calibration failed: " << res.error()
+                 << "\n      Board: " << kBoardParams.rows << "x" << kBoardParams.cols
+                 << ", square=" << kBoardParams.squareLength << "m, marker=" << kBoardParams.markerLength
+                 << ", dict=" << kBoardParams.dictionary
+                 << ", legacy=" << (kBoardParams.useLegacyPattern ? "true" : "false");
+        log(logging::LogType::ERROR, oss_fail.str());
+        return false;
+    }
+
+    std::ostringstream oss;
+    {
+        std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+        if (!calibrator_)
+        {
+            log(logging::LogType::ERROR, "RobotStereoCameraCalibration: internal error - calibrator missing after successful run.");
+            return false;
+        }
+        const auto& m = calibrator_->report();
+        oss << "Calibration succeeded\n";
+        oss << "      Intrinsics L RMS: " << m.intrinsics_left_rms << " (views " << m.intrinsics_left_used_views << ")\n";
+        oss << "      Intrinsics R RMS: " << m.intrinsics_right_rms << " (views " << m.intrinsics_right_used_views << ")\n";
+        oss << "      Stereo RMS: " << m.stereo_rms << " (pairs " << m.stereo_used_pairs << ")\n";
+        oss << "      Stereo Sampson mean/median: " << m.stereo_mean_sampson << " / " << m.stereo_median_sampson << "\n";
+        oss << "      Hand-eye usable pairs: " << m.hand_eye_usable_pairs << "\n";
+        oss << "      Refine RMSE L (init/final): " << m.refine_initial_reproj_rmse_l << " / " << m.refine_final_reproj_rmse_l << "\n";
+        oss << "      Refine RMSE R (init/final): " << m.refine_initial_reproj_rmse_r << " / " << m.refine_final_reproj_rmse_r;
+    }
+    log(logging::LogType::INFO, oss.str());
+    
     return true;
 }
 
@@ -190,13 +264,14 @@ bool RobotStereoCameraCalibrationModule::deactivate(const std::atomic<bool>& /*c
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    if (!activated_)
+    std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+    if (calibrator_ && !calibrator_->valid())
     {
-        log(logging::LogType::WARNING, "RobotStereoCameraCalibration: already deactivated.");
-        return true;
+        log(logging::LogType::WARNING, "RobotStereoCameraCalibration: unable to deactivate - calibration still running.");
+        return false;
     }
-
-    activated_ = false;
+    
+    calibrator_.reset();
     return true;
 }
 
@@ -204,54 +279,24 @@ bool RobotStereoCameraCalibrationModule::deactivate(const std::atomic<bool>& /*c
 bool RobotStereoCameraCalibrationModule::isActivated()
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    return activated_;
+    std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+    return calibrator_ != nullptr;
 }
 
 
 aergo::module::ISerializableModule::SaveData RobotStereoCameraCalibrationModule::save() noexcept
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
     ISerializableModule::SaveData data;
     data.success_ = true;
-    data.supports_saving_ = true;
+    data.supports_saving_ = false;
     data.schema_version_ = 1;
-
-    json j;
-    j["activated"] = activated_;
-    data.json_header_ = j.dump();
-
+    data.json_header_.clear();
     return data;
 }
 
 
 bool RobotStereoCameraCalibrationModule::load(aergo::module::ISerializableModule::SaveData data) noexcept
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    if (!data.supports_saving_ || data.schema_version_ != 1)
-    {
-        log(logging::LogType::ERROR, "RobotStereoCameraCalibration: unsupported save data.");
-        return false;
-    }
-
-    try
-    {
-        json j = json::parse(data.json_header_);
-        if (!j.contains("activated") || !j["activated"].is_boolean())
-        {
-            log(logging::LogType::ERROR, "RobotStereoCameraCalibration: invalid save data payload.");
-            return false;
-        }
-
-        activated_ = j["activated"].get<bool>();
-    }
-    catch (const std::exception& e)
-    {
-        log(logging::LogType::ERROR, std::string("RobotStereoCameraCalibration: failed to parse save data: ") + e.what());
-        return false;
-    }
-
     return true;
 }
 
@@ -261,7 +306,24 @@ aergo::module::helpers::activation_wrapper::message_types::ProgressData RobotSte
     using ProgressData = aergo::module::helpers::activation_wrapper::message_types::ProgressData;
     using ProgressType = aergo::module::helpers::activation_wrapper::message_types::ProgressType;
 
-    return { .progress_type_ = ProgressType::NONE, .progress_max_int_ = 0, .progress_current_value_double_ = 0.0, .progress_current_value_int_ = 0 };
+    std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+    if (!calibrator_)
+    {
+        return { .progress_type_ = ProgressType::NONE, .progress_max_int_ = 0, .progress_current_value_double_ = 0.0, .progress_current_value_int_ = 0 };
+    }
+
+    auto prog = calibrator_->progress();
+    if (prog.max_progress == 0)
+    {
+        return { .progress_type_ = ProgressType::NONE, .progress_max_int_ = 0, .progress_current_value_double_ = 0.0, .progress_current_value_int_ = 0 };
+    }
+
+    return {
+        .progress_type_ = ProgressType::INT,
+        .progress_max_int_ = prog.max_progress,
+        .progress_current_value_double_ = 0.0,
+        .progress_current_value_int_ = prog.current_progress
+    };
 }
 
 

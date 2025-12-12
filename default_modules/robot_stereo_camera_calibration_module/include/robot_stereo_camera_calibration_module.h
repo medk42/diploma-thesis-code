@@ -5,8 +5,10 @@
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_helpers/camera_messages/messages.h"
 #include "module_helpers/camera_pose_helper/message_structure.h"
+#include "calib/stereo_rig_calibrator.h"
 
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <opencv2/core.hpp>
 
@@ -91,6 +93,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
         uint32_t camera_pose_input_channel_{0};
 
         std::mutex mutex_;
-        bool activated_{false};
+        std::mutex calibrator_mutex_;
+        std::unique_ptr<calib::StereoRigCalibrator> calibrator_;
     };
 }
