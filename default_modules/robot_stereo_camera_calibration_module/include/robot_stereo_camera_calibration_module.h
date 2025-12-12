@@ -5,6 +5,7 @@
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_helpers/camera_messages/messages.h"
 #include "module_helpers/camera_pose_helper/message_structure.h"
+#include "calibrated_stereo_messages.h"
 #include "calib/stereo_rig_calibrator.h"
 
 #include <atomic>
@@ -91,6 +92,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
 
         bool valid_{false};
         uint32_t camera_pose_input_channel_{0};
+        uint32_t calibrated_publish_channel_{0};
 
         std::mutex mutex_;
         std::mutex calibrator_mutex_;

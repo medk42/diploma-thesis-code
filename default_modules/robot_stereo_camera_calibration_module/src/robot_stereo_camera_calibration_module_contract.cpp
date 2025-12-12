@@ -35,12 +35,16 @@ static constexpr communication_channel::Producer response_producers[] = {
     aergo::module::helpers::activation_wrapper::message_types::activation_response_producer
 };
 
+static constexpr communication_channel::Producer publish_producers[] = {
+    messages::calibrated_stereo_publish_producer
+};
+
 static constexpr ModuleInfo module_info = {
     .module_type_identifier_ = "robot_stereo_camera_calibration_module",
     .display_name_ = "Stereo Camera Calibration (Robot)",
     .display_description_ = "Calibrates a stereo camera relative to the robot flange using Charuco captures. Provide at least 10 synchronized stereo images with flange pose from camera_pose_injector. Charuco: 8x12 grid, 24 mm squares, 18 mm markers, ArUco DICT_4X4_100, legacy pattern.",
-    .publish_producers_ = nullptr,
-    .publish_producer_count_ = 0,
+    .publish_producers_ = publish_producers,
+    .publish_producer_count_ = std::size(publish_producers),
     .response_producers_ = response_producers,
     .response_producer_count_ = std::size(response_producers),
     .subscribe_consumers_ = subscribe_consumers,

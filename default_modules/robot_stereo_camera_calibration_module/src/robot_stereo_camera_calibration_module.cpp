@@ -11,6 +11,7 @@
 #include "calib/stereo_calibrator.h"
 #include "calib/handeye_calibrator.h"
 #include "calib/rig_refiner_ceres.h"
+#include "calibrated_stereo_messages.h"
 
 #include <cstring>
 #include <sstream>
@@ -91,6 +92,12 @@ RobotStereoCameraCalibrationModule::RobotStereoCameraCalibrationModule(
         return;
     }
 
+    if (!getPublishChannelByName(messages::calibrated_stereo_publish_producer.channel_type_identifier_, calibrated_publish_channel_))
+    {
+        log(logging::LogType::ERROR, "RobotStereoCameraCalibration: failed to resolve calibrated stereo publish channel.");
+        return;
+    }
+
     valid_ = true;
 }
 
@@ -124,11 +131,50 @@ IModule::IngressDecision RobotStereoCameraCalibrationModule::onIngress(
 
 
 void RobotStereoCameraCalibrationModule::processMessage(
-    uint32_t /*subscribe_consumer_id*/,
+    uint32_t subscribe_consumer_id,
     aergo::module::ChannelIdentifier /*source_channel*/,
-    aergo::module::message::MessageHeader /*message*/) noexcept
+    aergo::module::message::MessageHeader message) noexcept
 {
-    // Message passthrough will be added after calibration results are produced.
+    if (subscribe_consumer_id != camera_pose_input_channel_)
+    {
+        log(logging::LogType::WARNING, "RobotStereoCameraCalibration: received message on unexpected subscribe consumer.");
+        return;
+    }
+
+    cph::CameraWithFlangePose payload{};
+    if (!message.readAs(payload))
+    {
+        log(logging::LogType::WARNING, "RobotStereoCameraCalibration: received message without CameraWithFlangePose payload.");
+        return;
+    }
+
+    calib::StereoRigWorldCameraPoses world_poses;
+    {
+        std::lock_guard<std::mutex> c_lock(calibrator_mutex_);
+        if (!calibrator_)
+        {
+            return;
+        }
+        world_poses = calibrator_->computeWorld(payload.flange_pose);
+    }
+
+    messages::CalibratedStereoRobotMountedCamera out_msg{};
+    if (!messages::makeCalibratedStereoRobotMountedCamera(
+            payload,
+            world_poses.pose_left,
+            world_poses.pose_right,
+            world_poses.intrinsics_left.K,
+            world_poses.intrinsics_left.D,
+            world_poses.intrinsics_right.K,
+            world_poses.intrinsics_right.D,
+            out_msg))
+    {
+        log(logging::LogType::WARNING, "RobotStereoCameraCalibration: failed to pack calibrated message (invalid intrinsics).");
+        return;
+    }
+
+    auto out_header = aergo::module::message::MessageHeader::Message(&out_msg, message.blobs_, message.blob_count_);
+    sendMessage(calibrated_publish_channel_, out_header);
 }
 
 
