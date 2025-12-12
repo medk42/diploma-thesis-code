@@ -8,14 +8,14 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
     {
     }
 
-    HandEyeCalibrator::Result HandEyeCalibrator::run(const std::vector<Pose>& robotBase_from_flange,
-                                                     const std::vector<cv::Vec3d>& rvec_target_from_cam,
-                                                     const std::vector<cv::Vec3d>& tvec_target_from_cam) const
+    HandEyeCalibrator::Result HandEyeCalibrator::run(const std::vector<Pose>& robotBase_from_flange, // robot base <- robot flange
+                                                     const std::vector<cv::Vec3d>& rvec_cam_from_board, // CB: camera <- board
+                                                     const std::vector<cv::Vec3d>& tvec_cam_from_board) const
     {
         Result res;
 
-        if (robotBase_from_flange.size() != rvec_target_from_cam.size() ||
-            robotBase_from_flange.size() != tvec_target_from_cam.size())
+        if (robotBase_from_flange.size() != rvec_cam_from_board.size() ||
+            robotBase_from_flange.size() != tvec_cam_from_board.size())
         {
             res.message = "HandEyeCalibrator: input sizes do not match.";
             return res;
@@ -27,9 +27,9 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             return res;
         }
 
-        std::vector<cv::Mat> R_gripper2base;
+        std::vector<cv::Mat> R_gripper2base; // rotation: gripper -> base (robot flange->world frame, WF)
         std::vector<cv::Mat> t_gripper2base;
-        std::vector<cv::Mat> R_target2cam;
+        std::vector<cv::Mat> R_target2cam; // rotation: target -> camera (board -> camera, CB)
         std::vector<cv::Mat> t_target2cam;
 
         const size_t N = robotBase_from_flange.size();
@@ -40,21 +40,21 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
 
         for (size_t i = 0; i < N; ++i)
         {
-            const SE3 Twg = pose_utils::toSE3(robotBase_from_flange[i]); // base <- flange (gripper->base)
-            cv::Mat Rg = cv::Mat(Twg.R);
-            cv::Mat tg = (cv::Mat_<double>(3, 1) << Twg.t[0], Twg.t[1], Twg.t[2]);
+            const SE3 T_WF = pose_utils::toSE3(robotBase_from_flange[i]); // WF: world <- flange (gripper->base)
+            cv::Mat R_WF = cv::Mat(T_WF.R);
+            cv::Mat t_WF = (cv::Mat_<double>(3, 1) << T_WF.t[0], T_WF.t[1], T_WF.t[2]);
 
-            cv::Mat Rt; // target -> camera
-            cv::Rodrigues(rvec_target_from_cam[i], Rt);
-            cv::Mat tt = (cv::Mat_<double>(3, 1) << tvec_target_from_cam[i][0], tvec_target_from_cam[i][1], tvec_target_from_cam[i][2]);
+            cv::Mat R_CB; // CB: camera <- board
+            cv::Rodrigues(rvec_cam_from_board[i], R_CB);
+            cv::Mat t_CB = (cv::Mat_<double>(3, 1) << tvec_cam_from_board[i][0], tvec_cam_from_board[i][1], tvec_cam_from_board[i][2]);
 
-            R_gripper2base.push_back(Rg);
-            t_gripper2base.push_back(tg);
-            R_target2cam.push_back(Rt);
-            t_target2cam.push_back(tt);
+            R_gripper2base.push_back(R_WF);
+            t_gripper2base.push_back(t_WF);
+            R_target2cam.push_back(R_CB);
+            t_target2cam.push_back(t_CB);
         }
 
-        cv::Mat R_cam2gripper, t_cam2gripper;
+        cv::Mat R_cam2gripper, t_cam2gripper; // output: camera -> gripper (flange<-cam, flange_from_cam, FC)
         try
         {
             cv::calibrateHandEye(
@@ -72,18 +72,18 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             return res;
         }
 
-        res.cam_from_flange.R = cv::Matx33d(R_cam2gripper);
-        res.cam_from_flange.t = cv::Vec3d(t_cam2gripper);
+        res.T_FC.R = cv::Matx33d(R_cam2gripper);
+        res.T_FC.t = cv::Vec3d(t_cam2gripper);
         res.ok = true;
         return res;
     }
 
     SE3 HandEyeCalibrator::composeRightFromLeft(const StereoExtrinsics& right_from_left,
-                                                const SE3& camL_from_flange)
+                                                const HandEyeCalibrator::Result& hand_eye_left)
     {
         SE3 camR_from_camL;
         camR_from_camL.R = right_from_left.R_RL;
         camR_from_camL.t = right_from_left.t_RL;
-        return pose_utils::compose(camR_from_camL, camL_from_flange);
+        return pose_utils::compose(camR_from_camL, pose_utils::invert(hand_eye_left.T_FC));
     }
 }

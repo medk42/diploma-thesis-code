@@ -150,10 +150,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         {
             flags |= cv::CALIB_FIX_INTRINSIC;
         }
-        else if (prm_.useRationalModel)
-        {
-            flags |= cv::CALIB_RATIONAL_MODEL | cv::CALIB_ZERO_TANGENT_DIST;
-        }
 
         cv::Mat R, T, E, F;
         const double rms = cv::stereoCalibrate(

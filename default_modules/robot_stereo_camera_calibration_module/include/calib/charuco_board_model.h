@@ -17,7 +17,10 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             float squareLength{0.024f};
             float markerLength{0.018f};
             int dictionary{cv::aruco::DICT_4X4_100};
+            bool useLegacyPattern{true};
         };
+
+        CharucoBoardModel() : CharucoBoardModel(Params{}) {}
 
         static CharucoBoardModel Create(const Params& p);
 

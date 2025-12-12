@@ -18,7 +18,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             int minSharedCharucoCorners{10};
             int minPairs{8};
             bool fixIntrinsics{true};
-            bool useRationalModel{true};
             bool computeRectification{false};
             double rectifyAlpha{0.0};
         };

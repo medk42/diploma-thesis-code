@@ -13,7 +13,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
     public:
         struct Result
         {
-            SE3 cam_from_flange;
+            SE3 T_FC; // cam to flange / flange from cam (p_f = T_FC * p_c)
             double rms{-1.0};
             bool ok{false};
             std::string message;
@@ -32,7 +32,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
                    const std::vector<cv::Vec3d>& tvec_target_from_cam) const;
 
         static SE3 composeRightFromLeft(const StereoExtrinsics& right_from_left,
-                                        const SE3& camL_from_flange);
+                                        const HandEyeCalibrator::Result& hand_eye_left);
 
     private:
         Params prm_;

@@ -7,6 +7,7 @@
 #include "calib/intrinsics_calibrator.h"
 #include "calib/stereo_calibrator.h"
 #include "calib/handeye_calibrator.h"
+#include "calib/rig_refiner_ceres.h"
 
 #include <filesystem>
 #include <iostream>
@@ -30,7 +31,7 @@ namespace
         int frame_index{-1};
         cv::Mat img_left;
         cv::Mat img_right;
-        Pose robot_pose{};
+        Pose robot_pose{}; // world <- robot
         Pose camera_pose{};
         std::string path_left;
         std::string path_right;
@@ -135,6 +136,8 @@ int main()
         const SE3 Tcw = pose_utils::invert(Twc);          // camera <- world
         const SE3 Tcr = pose_utils::compose(Tcw, Twr);    // camera <- robot
         const Quaternion qcr = pose_utils::rToQuat(Tcr.R);
+        const SE3 Trc = pose_utils::invert(Tcr);          // robot <- camera
+        const Quaternion qrc = pose_utils::rToQuat(Trc.R);
 
         std::cout << "Frame " << s.frame_index
                   << " | left: " << s.img_left.cols << "x" << s.img_left.rows
@@ -153,6 +156,10 @@ int main()
                   << s.camera_pose.orientation.w << ")"
                   << "\n  Camera<-Robot t=(" << Tcr.t[0] << ", " << Tcr.t[1] << ", " << Tcr.t[2] << ")"
                   << " q=(" << qcr.x << ", " << qcr.y << ", " << qcr.z << ", " << qcr.w << ")"
+                  << "\n    ^ robot pose in camera frame"
+                  << "\n  Robot<-Camera t=(" << Trc.t[0] << ", " << Trc.t[1] << ", " << Trc.t[2] << ")"
+                  << " q=(" << qrc.x << ", " << qrc.y << ", " << qrc.z << ", " << qrc.w << ")"
+                  << "\n    ^ camera pose in robot frame"
                   << "\n";
 
         if (show_images)
@@ -240,6 +247,8 @@ int main()
         std::cout << "[intrinsics right] reason: " << resR.message << "\n";
     }
 
+    bool show_pose_detection = false;
+
     if (resL.ok && resR.ok)
     {
         StereoCalibrator::Params sp;
@@ -255,8 +264,8 @@ int main()
             std::cout << "[stereo] mean Sampson=" << sres.meanSampson << ", median=" << sres.medianSampson << "\n";
 
             // Hand-eye calibration using left camera
-            std::vector<Pose> base_from_flange;
-            std::vector<cv::Vec3d> rvec_tc;
+            std::vector<Pose> base_from_flange; // WF: robot base <- robot flange
+            std::vector<cv::Vec3d> rvec_tc; // CB: camera <- board
             std::vector<cv::Vec3d> tvec_tc;
             base_from_flange.reserve(samples.size());
             rvec_tc.reserve(samples.size());
@@ -270,6 +279,21 @@ int main()
                     base_from_flange.push_back(samples[i].robot_pose);
                     rvec_tc.push_back(rvec);
                     tvec_tc.push_back(tvec);
+
+                    if (show_pose_detection)
+                    {
+                        // draw pose into the image
+                        cv::drawFrameAxes(
+                            samples[i].img_left,
+                            resL.intr.K,
+                            resL.intr.D,
+                            rvec,
+                            tvec,
+                            0.05                      // axis length in meters (e.g. 5 cm)
+                        );
+                        cv::imshow("left_with_pose", samples[i].img_left);
+                        cv::waitKey(0);
+                    }
                 }
             }
 
@@ -281,12 +305,56 @@ int main()
                 std::cout << "[handeye] ok=" << heres.ok << "\n";
                 if (heres.ok)
                 {
-                    std::cout << "[handeye] camL<-flange R:\n" << cv::Mat(heres.cam_from_flange.R) << "\n";
-                    std::cout << "[handeye] camL<-flange t:\n" << cv::Mat(heres.cam_from_flange.t) << "\n";
+                    auto q_FL = pose_utils::rToQuat(heres.T_FC.R);
+                    std::cout << "[handeye] flange<-camL R:\n" << cv::Mat(heres.T_FC.R) << "\n"; // flange<-camL
+                    std::cout << "[handeye] flange<-camL q:("
+                              << q_FL.x << ", " << q_FL.y << ", " << q_FL.z << ", " << q_FL.w << ")\n";
+                    std::cout << "[handeye] flange<-camL t:\n" << cv::Mat(heres.T_FC.t) << "\n";
+                    
+                    auto T_FL = heres.T_FC; // camera = left
+                    auto T_LF = pose_utils::invert(T_FL); // camL<-flange
+                    auto q_LF = pose_utils::rToQuat(T_LF.R);
+                    std::cout << "[handeye] camL<-flange R:\n" << cv::Mat(T_LF.R) << "\n";
+                    std::cout << "[handeye] camL<-flange q:("
+                              << q_LF.x << ", " << q_LF.y << ", " << q_LF.z << ", " << q_LF.w << ")\n";
+                    std::cout << "[handeye] camL<-flange t:\n" << cv::Mat(T_LF.t) << "\n";
 
-                    auto camR_from_flange = HandEyeCalibrator::composeRightFromLeft(sres.extr, heres.cam_from_flange);
-                    std::cout << "[handeye] camR<-flange R:\n" << cv::Mat(camR_from_flange.R) << "\n";
-                    std::cout << "[handeye] camR<-flange t:\n" << cv::Mat(camR_from_flange.t) << "\n";
+                    auto T_RF = HandEyeCalibrator::composeRightFromLeft(sres.extr, heres); // camR<-flange
+                    auto q_RF = pose_utils::rToQuat(T_RF.R);
+                    std::cout << "[handeye] camR<-flange R:\n" << cv::Mat(T_RF.R) << "\n";
+                    std::cout << "[handeye] camR<-flange q:("
+                              << q_RF.x << ", " << q_RF.y << ", " << q_RF.z << ", " << q_RF.w << ")\n";
+                    std::cout << "[handeye] camR<-flange t:\n" << cv::Mat(T_RF.t) << "\n";
+
+                    // Joint refinement with Ceres
+                    RigRefinerCeres::Options ropts { };
+                    RigRefinerCeres refiner(ropts);
+                    RigRefinerCeres::Input rin;
+                    rin.viewsL = viewsL;
+                    rin.viewsR = viewsR;
+                    rin.base_from_flange = base_from_flange;
+                    rin.board = board;
+                    rin.KL = resL.intr;
+                    rin.KR = resR.intr;
+                    rin.RL = sres.extr;
+                    rin.camL_from_flange = T_LF;
+
+                    double pre_rmse_L = resL.rms;
+                    double pre_rmse_R = resR.rms;
+                    auto rref = refiner.refine(rin);
+                    std::cout << "[ceres] ok=" << rref.ok << " msg=" << rref.message << "\n";
+                    std::cout << "[ceres] pre RMSE L=" << pre_rmse_L << " R=" << pre_rmse_R
+                              << " | post RMSE L=" << rref.finalReprojRmseL
+                              << " R=" << rref.finalReprojRmseR << "\n";
+                    if (rref.ok)
+                    {
+                        std::cout << "[ceres] RL t before=" << cv::Mat(sres.extr.t_RL).t()
+                                  << " after=" << cv::Mat(rref.RL.t_RL).t() << "\n";
+                        std::cout << "[ceres] RL R before:\n" << cv::Mat(sres.extr.R_RL)
+                                  << "\n after:\n" << cv::Mat(rref.RL.R_RL) << "\n";
+                        std::cout << "[ceres] camL<-flange t before=" << cv::Mat(T_LF.t).t()
+                                  << " after=" << cv::Mat(rref.camL_from_flange.t).t() << "\n";
+                    }
                 }
                 else
                 {

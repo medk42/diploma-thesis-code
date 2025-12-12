@@ -25,6 +25,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
     struct StereoExtrinsics
     {
         cv::Matx33d R_RL{cv::Matx33d::eye()}; // Right <- Left rotation
-        cv::Vec3d t_RL{0.0, 0.0, 0.0};        // Right origin in Left frame
+        cv::Vec3d t_RL{0.0, 0.0, 0.0};        // Right <- Left translation (Position of Left camera in Right camera frame)
     };
 }

@@ -8,6 +8,7 @@ set(REQUIRED_HELPER_LIBS
     opencv_calib3d
     opencv_aruco
     opencv_highgui
+    Ceres::ceres
     nlohmann_json::nlohmann_json
 )
 
@@ -19,6 +20,7 @@ set (REQUIRED_HELPER_LIBS_TESTS
 
 # Find OpenCV
 find_package(OpenCV 4 REQUIRED core calib3d aruco imgproc imgcodecs highgui)
+find_package(Ceres REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # add JSON library
