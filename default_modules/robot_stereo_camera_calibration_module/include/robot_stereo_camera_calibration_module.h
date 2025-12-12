@@ -14,6 +14,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
 {
     namespace cm = aergo::module::helpers::camera_messages;
     namespace cph = aergo::module::helpers::camera_pose_helper;
+    namespace rc = aergo::module::helpers::robot_interface::robot_control;
+    using Pose = rc::Pose;
 
     class RobotStereoCameraCalibrationModule : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule
     {
@@ -77,25 +79,12 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
         bool load(aergo::module::ISerializableModule::SaveData data) noexcept override;
 
     private:
-        struct ParsedSampleView
-        {
-            cph::CameraWithFlangePose camera_pose{};
-            const uint8_t* blob_data{nullptr};
-            size_t blob_size{0};
-        };
-
-        struct ActivationProgress
-        {
-            bool running{false};
-            uint16_t total_samples{0};
-            uint16_t processed_samples{0};
-
-            static ActivationProgress RUNNING(uint16_t processed, uint16_t total) { return ActivationProgress{ .running = true, .total_samples = total, .processed_samples = processed}; }
-            static ActivationProgress NOT_RUNNING() { return ActivationProgress{ .running = false, .total_samples = 0, .processed_samples = 0}; }
-        };
-
-        bool parseSample(const std::vector<uint8_t>& raw, ParsedSampleView& out_view, size_t sample_index) noexcept;
-        bool validateAndLogSample(const ParsedSampleView& view, size_t sample_index) noexcept;
+        bool parseStereoSamples(const std::vector<std::vector<uint8_t>>& samples,
+                                const std::atomic<bool>& cancel_flag,
+                                std::atomic<bool>& cancelled,
+                                std::vector<cv::Mat>& left_images,
+                                std::vector<cv::Mat>& right_images,
+                                std::vector<Pose>& poses) noexcept;
         bool buildImageView(const cm::BlobHeader& blob_header, const cm::ImageHeader& img_header, int mat_type, const uint8_t* blob_data, cv::Mat& out_mat) noexcept;
 
         bool valid_{false};
@@ -103,7 +92,5 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
 
         std::mutex mutex_;
         bool activated_{false};
-
-        std::atomic<ActivationProgress> activation_progress_{};
     };
 }
