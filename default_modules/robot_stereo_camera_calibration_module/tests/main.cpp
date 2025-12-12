@@ -155,7 +155,6 @@ int main()
     refine_opts.huberDelta = 1.0;
 
     StereoRigCalibrator calibrator;
-    StereoRigCalibrator* ref = nullptr;
     std::atomic<bool> stop_thread{false};
     std::atomic<uint32_t> last_progress{0};
 
@@ -163,20 +162,16 @@ int main()
     {
         while (!stop_thread.load(std::memory_order_relaxed))
         {
-            if (ref)
+            auto prog = calibrator.progress();
+            if (prog.current_progress != last_progress.load(std::memory_order_relaxed))
             {
-                auto prog = ref->progress();
-                if (prog.current_progress != last_progress.load(std::memory_order_relaxed))
-                {
-                    last_progress.store(prog.current_progress, std::memory_order_relaxed);
-                    std::cout << "\rProgress: " << prog.current_progress << " / " << prog.max_progress << std::flush;
-                }
+                last_progress.store(prog.current_progress, std::memory_order_relaxed);
+                std::cout << "\rProgress: " << prog.current_progress << " / " << prog.max_progress << std::flush;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
 
-    ref = &calibrator;
     auto res = calibrator.runStereoRobotCalibration(
         board_params,
         det_params,
