@@ -14,7 +14,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         struct Result
         {
             SE3 T_FC; // cam to flange / flange from cam (p_f = T_FC * p_c)
-            double rms{-1.0};
             bool ok{false};
             std::string message;
         };

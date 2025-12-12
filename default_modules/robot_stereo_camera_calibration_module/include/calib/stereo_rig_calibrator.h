@@ -27,7 +27,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         double stereo_median_sampson{-1.0};            ///< Median Sampson distance after stereo calibration.
         size_t stereo_used_pairs{0};                   ///< Count of stereo pairs used in stereo calibration.
         size_t hand_eye_usable_pairs{0};               ///< Count of pairs usable for hand-eye calibration.
-        double hand_eye_rms{-1.0};                     ///< RMS from hand-eye calibration.
         CameraIntrinsics camera_intrinsics_left;       ///< Final left camera intrinsics.
         CameraIntrinsics camera_intrinsics_right;      ///< Final right camera intrinsics.
         StereoExtrinsics stereo_extrinsics;            ///< Final stereo extrinsics (Right <- Left).

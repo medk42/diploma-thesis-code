@@ -20,7 +20,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             int minCharucoCornersPerView{12};
             int minViews{8};
 
-            int flags {0}; //{ cv::CALIB_RATIONAL_MODEL | cv::CALIB_ZERO_TANGENT_DIST };
             cv::TermCriteria criteria{ cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 50, 1e-9) };
         };
 

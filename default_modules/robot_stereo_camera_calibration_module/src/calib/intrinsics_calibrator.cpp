@@ -103,7 +103,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             distCoeffs,
             rvecs,
             tvecs,
-            prm_.flags,
+            0,
             prm_.criteria);
 
         res.intr.K = cameraMatrix;

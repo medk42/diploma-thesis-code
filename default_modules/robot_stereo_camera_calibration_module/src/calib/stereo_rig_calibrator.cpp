@@ -18,6 +18,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             StereoRigProgress out{};
             out.current_progress = static_cast<uint32_t>(packed & 0xFFFFFFFFu);
             out.max_progress = static_cast<uint32_t>(packed >> 32);
+            return out;
         }
     }
 
@@ -168,7 +169,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         metrics_.stereo_median_sampson = stereo_res.medianSampson;
         metrics_.stereo_used_pairs = stereo_res.usedPairIndices.size();
         metrics_.hand_eye_usable_pairs = base_from_flange.size();
-        metrics_.hand_eye_rms = he_res.rms;
         metrics_.camera_intrinsics_left = refine_res.KL;
         metrics_.camera_intrinsics_right = refine_res.KR;
         metrics_.stereo_extrinsics = refine_res.RL;
@@ -210,7 +210,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         j["stereo_median_sampson"] = metrics_.stereo_median_sampson;
         j["stereo_used"] = metrics_.stereo_used_pairs;
         j["hand_eye_pairs"] = metrics_.hand_eye_usable_pairs;
-        j["hand_eye_rms"] = metrics_.hand_eye_rms;
         j["KL_K"] = matToVec(metrics_.camera_intrinsics_left.K);
         j["KL_D"] = matToVec(metrics_.camera_intrinsics_left.D);
         j["KL_size"] = {metrics_.camera_intrinsics_left.imageSize.width, metrics_.camera_intrinsics_left.imageSize.height};
@@ -277,7 +276,6 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             metrics_.stereo_median_sampson = s.value("stereo_median_sampson", -1.0);
             metrics_.stereo_used_pairs = s.value("stereo_used", 0);
             metrics_.hand_eye_usable_pairs = s.value("hand_eye_pairs", 0);
-            metrics_.hand_eye_rms = s.value("hand_eye_rms", -1.0);
 
             metrics_.camera_intrinsics_left.K = vecToMat(s.value<std::vector<double>>("KL_K", {}), 3, 3);
             metrics_.camera_intrinsics_left.D = vecToMat(s.value<std::vector<double>>("KL_D", {}), 1, static_cast<int>(s.value<std::vector<double>>("KL_D", {}).size()));
@@ -312,7 +310,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
     StereoRigWorldCameraPoses StereoRigCalibrator::computeWorld(const Pose& world_from_flange) const
     {
         StereoRigWorldCameraPoses out{};
-        
+
         SE3 T_WF = pose_utils::toSE3(world_from_flange);
         SE3 T_FL = pose_utils::invert(metrics_.camL_from_flange);
         SE3 T_FR = pose_utils::invert(metrics_.camR_from_flange);

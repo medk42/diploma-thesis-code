@@ -1,23 +1,16 @@
-#include "calib/pose_utils.h"
-#include "calib/types.h"
+#include "calib/stereo_rig_calibrator.h"
 #include "calib/charuco_defaults.h"
+#include "calib/pose_utils.h"
 
-#include "calib/charuco_board_model.h"
-#include "calib/charuco_detector.h"
-#include "calib/intrinsics_calibrator.h"
-#include "calib/stereo_calibrator.h"
-#include "calib/handeye_calibrator.h"
-#include "calib/rig_refiner_ceres.h"
-
+#include <atomic>
+#include <chrono>
 #include <filesystem>
-#include <iostream>
-#include <opencv2/aruco.hpp>
-#include <opencv2/calib3d.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
-#include <nlohmann/json.hpp>
 #include <fstream>
+#include <iostream>
+#include <nlohmann/json.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <string>
+#include <thread>
 
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module;
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib;
@@ -31,23 +24,8 @@ namespace
         int frame_index{-1};
         cv::Mat img_left;
         cv::Mat img_right;
-        Pose robot_pose{}; // world <- robot
-        Pose camera_pose{};
-        std::string path_left;
-        std::string path_right;
+        Pose robot_pose{}; // world <- flange
     };
-
-    CharucoBoardModel make_demo_board()
-    {
-        CharucoBoardModel::Params bp{
-            defaults::charucoboard::ROW_COUNT,
-            defaults::charucoboard::COL_COUNT,
-            defaults::charucoboard::SQUARE_LENGTH,
-            defaults::charucoboard::MARKER_LENGTH,
-            cv::aruco::DICT_4X4_100};
-
-        return CharucoBoardModel::Create(bp);
-    }
 
     Pose parse_pose(const json& j)
     {
@@ -76,11 +54,7 @@ namespace
         std::string line;
         while (std::getline(ifs, line))
         {
-            if (line.empty())
-            {
-                continue;
-            }
-
+            if (line.empty()) continue;
             json j;
             try
             {
@@ -94,278 +68,148 @@ namespace
 
             DemoSample s;
             s.frame_index = j.value("frame_index", -1);
-
             const auto left_rel = j["files"]["left"].get<std::string>();
             const auto right_rel = j["files"]["right"].get<std::string>();
-            s.path_left = (base_path / left_rel).string();
-            s.path_right = (base_path / right_rel).string();
+            const auto left_path = (base_path / left_rel).string();
+            const auto right_path = (base_path / right_rel).string();
 
             s.robot_pose = parse_pose(j["robot_pose_world"]);
-            s.camera_pose = parse_pose(j["camera_pose_world_est"]);
-
-            s.img_left = cv::imread(s.path_left, cv::IMREAD_COLOR);
-            s.img_right = cv::imread(s.path_right, cv::IMREAD_COLOR);
-
+            s.img_left = cv::imread(left_path, cv::IMREAD_COLOR);
+            s.img_right = cv::imread(right_path, cv::IMREAD_COLOR);
             if (s.img_left.empty() || s.img_right.empty())
             {
                 std::cout << "[load_demo_samples] Failed to read images for frame " << s.frame_index << std::endl;
                 continue;
             }
-
             samples.push_back(std::move(s));
         }
-
         return samples;
     }
-
 }
-
 
 int main()
 {
     const auto demo_base = std::filesystem::current_path() / "demo_data";
     auto samples = load_demo_samples(demo_base);
     std::cout << "[main] Loaded " << samples.size() << " samples from " << demo_base << std::endl;
-
-    const bool show_images = false;
-
-    for (const auto& s : samples)
-    {
-        const SE3 Twr = pose_utils::toSE3(s.robot_pose);  // world <- robot
-        const SE3 Twc = pose_utils::toSE3(s.camera_pose); // world <- camera
-        const SE3 Tcw = pose_utils::invert(Twc);          // camera <- world
-        const SE3 Tcr = pose_utils::compose(Tcw, Twr);    // camera <- robot
-        const Quaternion qcr = pose_utils::rToQuat(Tcr.R);
-        const SE3 Trc = pose_utils::invert(Tcr);          // robot <- camera
-        const Quaternion qrc = pose_utils::rToQuat(Trc.R);
-
-        std::cout << "Frame " << s.frame_index
-                  << " | left: " << s.img_left.cols << "x" << s.img_left.rows
-                  << " | right: " << s.img_right.cols << "x" << s.img_right.rows
-                  << "\n  Robot pose pos=(" << s.robot_pose.position.x << ", "
-                  << s.robot_pose.position.y << ", " << s.robot_pose.position.z << ")"
-                  << " ori=(" << s.robot_pose.orientation.x << ", "
-                  << s.robot_pose.orientation.y << ", "
-                  << s.robot_pose.orientation.z << ", "
-                  << s.robot_pose.orientation.w << ")"
-                  << "\n  Camera pose pos=(" << s.camera_pose.position.x << ", "
-                  << s.camera_pose.position.y << ", " << s.camera_pose.position.z << ")"
-                  << " ori=(" << s.camera_pose.orientation.x << ", "
-                  << s.camera_pose.orientation.y << ", "
-                  << s.camera_pose.orientation.z << ", "
-                  << s.camera_pose.orientation.w << ")"
-                  << "\n  Camera<-Robot t=(" << Tcr.t[0] << ", " << Tcr.t[1] << ", " << Tcr.t[2] << ")"
-                  << " q=(" << qcr.x << ", " << qcr.y << ", " << qcr.z << ", " << qcr.w << ")"
-                  << "\n    ^ robot pose in camera frame"
-                  << "\n  Robot<-Camera t=(" << Trc.t[0] << ", " << Trc.t[1] << ", " << Trc.t[2] << ")"
-                  << " q=(" << qrc.x << ", " << qrc.y << ", " << qrc.z << ", " << qrc.w << ")"
-                  << "\n    ^ camera pose in robot frame"
-                  << "\n";
-
-        if (show_images)
-        {
-            cv::imshow("left", s.img_left);
-            cv::imshow("right", s.img_right);
-            cv::waitKey(0);
-        }
-    }
-
     if (samples.empty())
     {
         return 0;
     }
 
-    std::cout << "Charuco defaults: rows=" << defaults::charucoboard::ROW_COUNT
-              << ", cols=" << defaults::charucoboard::COL_COUNT
-              << ", square=" << defaults::charucoboard::SQUARE_LENGTH
-              << ", marker=" << defaults::charucoboard::MARKER_LENGTH << "\n";
-
-    const auto board = make_demo_board();
-
-    CharucoDetector detector(board);
-    std::vector<CharucoDetector::Result> viewsL;
-    std::vector<CharucoDetector::Result> viewsR;
-    viewsL.reserve(samples.size());
-    viewsR.reserve(samples.size());
-
-    const bool show_overlays = false;
-
+    // Prepare inputs
+    std::vector<cv::Mat> left_images;
+    std::vector<cv::Mat> right_images;
+    std::vector<Pose> robot_poses;
+    left_images.reserve(samples.size());
+    right_images.reserve(samples.size());
+    robot_poses.reserve(samples.size());
     for (const auto& s : samples)
     {
-        CharucoDetector::Result dl = detector.detect(s.img_left);
-        CharucoDetector::Result dr = detector.detect(s.img_right);
+        left_images.push_back(s.img_left);
+        right_images.push_back(s.img_right);
+        robot_poses.push_back(s.robot_pose);
+    }
 
-        viewsL.push_back(dl);
-        viewsR.push_back(dr);
+    // Parameter defaults (explicit)
+    CharucoBoardModel::Params board_params{
+        defaults::charucoboard::ROW_COUNT,
+        defaults::charucoboard::COL_COUNT,
+        defaults::charucoboard::SQUARE_LENGTH,
+        defaults::charucoboard::MARKER_LENGTH,
+        cv::aruco::DICT_4X4_100,
+        true
+    };
 
-        if (show_overlays)
+    CharucoDetector::Params det_params;
+    det_params.adaptiveWinMin = 3;
+    det_params.adaptiveWinMax = 23;
+    det_params.adaptiveWinStep = 10;
+    det_params.minMarkerPerimeterRate = 0.02;
+    det_params.refineSubpix = true;
+    det_params.subpixWin = cv::Size(5, 5);
+    det_params.subpixMaxIters = 50;
+    det_params.subpixEps = 0.01;
+    det_params.minCharucoCorners = 12;
+    det_params.minArucoMarkers = 4;
+
+    IntrinsicsCalibrator::Params intr_params;
+    intr_params.minCharucoCornersPerView = 12;
+    intr_params.minViews = 8;
+    intr_params.criteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 50, 1e-9);
+
+    StereoCalibrator::Params stereo_params;
+    stereo_params.minSharedCharucoCorners = 10;
+    stereo_params.minPairs = 8;
+    stereo_params.fixIntrinsics = true;
+
+    HandEyeCalibrator::Params handeye_params;
+    handeye_params.method = cv::CALIB_HAND_EYE_TSAI;
+    handeye_params.minPairs = 8;
+
+    RigRefinerCeres::Options refine_opts;
+    refine_opts.refineStereo = true;
+    refine_opts.refineHandEye = true;
+    refine_opts.estimateBoardInWorld = true;
+    refine_opts.maxIters = 50;
+    refine_opts.huberDelta = 1.0;
+
+    StereoRigCalibrator calibrator;
+    StereoRigCalibrator* ref = nullptr;
+    std::atomic<bool> stop_thread{false};
+    std::atomic<uint32_t> last_progress{0};
+
+    std::thread progress_thread([&]()
+    {
+        while (!stop_thread.load(std::memory_order_relaxed))
         {
-            cv::Mat grayL, grayR;
-            cv::cvtColor(s.img_left, grayL, cv::COLOR_BGR2GRAY);
-            cv::cvtColor(s.img_right, grayR, cv::COLOR_BGR2GRAY);
-
-            cv::Mat visL, visR;
-            cv::cvtColor(grayL, visL, cv::COLOR_GRAY2BGR);
-            cv::cvtColor(grayR, visR, cv::COLOR_GRAY2BGR);
-
-            cv::aruco::drawDetectedMarkers(visL, dl.markerCorners, dl.markerIds);
-            cv::aruco::drawDetectedMarkers(visR, dr.markerCorners, dr.markerIds);
-
-            cv::aruco::drawDetectedCornersCharuco(visL, dl.corners2d, dl.ids, cv::Scalar(0, 255, 0));
-            cv::aruco::drawDetectedCornersCharuco(visR, dr.corners2d, dr.ids, cv::Scalar(0, 255, 0));
-
-            cv::imshow("left_overlay", visL);
-            cv::imshow("right_overlay", visR);
-            cv::waitKey(0);
-        }
-    }
-
-    IntrinsicsCalibrator intrCalib;
-    const cv::Size imgSize = samples.front().img_left.size();
-    auto resL = intrCalib.calibrate(viewsL, board, imgSize);
-    auto resR = intrCalib.calibrate(viewsR, board, imgSize);
-
-    std::cout << "[intrinsics left] ok=" << resL.ok << ", rms=" << resL.rms << ", views=" << resL.usedViewIndices.size() << "\n";
-    if (resL.ok)
-    {
-        std::cout << "[intrinsics left] K:\n" << resL.intr.K << "\n";
-        std::cout << "[intrinsics left] D:\n" << resL.intr.D << "\n";
-    }
-    else
-    {
-        std::cout << "[intrinsics left] reason: " << resL.message << "\n";
-    }
-
-    std::cout << "[intrinsics right] ok=" << resR.ok << ", rms=" << resR.rms << ", views=" << resR.usedViewIndices.size() << "\n";
-    if (resR.ok)
-    {
-        std::cout << "[intrinsics right] K:\n" << resR.intr.K << "\n";
-        std::cout << "[intrinsics right] D:\n" << resR.intr.D << "\n";
-    }
-    else
-    {
-        std::cout << "[intrinsics right] reason: " << resR.message << "\n";
-    }
-
-    bool show_pose_detection = false;
-
-    if (resL.ok && resR.ok)
-    {
-        StereoCalibrator::Params sp;
-        StereoCalibrator stereo(sp);
-        auto sres = stereo.calibrate(viewsL, viewsR, board, resL.intr, resR.intr);
-
-        std::cout << "[stereo] ok=" << sres.ok << ", rms=" << sres.rms << "\n";
-        if (sres.ok)
-        {
-            std::cout << "[stereo] R:\n" << cv::Mat(sres.extr.R_RL) << "\n";
-            std::cout << "[stereo] t:\n" << cv::Mat(sres.extr.t_RL) << "\n";
-            std::cout << "[stereo] mean Sampson=" << sres.meanSampson << ", median=" << sres.medianSampson << "\n";
-
-            // Hand-eye calibration using left camera
-            std::vector<Pose> base_from_flange; // WF: robot base <- robot flange
-            std::vector<cv::Vec3d> rvec_tc; // CB: camera <- board
-            std::vector<cv::Vec3d> tvec_tc;
-            base_from_flange.reserve(samples.size());
-            rvec_tc.reserve(samples.size());
-            tvec_tc.reserve(samples.size());
-
-            for (size_t i = 0; i < samples.size(); ++i)
+            if (ref)
             {
-                cv::Vec3d rvec, tvec;
-                if (detector.estimateBoardPose(viewsL[i], resL.intr, rvec, tvec))
+                auto prog = ref->progress();
+                if (prog.current_progress != last_progress.load(std::memory_order_relaxed))
                 {
-                    base_from_flange.push_back(samples[i].robot_pose);
-                    rvec_tc.push_back(rvec);
-                    tvec_tc.push_back(tvec);
-
-                    if (show_pose_detection)
-                    {
-                        // draw pose into the image
-                        cv::drawFrameAxes(
-                            samples[i].img_left,
-                            resL.intr.K,
-                            resL.intr.D,
-                            rvec,
-                            tvec,
-                            0.05                      // axis length in meters (e.g. 5 cm)
-                        );
-                        cv::imshow("left_with_pose", samples[i].img_left);
-                        cv::waitKey(0);
-                    }
+                    last_progress.store(prog.current_progress, std::memory_order_relaxed);
+                    std::cout << "\rProgress: " << prog.current_progress << " / " << prog.max_progress << std::flush;
                 }
             }
-
-            std::cout << "[handeye] usable pairs: " << base_from_flange.size() << "\n";
-            if (base_from_flange.size() >= 2)
-            {
-                HandEyeCalibrator he;
-                auto heres = he.run(base_from_flange, rvec_tc, tvec_tc);
-                std::cout << "[handeye] ok=" << heres.ok << "\n";
-                if (heres.ok)
-                {
-                    auto q_FL = pose_utils::rToQuat(heres.T_FC.R);
-                    std::cout << "[handeye] flange<-camL R:\n" << cv::Mat(heres.T_FC.R) << "\n"; // flange<-camL
-                    std::cout << "[handeye] flange<-camL q:("
-                              << q_FL.x << ", " << q_FL.y << ", " << q_FL.z << ", " << q_FL.w << ")\n";
-                    std::cout << "[handeye] flange<-camL t:\n" << cv::Mat(heres.T_FC.t) << "\n";
-                    
-                    auto T_FL = heres.T_FC; // camera = left
-                    auto T_LF = pose_utils::invert(T_FL); // camL<-flange
-                    auto q_LF = pose_utils::rToQuat(T_LF.R);
-                    std::cout << "[handeye] camL<-flange R:\n" << cv::Mat(T_LF.R) << "\n";
-                    std::cout << "[handeye] camL<-flange q:("
-                              << q_LF.x << ", " << q_LF.y << ", " << q_LF.z << ", " << q_LF.w << ")\n";
-                    std::cout << "[handeye] camL<-flange t:\n" << cv::Mat(T_LF.t) << "\n";
-
-                    auto T_RF = HandEyeCalibrator::composeRightFromLeft(sres.extr, heres); // camR<-flange
-                    auto q_RF = pose_utils::rToQuat(T_RF.R);
-                    std::cout << "[handeye] camR<-flange R:\n" << cv::Mat(T_RF.R) << "\n";
-                    std::cout << "[handeye] camR<-flange q:("
-                              << q_RF.x << ", " << q_RF.y << ", " << q_RF.z << ", " << q_RF.w << ")\n";
-                    std::cout << "[handeye] camR<-flange t:\n" << cv::Mat(T_RF.t) << "\n";
-
-                    // Joint refinement with Ceres
-                    RigRefinerCeres::Options ropts { };
-                    RigRefinerCeres refiner(ropts);
-                    RigRefinerCeres::Input rin;
-                    rin.viewsL = viewsL;
-                    rin.viewsR = viewsR;
-                    rin.base_from_flange = base_from_flange;
-                    rin.board = board;
-                    rin.KL = resL.intr;
-                    rin.KR = resR.intr;
-                    rin.RL = sres.extr;
-                    rin.camL_from_flange = T_LF;
-
-                    auto rref = refiner.refine(rin);
-                    std::cout << "[ceres] ok=" << rref.ok << " msg=" << rref.message << "\n";
-                    std::cout << "[ceres] pre RMSE L=" << rref.initialReprojRmseL << " R=" << rref.initialReprojRmseR
-                              << " | post RMSE L=" << rref.finalReprojRmseL
-                              << " R=" << rref.finalReprojRmseR << "\n";
-                    if (rref.ok)
-                    {
-                        std::cout << "[ceres] RL t before=" << cv::Mat(sres.extr.t_RL).t()
-                                  << " after=" << cv::Mat(rref.RL.t_RL).t() << "\n";
-                        std::cout << "[ceres] RL R before:\n" << cv::Mat(sres.extr.R_RL)
-                                  << "\n after:\n" << cv::Mat(rref.RL.R_RL) << "\n";
-                        std::cout << "[ceres] camL<-flange t before=" << cv::Mat(T_LF.t).t()
-                                  << " after=" << cv::Mat(rref.camL_from_flange.t).t() << "\n";
-                        std::cout << "[ceres] world<-board t=" << cv::Mat(rref.world_from_board.t).t() << "\n";
-                        std::cout << "[ceres] world<-board R:\n" << cv::Mat(rref.world_from_board.R) << "\n";
-                    }
-                }
-                else
-                {
-                    std::cout << "[handeye] reason: " << heres.message << "\n";
-                }
-            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-        else
-        {
-            std::cout << "[stereo] reason: " << sres.message << "\n";
-        }
+    });
+
+    ref = &calibrator;
+    auto res = calibrator.runStereoRobotCalibration(
+        board_params,
+        det_params,
+        intr_params,
+        stereo_params,
+        handeye_params,
+        refine_opts,
+        left_images,
+        right_images,
+        robot_poses);
+
+    stop_thread.store(true, std::memory_order_relaxed);
+    progress_thread.join();
+    std::cout << std::endl;
+
+    if (!res.has_value())
+    {
+        std::cout << "Calibration failed: " << res.error() << std::endl;
+        return 0;
     }
 
+    const auto& m = calibrator.report();
+    std::cout << "Calibration succeeded\n";
+    std::cout << "Intrinsics L RMS: " << m.intrinsics_left_rms << " (views " << m.intrinsics_left_used_views << ")\n";
+    std::cout << "Intrinsics R RMS: " << m.intrinsics_right_rms << " (views " << m.intrinsics_right_used_views << ")\n";
+    std::cout << "Stereo RMS: " << m.stereo_rms << " mean Sampson=" << m.stereo_mean_sampson
+              << " median Sampson=" << m.stereo_median_sampson << " pairs=" << m.stereo_used_pairs << "\n";
+    std::cout << "Hand-eye usable pairs: " << m.hand_eye_usable_pairs << "\n";
+    std::cout << "Refine RMSE L: " << m.refine_initial_reproj_rmse_l << " -> " << m.refine_final_reproj_rmse_l
+              << " | R: " << m.refine_initial_reproj_rmse_r << " -> " << m.refine_final_reproj_rmse_r << "\n";
+    std::cout << "camL<-flange t: " << cv::Mat(m.camL_from_flange.t).t();
+    std::cout << " camR<-flange t: " << cv::Mat(m.camR_from_flange.t).t() << "\n";
+    std::cout << "Stereo t (R<-L): " << cv::Mat(m.stereo_extrinsics.t_RL).t() << "\n";
+    std::cout << "Done.\n";
     return 0;
 }
