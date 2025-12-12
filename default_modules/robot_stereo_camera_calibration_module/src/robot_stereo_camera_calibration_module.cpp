@@ -11,6 +11,7 @@
 #include "calib/stereo_calibrator.h"
 #include "calib/handeye_calibrator.h"
 #include "calib/rig_refiner_ceres.h"
+#include "calib/pose_utils.h"
 #include "module_helpers/calibrated_stereo_robot_messages/calibrated_stereo_messages.h"
 
 #include <cstring>
@@ -299,7 +300,35 @@ bool RobotStereoCameraCalibrationModule::activate(
         oss << "      Stereo Sampson mean/median: " << m.stereo_mean_sampson << " / " << m.stereo_median_sampson << "\n";
         oss << "      Hand-eye usable pairs: " << m.hand_eye_usable_pairs << "\n";
         oss << "      Refine RMSE L (init/final): " << m.refine_initial_reproj_rmse_l << " / " << m.refine_final_reproj_rmse_l << "\n";
-        oss << "      Refine RMSE R (init/final): " << m.refine_initial_reproj_rmse_r << " / " << m.refine_final_reproj_rmse_r;
+        oss << "      Refine RMSE R (init/final): " << m.refine_initial_reproj_rmse_r << " / " << m.refine_final_reproj_rmse_r << "\n";
+
+        const auto& t_RL = m.stereo_extrinsics.t_RL;
+        auto q_RL = calib::pose_utils::rToQuat(m.stereo_extrinsics.R_RL);
+        oss << "      Stereo t_RL (m): [" << t_RL(0) << ", " << t_RL(1) << ", " << t_RL(2) << "]\n";
+        oss << "      Stereo q_RL (xyzw): [" << q_RL.x << ", " << q_RL.y << ", " << q_RL.z << ", " << q_RL.w << "]\n";
+
+        const auto dumpMat = [](const cv::Mat& M) -> std::string {
+            std::ostringstream s;
+            s << "[";
+            for (int r = 0; r < M.rows; ++r)
+            {
+                if (r > 0) s << "; ";
+                const double* row = M.ptr<double>(r);
+                s << row[0] << ", " << row[1] << ", " << row[2];
+            }
+            s << "]";
+            return s.str();
+        };
+
+        oss << "      K_left: " << dumpMat(m.camera_intrinsics_left.K) << "\n";
+        oss << "      D_left: " << dumpMat(m.camera_intrinsics_left.D) << "\n";
+        oss << "      K_right: " << dumpMat(m.camera_intrinsics_right.K) << "\n";
+        oss << "      D_right: " << dumpMat(m.camera_intrinsics_right.D) << "\n";
+
+        const auto& t_FL = m.camL_from_flange.t;
+        auto q_FL = calib::pose_utils::rToQuat(m.camL_from_flange.R);
+        oss << "      camL_from_flange t (m): [" << t_FL(0) << ", " << t_FL(1) << ", " << t_FL(2) << "]\n";
+        oss << "      camL_from_flange q (xyzw): [" << q_FL.x << ", " << q_FL.y << ", " << q_FL.z << ", " << q_FL.w << "]";
     }
     log(logging::LogType::INFO, oss.str());
     
