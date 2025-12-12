@@ -7,6 +7,7 @@
 #include "module_helpers/activation_wrapper/activation_wrapper.h"
 #include "module_helpers/camera_pose_helper/message_structure.h"
 #include "module_helpers/parameter_description/parameter_description.h"
+#include "module_helpers/calibrated_stereo_robot_messages/calibrated_stereo_messages.h"
 
 #include <limits>
 
@@ -19,6 +20,7 @@ using namespace aergo::module;
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module;
 namespace cph = aergo::module::helpers::camera_pose_helper;
 namespace p_desc = aergo::module::helpers::parameter_description;
+namespace csr = aergo::module::helpers::calibrated_stereo_robot_messages;
 
 static constexpr communication_channel::Consumer subscribe_consumers[] = {
     {
@@ -36,7 +38,7 @@ static constexpr communication_channel::Producer response_producers[] = {
 };
 
 static constexpr communication_channel::Producer publish_producers[] = {
-    messages::calibrated_stereo_publish_producer
+    csr::calibrated_stereo_publish_producer
 };
 
 static constexpr ModuleInfo module_info = {

@@ -11,7 +11,7 @@
 #include "calib/stereo_calibrator.h"
 #include "calib/handeye_calibrator.h"
 #include "calib/rig_refiner_ceres.h"
-#include "calibrated_stereo_messages.h"
+#include "module_helpers/calibrated_stereo_robot_messages/calibrated_stereo_messages.h"
 
 #include <cstring>
 #include <sstream>
@@ -22,6 +22,7 @@
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module;
 using namespace aergo::module;
 using json = nlohmann::json;
+namespace messages = aergo::module::helpers::calibrated_stereo_robot_messages;
 
 namespace
 {
