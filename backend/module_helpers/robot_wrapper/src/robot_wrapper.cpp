@@ -204,6 +204,8 @@ const char* parseRequestResult(sync_req::RequestResult result)
             return "RobotWrapper: Request sent, but failed to receive response because local queue was full.";
         case sync_req::RequestResult::ALREADY_PENDING:
             return "RobotWrapper: Request is already pending, cannot send another.";
+        default:
+            return "RobotWrapper: Unknown request result.";
     }
 }
 
@@ -224,6 +226,8 @@ const char* parseRespType(ri::RespType resp_type)
             return "RobotWrapper: Action request was successful (finished or updated successfully).";
         case ri::RespType::FAILURE:
             return "RobotWrapper: Action request failed (could not be started or updated or failed).";
+        default:
+            return "RobotWrapper: Unknown response type.";
     }
 }
 
