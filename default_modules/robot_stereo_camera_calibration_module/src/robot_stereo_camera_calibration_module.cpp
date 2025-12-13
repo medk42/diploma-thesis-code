@@ -200,15 +200,6 @@ bool RobotStereoCameraCalibrationModule::activate(
         return false;
     }
 
-    std::ostringstream board_info;
-    board_info << "RobotStereoCameraCalibration: ChArUco board requirements - "
-               << kBoardParams.rows << " rows x " << kBoardParams.cols << " columns, "
-               << "square length " << kBoardParams.squareLength << " m, "
-               << "marker length " << kBoardParams.markerLength << " m, "
-               << "dictionary id " << kBoardParams.dictionary << ", legacy pattern "
-               << (kBoardParams.useLegacyPattern ? "enabled" : "disabled") << ".";
-    log(logging::LogType::INFO, board_info.str());
-
     std::vector<cv::Mat> left_images;
     std::vector<cv::Mat> right_images;
     std::vector<Pose> poses;
@@ -276,10 +267,13 @@ bool RobotStereoCameraCalibrationModule::activate(
 
         std::ostringstream oss_fail;
         oss_fail << "RobotStereoCameraCalibration: calibration failed: " << res.error()
-                 << "\n      Board: " << kBoardParams.rows << "x" << kBoardParams.cols
-                 << ", square=" << kBoardParams.squareLength << "m, marker=" << kBoardParams.markerLength
-                 << ", dict=" << kBoardParams.dictionary
-                 << ", legacy=" << (kBoardParams.useLegacyPattern ? "true" : "false");
+                 << "\n      RobotStereoCameraCalibration: ChArUco board requirements - "
+                << kBoardParams.rows << " rows x " << kBoardParams.cols << " columns, "
+                << "square length " << kBoardParams.squareLength << " m, "
+                << "marker length " << kBoardParams.markerLength << " m, "
+                << "dictionary id " << kBoardParams.dictionary << ", legacy pattern "
+                << (kBoardParams.useLegacyPattern ? "enabled" : "disabled") << ".";
+                
         log(logging::LogType::ERROR, oss_fail.str());
         return false;
     }
