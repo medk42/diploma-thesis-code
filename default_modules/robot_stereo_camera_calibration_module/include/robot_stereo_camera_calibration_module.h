@@ -88,6 +88,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
                                 std::vector<cv::Mat>& left_images,
                                 std::vector<cv::Mat>& right_images,
                                 std::vector<Pose>& poses) noexcept;
+        bool computePosesFromLeftImages(const std::vector<cv::Mat>& left_images,
+                                        std::vector<Pose>& poses) noexcept;
         bool buildImageView(const cm::BlobHeader& blob_header, const cm::ImageHeader& img_header, int mat_type, const uint8_t* blob_data, cv::Mat& out_mat) noexcept;
 
         bool valid_{false};
