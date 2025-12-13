@@ -179,6 +179,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         metrics_.refine_initial_reproj_rmse_r = refine_res.initialReprojRmseR;
         metrics_.refine_final_reproj_rmse_l = refine_res.finalReprojRmseL;
         metrics_.refine_final_reproj_rmse_r = refine_res.finalReprojRmseR;
+        metrics_.refine_message = refine_res.message;
 
         valid_.store(true, std::memory_order_release); // Calibration successful, can read metrics
         updateProgress(max_ticks);

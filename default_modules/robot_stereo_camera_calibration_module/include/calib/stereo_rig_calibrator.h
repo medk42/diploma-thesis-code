@@ -37,6 +37,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         double refine_initial_reproj_rmse_r{-1.0};     ///< Initial right reprojection RMSE before refinement.
         double refine_final_reproj_rmse_l{-1.0};       ///< Final left reprojection RMSE after refinement.
         double refine_final_reproj_rmse_r{-1.0};       ///< Final right reprojection RMSE after refinement.
+        std::string refine_message;                    ///< Message from refinement step.
     };
 
     struct StereoRigProgress
