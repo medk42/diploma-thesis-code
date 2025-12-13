@@ -9,7 +9,7 @@
 using json = nlohmann::json;
 using namespace aergo::default_modules::pen_calibration_multicam_module;
 using namespace aergo::default_modules::pen_calibration_multicam_module::pen;
-namespace pose_utils = aergo::default_modules::robot_stereo_camera_calibration_module::calib::pose_utils;
+namespace pose_utils = aergo::default_modules::pen_calibration_multicam_module::calib::pose_utils;
 
 namespace
 {

@@ -2,7 +2,7 @@
 
 #include "calib/types.h"
 
-namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib::pose_utils
+namespace aergo::default_modules::pen_calibration_multicam_module::calib::pose_utils
 {
     cv::Matx33d quatToR(const Quaternion& q);
     Quaternion rToQuat(const cv::Matx33d& R);

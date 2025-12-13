@@ -3,7 +3,7 @@
 #include <opencv2/calib3d.hpp>
 #include <cmath>
 
-namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib::pose_utils
+namespace aergo::default_modules::pen_calibration_multicam_module::calib::pose_utils
 {
     namespace
     {
