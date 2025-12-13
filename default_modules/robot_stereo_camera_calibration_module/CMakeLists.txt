@@ -4,7 +4,7 @@ set(REQUIRED_HELPER_LIBS
     helpers___activation_wrapper
     helpers___camera_messages
     helpers___camera_pose_helper
-    helpers___calibrated_stereo_robot_messages
+    helpers___calibrated_camera_robot_messages
     opencv_core
     opencv_calib3d
     opencv_aruco
