@@ -11,18 +11,25 @@ using namespace aergo::default_modules::pen_calibration_multicam_module;
 using namespace aergo::default_modules::pen_calibration_multicam_module::pen;
 namespace pose_utils = aergo::default_modules::pen_calibration_multicam_module::calib::pose_utils;
 
+cv::aruco::DetectorParameters getDetectorParams()
+{
+    cv::aruco::DetectorParameters params;
+
+    params.cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+    params.cornerRefinementWinSize = 5;
+    params.cornerRefinementMaxIterations = 30;
+    params.cornerRefinementMinAccuracy = 0.01;
+    
+    return params;
+}
+
+
 JigPoseEstimator::JigPoseEstimator(int dict_id, double tag_size_m, int tag_id)
 : tag_id_(tag_id)
 , tag_size_m_(tag_size_m)
-, dict_id_(dict_id),
-dict_(cv::makePtr<cv::aruco::Dictionary>(cv::aruco::getPredefinedDictionary(dict_id)))
-{
-    params_ = cv::makePtr<cv::aruco::DetectorParameters>();
-    params_->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
-    params_->cornerRefinementWinSize = 5;          
-    params_->cornerRefinementMaxIterations = 30;
-    params_->cornerRefinementMinAccuracy = 0.01;
-}
+, dict_id_(dict_id)
+, detector_(cv::aruco::getPredefinedDictionary(dict_id), getDetectorParams())
+{}
 
 bool JigPoseEstimator::estimate(const cv::Mat& gray,
                                 const calib::CameraIntrinsics& K,
@@ -30,10 +37,10 @@ bool JigPoseEstimator::estimate(const cv::Mat& gray,
 {
     if (gray.empty() || K.K.empty())
         return false;
-
+        
     std::vector<std::vector<cv::Point2f>> corners;
     std::vector<int> ids;
-    cv::aruco::detectMarkers(gray, dict_, corners, ids, params_);
+    detector_.detectMarkers(gray, corners, ids);
 
     if (ids.empty())
         return false;

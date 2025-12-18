@@ -29,7 +29,8 @@ namespace aergo::default_modules::pen_calibration_multicam_module::pen {
 
         // Access
         const std::vector<MarkerSpec>& cadMarkers() const { return markers_; }
-        const double markerSizeM() const { return marker_size_m_; }
+        double markerSizeM() const { return marker_size_m_; }
+        int dictId() const { return dict_id_; }
         
         int referenceMarkerId() const { return ref_id_; }
         calib::Vector3 tip_P() const { return tip_P_; }

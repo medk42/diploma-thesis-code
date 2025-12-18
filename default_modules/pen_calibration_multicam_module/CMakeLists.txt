@@ -20,6 +20,9 @@ target_link_libraries(${MODULE_NAME} PRIVATE
     opencv_core
     opencv_calib3d
     opencv_aruco
+    opencv_imgproc
+    opencv_imgcodecs
+    opencv_highgui
     Ceres::ceres
 )
 
@@ -38,6 +41,28 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
     POSITION_INDEPENDENT_CODE ON
+)
+
+add_executable(${MODULE_NAME}_tests
+    ${PROJECT_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/main.cpp
+)
+
+target_include_directories(${MODULE_NAME}_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(${MODULE_NAME}_tests PRIVATE
+    module_common
+    helpers___activation_wrapper
+    helpers___calibrated_camera_robot_messages
+    opencv_core
+    opencv_calib3d
+    opencv_aruco
+    opencv_imgproc
+    opencv_imgcodecs
+    opencv_highgui
+    Ceres::ceres
 )
 
 install(TARGETS "${MODULE_NAME}" DESTINATION ${CMAKE_SOURCE_DIR}/binaries/modules)

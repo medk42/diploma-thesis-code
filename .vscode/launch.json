@@ -136,6 +136,18 @@
             "preLaunchTask": "Project: Build and Install"
         },
         {
+            "name": "pen_calibration_multicam_module_tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-core-windows/default_modules/pen_calibration_multicam_module/Debug/pen_calibration_multicam_module_tests.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/default_modules/pen_calibration_multicam_module/tests",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Project: Build and Install"
+        },
+        {
             "name": "aruco_test",
             "type": "cppdbg",
             "request": "launch",

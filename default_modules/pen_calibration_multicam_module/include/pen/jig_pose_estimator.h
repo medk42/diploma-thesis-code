@@ -17,8 +17,7 @@ namespace aergo::default_modules::pen_calibration_multicam_module::pen {
         int tag_id_;
         double tag_size_m_;
         int dict_id_;
-        cv::Ptr<cv::aruco::Dictionary> dict_;
-        cv::Ptr<cv::aruco::DetectorParameters> params_;
+        cv::aruco::ArucoDetector detector_;
     };
 
 } // namespace pen
