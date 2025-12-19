@@ -14,6 +14,8 @@
 #include <string_view>
 #include <mutex>
 #include <condition_variable>
+#include <chrono>
+#include <atomic>
 
 namespace aergo::module::helpers::robot_interface::robot_control
 {
@@ -161,6 +163,13 @@ namespace aergo::module::helpers::robot_interface::robot_control
     private:
         MoveRequestResult moveCommon(std::span<const std::byte> request_data, bool blocking, std::unique_lock<std::mutex>& lock);
 
+        int64_t millis() const noexcept
+        {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+            ).count();
+        }
+
         enum class RequestType { ROBOT_REQUEST };
 
         aergo::module::BaseModule &base_module_;
@@ -182,5 +191,8 @@ namespace aergo::module::helpers::robot_interface::robot_control
         std::map<uint64_t, std::optional<MoveRequestResult>> sync_action_ids_;
         std::set<uint64_t> async_action_ids_;
         std::vector<std::byte> request_data_buffer_;
+
+        std::atomic<int64_t> last_move_status_ms_{ 0 };
+        std::atomic<int64_t> last_send_move_request_ms_{ 0 };
     };
 }

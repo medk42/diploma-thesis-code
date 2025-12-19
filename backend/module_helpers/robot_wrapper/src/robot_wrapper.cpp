@@ -100,7 +100,7 @@ void RobotWrapper::processResponse(message::MessageHeader message) noexcept
 
 void RobotWrapper::processMessage(uint32_t subscribe_consumer_id, message::MessageHeader message) noexcept
 {
-    if (subscribe_consumer_id == robot_status_channel_ && rc_status_callback_)
+    if (subscribe_consumer_id == robot_status_channel_)
     {
         ri::StatusMessage status_msg;
         if (!message.readAs(status_msg))
@@ -130,7 +130,39 @@ void RobotWrapper::processMessage(uint32_t subscribe_consumer_id, message::Messa
             return;
         }
 
-        rc_status_callback_(status);
+        if (status.status == RobotStatus::MOVING)
+        {
+            last_move_status_ms_ = millis();
+        }
+
+        int64_t time_ms = millis();
+        if (time_ms - last_move_status_ms_ > 500 && time_ms - last_send_move_request_ms_ > 500)
+        {
+            // If robot is not moving and no move requests have been sent recently, any existing
+            // move actions are likely stale - clear them.
+            std::lock_guard<std::mutex> lock(mutex_);
+
+            if (!async_action_ids_.empty())
+            {
+                base_module_.log(logging::LogType::INFO, "RobotWrapper: Clearing stale asynchronous move actions due to inactivity, " + std::to_string(async_action_ids_.size()) + " cleared.");
+                async_action_ids_.clear();
+            }
+
+            if (!sync_action_ids_.empty())
+            {
+                base_module_.log(logging::LogType::INFO, "RobotWrapper: Clearing stale synchronous move actions due to inactivity, " + std::to_string(sync_action_ids_.size()) + " cleared.");
+                for (auto& [action_id, result] : sync_action_ids_)
+                {
+                    result = MoveRequestResult{ false, "Cleared due to inactivity", 0 };
+                }
+                cv_.notify_all();
+            }
+        }
+
+        if (rc_status_callback_)
+        {
+            rc_status_callback_(status);
+        }
     }
     else if (subscribe_consumer_id == robot_finished_channel_)
     {
@@ -234,6 +266,8 @@ const char* parseRespType(ri::RespType resp_type)
 
 MoveRequestResult RobotWrapper::moveCommon(std::span<const std::byte> request_data, bool blocking, std::unique_lock<std::mutex>& lock)
 {
+    last_send_move_request_ms_ = millis();
+
     ri::Request robot_control_request =
     {
         .req_type = ri::ReqType::START_ACTION,
