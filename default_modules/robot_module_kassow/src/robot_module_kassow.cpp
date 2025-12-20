@@ -4,7 +4,7 @@
 #include "module_helpers/robot_interface/features/robot_control/messages.h"
 #include "module_helpers/serialization_helper/serialization_helper.h"
 
-#include "robot_module_kassow/kr2_robot_models/a810.h"
+#include "robot_module_kassow/kr2_robot_models/common.h"
 
 #include <nlohmann/json.hpp>
 
@@ -88,12 +88,24 @@ RobotModuleKassow::RobotModuleKassow(const char* data_path,
     }
 
     robot_visualization_ = std::make_unique<robot_vis::RobotVisualization>(visualization_helper_.get());
-    if (!robot_visualization_->registerResources(
-        vis3d::Color { 0x21, 0x21, 0x21, 0xFF },
-        robot_vis::robot_model::a810::kRootLink,
-        robot_vis::robot_model::a810::kJoints,
-        robot_vis::robot_model::a810::kCylinders
-    ))
+    auto register_robot_vis = [this](robot_vis::robot_model::RobotModelType model_type)
+    {
+        return robot_visualization_->registerModelType(
+            model_type,
+            vis3d::Color { 0x21, 0x21, 0x21, 0xFF },
+            robot_vis::robot_model::getRootLink(model_type),
+            robot_vis::robot_model::getJoints(model_type),
+            robot_vis::robot_model::getCylinders(model_type)
+        );
+    };
+
+    
+    if (!robot_visualization_->registerFixedResources() ||
+        !register_robot_vis(robot_vis::robot_model::RobotModelType::A810) ||
+        !register_robot_vis(robot_vis::robot_model::RobotModelType::A1018) ||
+        !register_robot_vis(robot_vis::robot_model::RobotModelType::A1205) ||
+        !register_robot_vis(robot_vis::robot_model::RobotModelType::A1410) ||
+        !register_robot_vis(robot_vis::robot_model::RobotModelType::A1805))
     {
         log(logging::LogType::ERROR, "Failed to register robot visualization resources");
         return;
@@ -253,18 +265,18 @@ bool RobotModuleKassow::activate(std::vector<std::vector<std::vector<uint8_t>>>&
         return true;
     }
 
-    if (parameter_values.size() != 5)
+    if (parameter_values.size() != 6)
     {
-        log(logging::LogType::ERROR, "Activation parameters malformed (expected 5 parameters)");
+        log(logging::LogType::ERROR, "Activation parameters malformed (expected 6 parameters)");
         return false;
     }
 
-    auto readInt64 = [](const std::vector<uint8_t>& buf, int64_t& out) -> bool {
-        if (buf.size() != sizeof(int64_t))
+    auto readInt = [](const std::vector<uint8_t>& buf, auto& out) -> bool {
+        if (buf.size() != sizeof(out))
         {
             return false;
         }
-        std::memcpy(&out, buf.data(), sizeof(int64_t));
+        std::memcpy(&out, buf.data(), sizeof(out));
         return true;
     };
 
@@ -273,21 +285,25 @@ bool RobotModuleKassow::activate(std::vector<std::vector<std::vector<uint8_t>>>&
     int64_t req_timeout{};
     int64_t poll_interval{};
     int64_t reconnect_wait{};
+    size_t model_type_int{};
 
-    if (!readInt64(parameter_values[1][0], port) ||
-        !readInt64(parameter_values[2][0], req_timeout) ||
-        !readInt64(parameter_values[3][0], poll_interval) ||
-        !readInt64(parameter_values[4][0], reconnect_wait))
+    if (!readInt(parameter_values[1][0], port) ||
+        !readInt(parameter_values[2][0], req_timeout) ||
+        !readInt(parameter_values[3][0], poll_interval) ||
+        !readInt(parameter_values[4][0], reconnect_wait) ||
+        !readInt(parameter_values[5][0], model_type_int))
     {
         log(logging::LogType::ERROR, "Activation parameters malformed (integer size mismatch)");
         return false;
     }
 
-    if (host.empty() || port <= 0 || port > 65535 || req_timeout <= 0 || poll_interval <= 0 || reconnect_wait <= 0)
+    if (host.empty() || port <= 0 || port > 65535 || req_timeout <= 0 || poll_interval <= 0 || reconnect_wait <= 0 || model_type_int < 0 || model_type_int > 4)
     {
         log(logging::LogType::ERROR, "Activation parameters out of range");
         return false;
     }
+
+    model_type_ = static_cast<robot_vis::robot_model::RobotModelType>(model_type_int);
 
     kassow_host_ = host;
     kassow_port_ = static_cast<uint16_t>(port);
@@ -325,6 +341,7 @@ bool RobotModuleKassow::deactivate(const std::atomic<bool>& cancel_flag, std::at
     }
     rpc_client_->disconnect();
 
+    std::lock_guard<std::mutex> vis_lock(vis3d_mutex_);
     robot_visualization_->removeVisualization();
 
     return true;
@@ -346,6 +363,7 @@ ISerializableModule::SaveData RobotModuleKassow::save() noexcept
     header["request_timeout_ms"] = request_timeout_ms_;
     header["poll_interval_ms"] = poll_interval_ms_;
     header["reconnect_wait_ms"] = reconnect_wait_ms_;
+    header["model_type"] = static_cast<int>(model_type_);
 
     data.json_header_ = header.dump();
     return data;
@@ -369,7 +387,8 @@ bool RobotModuleKassow::load(ISerializableModule::SaveData data) noexcept
     {
         auto header = json::parse(data.json_header_);
         if (!header.contains("activated") || !header.contains("host") || !header.contains("port") ||
-            !header.contains("request_timeout_ms") || !header.contains("poll_interval_ms") || !header.contains("reconnect_wait_ms"))
+            !header.contains("request_timeout_ms") || !header.contains("poll_interval_ms") ||
+            !header.contains("reconnect_wait_ms") || !header.contains("model_type"))
         {
             log(logging::LogType::ERROR, "Save data missing required fields");
             return false;
@@ -380,6 +399,14 @@ bool RobotModuleKassow::load(ISerializableModule::SaveData data) noexcept
         request_timeout_ms_ = static_cast<uint32_t>(header["request_timeout_ms"].get<uint64_t>());
         poll_interval_ms_ = static_cast<uint32_t>(header["poll_interval_ms"].get<uint64_t>());
         reconnect_wait_ms_ = static_cast<uint32_t>(header["reconnect_wait_ms"].get<uint64_t>());
+        
+        int model_type_int = header["model_type"].get<int>();
+        if (model_type_int < 0 || model_type_int > 4)
+        {
+            log(logging::LogType::ERROR, "Saved robot model type is out of range");
+            return false;
+        }
+        model_type_ = static_cast<robot_vis::robot_model::RobotModelType>(model_type_int);
 
         if (kassow_host_.empty() || kassow_port_ == 0 || request_timeout_ms_ == 0 || poll_interval_ms_ == 0 || reconnect_wait_ms_ == 0)
         {
@@ -536,7 +563,7 @@ void RobotModuleKassow::handleRobotControlStatus(const helpers::robot_interface:
 
     if (!robot_visualization_->isVisualizationCreated())
     {
-        robot_visualization_->createVisualization();
+        robot_visualization_->createVisualization(model_type_);
     }
 
     robot_visualization_->updateRobotVisualization(

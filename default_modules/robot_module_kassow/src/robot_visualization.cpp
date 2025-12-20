@@ -133,69 +133,84 @@ vis3d::Quat alignZToDir(const vis3d::Vec3& dir_in) {
 }
 
 
-bool RobotVisualization::registerResources(
+bool RobotVisualization::registerModelType(
+    robot_model::RobotModelType model_type,
     vis3d::Color robot_color,
     std::string_view root_link,
     std::span<const robot_model::JointDesc> joints,
-    std::span<const vis3d::CylinderDesc> cylinders,
-    vis3d::Color trajectory_color,
-    ArrowConfig arrow_cfg
+    std::span<const vis3d::CylinderDesc> cylinders
 ) {
-    if (resources_registered_ || helper_ == nullptr || !helper_->valid())
+    if (model_data_.find(model_type) != model_data_.end() || helper_ == nullptr || !helper_->valid())
     {
         return false;
     }
 
-    // Set local data
-    root_link_ = std::string(root_link);
+    model_data_.insert({model_type, RobotModelData{}});
+    auto& local_model_data = model_data_[model_type];
 
-    joints_.clear();
-    joints_.reserve(joints.size());
+    // Set local data
+    local_model_data.root_link_ = std::string(root_link);
+
+    local_model_data.joints_.clear();
+    local_model_data.joints_.reserve(joints.size());
     for (std::size_t i = 0; i < joints.size(); ++i)
     {
-        joints_.push_back(JointRuntime{joints[i], -1});
+        local_model_data.joints_.push_back(JointRuntime{joints[i], -1});
     }
 
-    cylinders_.assign(cylinders.begin(), cylinders.end());
+    local_model_data.cylinders_.assign(cylinders.begin(), cylinders.end());
 
-    movable_order_.clear();
-    for (std::size_t i = 0; i < joints_.size(); ++i)
+    local_model_data.movable_order_.clear();
+    for (std::size_t i = 0; i < local_model_data.joints_.size(); ++i)
     {
-        if (joints_[i].desc.movable)
+        if (local_model_data.joints_[i].desc.movable)
         {
-            joints_[i].angle_index = static_cast<int>(movable_order_.size());
-            movable_order_.push_back(i);
+            local_model_data.joints_[i].angle_index = static_cast<int>(local_model_data.movable_order_.size());
+            local_model_data.movable_order_.push_back(i);
         }
     }
 
-    resources_.resize(joints_.size());
-    objects_.assign(joints_.size(), vis3d::ObjectId{0});
+    local_model_data.resources_.resize(local_model_data.joints_.size());
 
     // Register one cylinder resource per joint segment.
-    for (std::size_t i = 0; i < joints_.size(); ++i)
+    for (std::size_t i = 0; i < local_model_data.joints_.size(); ++i)
     {
-        if (i >= cylinders_.size() || cylinders_[i].h <= 1e-6f)
+        if (i >= local_model_data.cylinders_.size() || local_model_data.cylinders_[i].h <= 1e-6f)
         {
-            resources_[i] = vis3d::ResourceId{0};
+            local_model_data.resources_[i] = vis3d::ResourceId{0};
             continue;
         }
 
         vis3d::ComplexShape shape{};
         shape.parts.push_back(vis3d::PrimitiveShape {
             .type = vis3d::PrimitiveShapeType::CYLINDER,
-            .desc = cylinders_[i],
+            .desc = local_model_data.cylinders_[i],
             .origin = vis3d::Pose{}, // center at origin; orient along +Z
             .color = robot_color
         });
 
-        resources_[i] = helper_->registerResource(shape);
+        local_model_data.resources_[i] = helper_->registerResource(shape);
     }
 
     // Compute adjacency
-    adj_.clear();
-    for (std::size_t i = 0; i < joints_.size(); ++i)
+    local_model_data.adj_.clear();
+    for (std::size_t i = 0; i < local_model_data.joints_.size(); ++i)
     {
-        adj_[joints_[i].desc.parent].push_back(i);
+        local_model_data.adj_[local_model_data.joints_[i].desc.parent].push_back(i);
+    }
+
+    return true;
+}
+
+
+bool RobotVisualization::registerFixedResources(
+    vis3d::Color trajectory_color,
+    ArrowConfig arrow_cfg
+)
+{
+    if (fixed_resources_registered_ || helper_ == nullptr || !helper_->valid())
+    {
+        return false;
     }
 
     // Register arrow resource (TCP axes)
@@ -253,30 +268,35 @@ bool RobotVisualization::registerResources(
 
     trajectory_color_ = trajectory_color;
 
-    resources_registered_ = true;
+    fixed_resources_registered_ = true;
 
     return true;
 }
 
 
-bool RobotVisualization::createVisualization() {
-    if (!resources_registered_ || objects_created_)
+bool RobotVisualization::createVisualization(robot_model::RobotModelType model_type) {
+    if (!fixed_resources_registered_ || model_data_.find(model_type) == model_data_.end() || !helper_ || !helper_->valid() || objects_created_)
     {
         return false;
     }
 
+    const auto& local_model_data = model_data_[model_type];
+
+    objects_.clear();
+    objects_.assign(local_model_data.joints_.size(), vis3d::ObjectId{0});
+
     bool ok = true;
 
-    for (std::size_t i = 0; i < joints_.size(); ++i)
+    for (std::size_t i = 0; i < local_model_data.joints_.size(); ++i)
     {
-        if (resources_[i].id == 0)
+        if (local_model_data.resources_[i].id == 0)
         {
             continue;
         }
 
         vis3d::Pose pose{};
         vis3d::ObjectId id{};
-        bool added = helper_->addObject(resources_[i], pose, id);
+        bool added = helper_->addObject(local_model_data.resources_[i], pose, id);
 
         ok = ok && added;
         objects_[i] = id;
@@ -299,26 +319,32 @@ bool RobotVisualization::createVisualization() {
     helper_->sendUpdate();
     objects_created_ = ok;
 
+    if (ok)
+    {
+        current_model_type_ = model_type;
+    }
+
     return ok;
 }
 
 void RobotVisualization::computeLinkPoses(
+    const RobotModelData &local_model_data,
     std::unordered_map<std::string, Mat4>& out_link_pose,
     std::span<const double> joint_angles_rad
 ) const {
     out_link_pose.clear();
-    out_link_pose[root_link_] = Mat4::identity();
+    out_link_pose[local_model_data.root_link_] = Mat4::identity();
 
     std::function<void(const std::string&)> dfs = [&](const std::string& link) -> void {
-        auto it = adj_.find(link);
-        if (it == adj_.end())
+        auto it = local_model_data.adj_.find(link);
+        if (it == local_model_data.adj_.end())
         {
             return;
         }
 
         for (std::size_t joint_idx : it->second)
         {
-            const auto& j = joints_[joint_idx];
+            const auto& j = local_model_data.joints_[joint_idx];
             const Mat4 parent_pose = out_link_pose[link];
 
             Mat4 T_origin = Mat4::fromRpyXyz(j.desc.origin_xyz, j.desc.origin_rpy);
@@ -336,22 +362,28 @@ void RobotVisualization::computeLinkPoses(
         }
     };
 
-    dfs(root_link_);
+    dfs(local_model_data.root_link_);
 }
 
 
 bool RobotVisualization::updateRobotVisualization(std::span<const double> joint_angles_rad) {
-    if (!objects_created_ || joint_angles_rad.size() != movable_order_.size())
+    if (!objects_created_ || !current_model_type_.has_value() || model_data_.find(current_model_type_.value()) == model_data_.end() || !current_model_type_.has_value() || !helper_ || !helper_->valid())
+    {
+        return false;
+    }
+
+    const auto& local_model_data = model_data_.at(current_model_type_.value());
+    if (joint_angles_rad.size() != local_model_data.movable_order_.size())
     {
         return false;
     }
 
     std::unordered_map<std::string, Mat4> link_pose;
-    computeLinkPoses(link_pose, joint_angles_rad);
+    computeLinkPoses(local_model_data, link_pose, joint_angles_rad);
 
-    for (std::size_t i = 0; i < joints_.size(); ++i)
+    for (std::size_t i = 0; i < local_model_data.joints_.size(); ++i)
     {
-        const auto& j = joints_[i];
+        const auto& j = local_model_data.joints_[i];
         
         auto parent_it = link_pose.find(j.desc.parent);
         auto child_it = link_pose.find(j.desc.child);
@@ -361,7 +393,7 @@ bool RobotVisualization::updateRobotVisualization(std::span<const double> joint_
             continue;
         }
 
-        if (resources_[i].id == 0)
+        if (local_model_data.resources_[i].id == 0)
         {
             continue;  // not visualized
         }
@@ -494,6 +526,8 @@ void RobotVisualization::removeVisualization() {
     {
         return;
     }
+
+    current_model_type_ = std::nullopt;
 
     for (const auto& id : objects_)
     {

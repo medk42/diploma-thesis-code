@@ -10,6 +10,8 @@
 #include <vector>
 #include <cmath>
 #include <cstdint>
+#include <map>
+#include <optional>
 
 #include "kr2_robot_models/structs.h"
 
@@ -53,17 +55,21 @@ namespace aergo::default_modules::robot_module_kassow::robot_vis {
         explicit RobotVisualization(vis3d::VisualizationHelper* helper) : helper_(helper) {}
 
         // Register with external descriptors.
-        bool registerResources(
+        bool registerModelType(
+            robot_model::RobotModelType model_type,
             vis3d::Color robot_color,
             std::string_view root_link,
             std::span<const robot_model::JointDesc> joints,
-            std::span<const vis3d::CylinderDesc> cylinders,
+            std::span<const vis3d::CylinderDesc> cylinders
+        );
+
+        bool registerFixedResources(
             vis3d::Color trajectory_color = vis3d::Color{ 0xff, 0x6b, 0xf0, 0xFF },
             ArrowConfig arrow_cfg = ArrowConfig{}
         );
 
         // Create visualization objects (call after registerResources).
-        bool createVisualization();
+        bool createVisualization(robot_model::RobotModelType model_type);
 
         // Update poses from 7 joint angles (radians). Order must match kMovableJointNames.
         bool updateRobotVisualization(std::span<const double> joint_angles_rad);
@@ -84,22 +90,32 @@ namespace aergo::default_modules::robot_module_kassow::robot_vis {
         bool isVisualizationCreated() const { return objects_created_; }
 
     private:
+        struct RobotModelData
+        {
+            std::string root_link_;
+            std::vector<JointRuntime> joints_;
+            std::vector<vis3d::CylinderDesc> cylinders_;
+            
+            std::vector<std::size_t> movable_order_;  // indices into joints_
+            std::unordered_map<std::string, std::vector<std::size_t>> adj_;
+
+            std::vector<vis3d::ResourceId> resources_;
+        };
+        
+        
         void computeLinkPoses(
+            const RobotModelData &local_model_data,
             std::unordered_map<std::string, Mat4>& out_link_pose,
             std::span<const double> joint_angles_rad
         ) const;
 
+
         vis3d::VisualizationHelper* helper_{nullptr};
 
-        std::string root_link_;
-        std::vector<JointRuntime> joints_;
-        std::vector<vis3d::CylinderDesc> cylinders_;
+        std::map<robot_model::RobotModelType, RobotModelData> model_data_;
 
-        std::vector<std::size_t> movable_order_;  // indices into joints_
-        std::unordered_map<std::string, std::vector<std::size_t>> adj_;
-
-        std::vector<vis3d::ResourceId> resources_;
         std::vector<vis3d::ObjectId> objects_;
+        std::optional<robot_model::RobotModelType> current_model_type_ {std::nullopt};
         
         vis3d::ResourceId arrow_resource_{0};
         vis3d::ObjectId tcp_arrow_object_{0};
@@ -111,7 +127,7 @@ namespace aergo::default_modules::robot_module_kassow::robot_vis {
         ri::robot_control::Vector3 last_trajectory_point_{};
         vis3d::Color trajectory_color_{};
 
-        bool resources_registered_{false};
+        bool fixed_resources_registered_{false};
         bool objects_created_{false};
     };
 

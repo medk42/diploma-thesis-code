@@ -10,6 +10,8 @@
 
 #include "robot_visualization.h"
 
+#include "robot_module_kassow/kr2_robot_models/structs.h"
+
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -88,6 +90,7 @@ namespace aergo::default_modules::robot_module_kassow
         uint32_t request_timeout_ms_ {200};
         uint32_t poll_interval_ms_ {10};
         uint32_t reconnect_wait_ms_ {500};
+        robot_vis::robot_model::RobotModelType model_type_{robot_vis::robot_model::RobotModelType::A810};
 
         std::atomic<bool> activated_;
         std::mutex activation_mutex_;

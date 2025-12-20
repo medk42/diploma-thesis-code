@@ -88,6 +88,13 @@ static aergo::module::helpers::parameter_description::ParameterList parameters(s
         .min_value_long_ = 50,
         .max_value_long_ = 10000,
         .default_value_ = "500"
+    },
+    {
+        .type_ = aergo::module::helpers::parameter_description::ParameterType::ENUM,
+        .param_name_ = "Robot Model",
+        .param_desc_ = "Kassow robot model type",
+        .enum_values_ = { "A810", "A1018", "A1205", "A1410", "A1805" },
+        .default_value_ = "0"
     }
 });
 

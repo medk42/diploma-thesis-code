@@ -65,7 +65,7 @@ namespace aergo::module::helpers::parameter_description
         uint16_t list_size_min_ = 0; // only used if as_list_ is true, no limits if 0
         uint16_t list_size_max_ = 0; // only used if as_list_ is true, no limits if 0
 
-        std::string default_value_; // default value as a string (for all types, except CUSTOM; for lists, value is used for all entries), for enum it is the enum string value (if empty, first enum value is used)
+        std::string default_value_; // default value as a string (for all types, except CUSTOM; for lists, value is used for all entries), for enum it is the integer index
         
 
         /// @brief Checks if the given ParameterValueOpt is valid for this ParameterDescription.
