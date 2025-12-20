@@ -3,13 +3,26 @@
 
 #include "ble_reader.h"
 
+#include <chrono>
+#include <cstdint>
+
+int64_t micros()
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()
+    ).count();
+}
 
 
 int main(int argc, char** argv) {
-   
 
-    aergo::pen_tracking::BleReader ble_reader(aergo::defaults::pen::SERVICE_UUID, aergo::defaults::pen::CHARACTERISTIC_UUID, [](aergo::pen_tracking::PenDataPacket packet) {
-        AERGO_LOG("Flags: " << packet.flags)
+    int64_t last_time = micros();
+
+    aergo::pen_tracking::BleReader ble_reader(aergo::defaults::pen::SERVICE_UUID, aergo::defaults::pen::CHARACTERISTIC_UUID, [&last_time](aergo::pen_tracking::PenDataPacket packet) {
+        int64_t current_time = micros();
+        double freq = 1000000.0 / (current_time - last_time);
+        last_time = current_time;
+        AERGO_LOG("Flags: " << packet.flags << " Freq: " << freq << " Hz");
     });
 
     bool res = ble_reader.start();
