@@ -1,114 +1,113 @@
 import asyncio
-import bleak
 import struct
 import time
 
-PEN_SERVICE_ID = '2bfae565-df4e-45b6-b1fa-a6f75c1be2b3'
-PEN_CHARACTERISTIC_UUID = 'e76d106d-a549-4b3a-afbd-8879582943fe'
+from bleak import BleakClient, BleakScanner
+
+PEN_SERVICE_ID = "2bfae565-df4e-45b6-b1fa-a6f75c1be2b3"
+PEN_CHARACTERISTIC_UUID = "e76d106d-a549-4b3a-afbd-8879582943fe"
 
 FLAG_VALID = 1
 FLAG_BUT_PRIM_PRESSED = 2
 FLAG_BUT_SEC_PRESSED = 4
 
-
-import struct
-
 last_notify = time.time()
 but_prim_last = False
 but_sec_last = False
 
-def notification_handler(sender, data):
-    global last_notify
-    global but_prim_last
-    global but_sec_last
 
-    current_time = time.time()
-    time_diff = current_time - last_notify
-    last_notify = current_time
+def notification_handler(sender: int, data: bytearray):
+    global last_notify, but_prim_last, but_sec_last
 
-    # Define the correct format string
-    # '<' for little-endian, '3h' for 3 int16_t, '3h' for 3 int16_t, 'H' for uint16_t
-    format_string = "<3h3hH"
+    now = time.time()
+    dt = now - last_notify
+    last_notify = now
 
-    # print(len(data), data)
-    # Unpack the data
-    unpacked_data = struct.unpack(format_string, data)
+    accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, flags = struct.unpack("<3h3hH", data)
 
-    # Extract the values
-    accel = unpacked_data[:3]
-    gyro = unpacked_data[3:6]
-    flags = unpacked_data[6]
-
-    # Check that packet is valid
     if not (flags & FLAG_VALID):
         return
-    
-    but_prim_pressed = True if flags & FLAG_BUT_PRIM_PRESSED else False
-    but_sec_pressed = True if flags & FLAG_BUT_SEC_PRESSED else False
+
+    but_prim_pressed = bool(flags & FLAG_BUT_PRIM_PRESSED)
+    but_sec_pressed = bool(flags & FLAG_BUT_SEC_PRESSED)
 
     if but_prim_pressed and not but_prim_last:
-        print('Primary button: PRESSED')
+        print("Primary button: PRESSED")
     if not but_prim_pressed and but_prim_last:
-        print('Primary button: RELEASED')
+        print("Primary button: RELEASED")
     if but_sec_pressed and not but_sec_last:
-        print('Secondary button: PRESSED')
+        print("Secondary button: PRESSED")
     if not but_sec_pressed and but_sec_last:
-        print('Secondary button: RELEASED')
+        print("Secondary button: RELEASED")
 
     but_prim_last = but_prim_pressed
     but_sec_last = but_sec_pressed
 
-    # Print the data
-    # print(f"Time diff: {time_diff * 1000:.1f}ms, Accelerometer: {accel}, Gyroscope: {gyro}, Flags: {flags}")
+    accel = (accel_x, accel_y, accel_z)
+    gyro = (gyro_x, gyro_y, gyro_z)
+    print(f"Time diff: {dt * 1000:.1f}ms, Accelerometer: {accel}, Gyroscope: {gyro}, Flags: {flags}")
 
-        
 
-async def communicate(client):
-    if client.is_connected:
-        print('Connected')
+async def print_services(client: BleakClient):
+    # Bleak 2.x: services are available via client.services after connect
+    services = getattr(client, "services", None)
 
+    # Bleak 1.x fallback
+    if services is None and hasattr(client, "get_services"):
         services = await client.get_services()
-        for service in services:
-            print(f"Service: {service.uuid}")
-            for characteristic in service.characteristics:
-                print(f"  Characteristic: {characteristic.uuid} ({characteristic.properties})")
-        await client.start_notify(PEN_CHARACTERISTIC_UUID, notification_handler)
+
+    if not services:
+        print("(No services available)")
+        return
+
+    for service in services:
+        print(f"Service: {service.uuid}")
+        for ch in service.characteristics:
+            print(f"  Characteristic: {ch.uuid} ({ch.properties})")
+
+
+async def communicate(client: BleakClient):
+    print("Connected:", client.is_connected)
+
+    await print_services(client)
+
+    await client.start_notify(PEN_CHARACTERISTIC_UUID, notification_handler)
+    try:
         await asyncio.sleep(10)
+    finally:
         await client.stop_notify(PEN_CHARACTERISTIC_UUID)
         print("Disconnected")
-    else:
-        print('Failed to connect')
+
+
+async def find_pen(timeout: float = 5.0):
+    dev = await BleakScanner.find_device_by_name("3D Pen", timeout=timeout)
+    if dev is not None:
+        return dev
+
+    results = await BleakScanner.discover(timeout=timeout, return_adv=True)
+    target = PEN_SERVICE_ID.lower()
+
+    for dev, adv in results.values():  # address -> (BLEDevice, AdvertisementData)
+        uuids = [u.lower() for u in (adv.service_uuids or [])]
+        name = dev.name or adv.local_name or ""
+        if target in uuids or name == "3D Pen":
+            return dev
+
+    return None
+
 
 async def main():
-    # Create a BleakScanner
-    scanner = bleak.BleakScanner()
+    dev = await find_pen(timeout=5.0)
+    print("Selected device:", dev)
 
-    device = await bleak.BleakScanner.find_device_by_name("3D Pen", timeout=5)
-    print(device)
+    if dev is None:
+        print('No "3D Pen" device found.')
+        return
 
-    # Start scanning for devices
-    print("Scanning for devices...")
-    devices = await scanner.discover()
+    print(f"Connecting to device: {dev.address}")
+    async with BleakClient(dev) as client:
+        await communicate(client)
 
-    # Print the discovered devices
-    for i, device in enumerate(devices):
-        print(f"Device {i+1}: {device.name}, Address: {device.address}")
 
-    # Use the address of the device you want to connect to
-    if devices:
-        found_device = None
-        for device in devices:
-            if len(device.metadata['uuids']) > 0 and device.metadata['uuids'][0] == PEN_SERVICE_ID:
-                found_device = device
-        if found_device:
-            print(f"Connecting to device: {found_device.address}")
-
-            async with bleak.BleakClient(found_device) as client:
-                await communicate(client)
-        else:
-            print('No "DPOINT" device found.')
-    else:
-        print("No devices found")
-
-# Run the main function
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
