@@ -586,7 +586,9 @@ bool RobotStereoCameraCalibrationModule::parseStereoSamples(
         poses.push_back(camera_pose.flange_pose);
     }
 
-    // TODO remove this fallback when proper pose data is available in tests.
+    return true;
+
+    // This is fallback for testing when flange poses are not available; not used in normal operation.
     // Try to infer poses from images for offline testing (non-fatal).
     if (!computePosesFromLeftImages(left_images, poses))
     {

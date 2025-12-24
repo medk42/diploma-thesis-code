@@ -364,8 +364,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         double q_RL[4]; matToQuatWxyz(in.RL.R_RL, q_RL);
         double t_RL[3] = { in.RL.t_RL[0], in.RL.t_RL[1], in.RL.t_RL[2] };
 
-        double q_WB[4] = {1,0,0,0};
-        double t_WB[3] = {0,0,0};
+        double q_WB[4]; matToQuatWxyz(in.world_from_board.R, q_WB);
+        double t_WB[3] = {in.world_from_board.t[0], in.world_from_board.t[1], in.world_from_board.t[2]};
 
         auto distL = matToDist(in.KL.D);
         auto distR = matToDist(in.KR.D);

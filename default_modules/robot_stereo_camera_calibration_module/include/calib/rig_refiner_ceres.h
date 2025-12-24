@@ -33,6 +33,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             CameraIntrinsics KR;
             StereoExtrinsics RL;
             SE3 camL_from_flange;
+            SE3 world_from_board; // T_world_board, board pose in world
         };
 
         struct Result
@@ -42,7 +43,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             StereoExtrinsics RL;
             SE3 camL_from_flange;
             SE3 camR_from_flange;
-            SE3 world_from_board;
+            SE3 world_from_board; // T_world_board, board pose in world
             double initialReprojRmseL{-1.0};
             double initialReprojRmseR{-1.0};
             double finalReprojRmseL{-1.0};

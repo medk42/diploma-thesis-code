@@ -110,7 +110,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         }
 
         // Estimate board pose per usable frame (left camera)
-        std::vector<Pose> base_from_flange;
+        std::vector<Pose> base_from_flange; // T_base_flange, flange pose in base
         std::vector<cv::Vec3d> rvec_tc;
         std::vector<cv::Vec3d> tvec_tc;
         base_from_flange.reserve(n);
@@ -141,16 +141,29 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             return std::unexpected("Hand-eye calibration failed: " + he_res.message);
         }
 
+        if (base_from_flange.empty())
+        {
+            return std::unexpected("Hand-eye calibration failed: no usable pose pairs.");
+        }
+
+        SE3 T_base_flange = pose_utils::toSE3(base_from_flange.front());
+        SE3 T_flange_cam = he_res.T_FC;
+        SE3 T_cam_board = pose_utils::rtToSE3(rvec_tc.front(), tvec_tc.front());
+
+        SE3 T_base_cam = pose_utils::compose(T_base_flange, T_flange_cam);
+        SE3 T_base_board = pose_utils::compose(T_base_cam, T_cam_board);
+
         RigRefinerCeres refiner(refine_opts);
         RigRefinerCeres::Input rin;
         rin.viewsL = viewsL;
         rin.viewsR = viewsR;
-        rin.base_from_flange = base_from_flange;
+        rin.base_from_flange = robot_poses;
         rin.board = board;
         rin.KL = intrL_res.intr;
         rin.KR = intrR_res.intr;
         rin.RL = stereo_res.extr;
         rin.camL_from_flange = pose_utils::invert(he_res.T_FC);
+        rin.world_from_board = T_base_board;
 
         auto refine_res = refiner.refine(rin);
         ++tick; updateProgress(tick);
