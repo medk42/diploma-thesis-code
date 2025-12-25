@@ -45,7 +45,7 @@ namespace aergo::module::helpers::activation_wrapper
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> listAdd(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
         std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> listRemove(message_types::Request& request, message::SharedDataBlob* blob, message_types::Response response);
         void handleActivationTask();
-        void setCustomValueOnReceive(message::MessageHeader message);
+        void setCustomValueOnReceive(IActivableModule::ProcessingChannelType channel_type, uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message);
 
         /// @brief Check if current parameter values are valid (types, ranges, enum values, list sizes).
         /// @return true if valid, false otherwise
@@ -71,6 +71,7 @@ namespace aergo::module::helpers::activation_wrapper
             std::atomic<bool> expected_;  // true if we are waiting for a CUSTOM message/response, false otherwise
             size_t param_id_;             // ID of the parameter we are changing
             size_t list_id_;              // ID into the list inside the parameter (0 for non-lists)
+            uint64_t request_id_;         // ID of the request (for CUSTOM requests)
         } message_wait_;                  // waiting for CUSTOM message/response.
 
         std::mutex mutex_; // mutex for thread safety

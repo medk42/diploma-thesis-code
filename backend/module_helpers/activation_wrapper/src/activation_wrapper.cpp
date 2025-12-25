@@ -89,7 +89,7 @@ void ActivationWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelId
             auto& param = parameters_->getParameters()[message_wait_.param_id_];
             if (param.custom_channel_type_ == CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == subscribe_consumer_id)
             {
-                setCustomValueOnReceive(message);
+                setCustomValueOnReceive(IActivableModule::ProcessingChannelType::MESSAGE, subscribe_consumer_id, source_channel, message);
                 return;
             }
         }
@@ -156,9 +156,9 @@ void ActivationWrapper::processResponse(uint32_t request_consumer_id, ChannelIde
         if (message_wait_.expected_.load(std::memory_order_acquire)) // double check after locking
         {
             auto& param = parameters_->getParameters()[message_wait_.param_id_];
-            if (param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == request_consumer_id)
+            if (param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == request_consumer_id && message.id_ == message_wait_.request_id_)
             {
-                setCustomValueOnReceive(message);
+                setCustomValueOnReceive(IActivableModule::ProcessingChannelType::RESPONSE, request_consumer_id, source_channel, message);
                 return;
             }
         }
@@ -210,7 +210,7 @@ aergo::module::IModule::IngressDecision ActivationWrapper::onIngress(aergo::modu
         {
             auto& param = parameters_->getParameters()[message_wait_.param_id_];
             if ((kind == aergo::module::IModule::ProcessingType::MESSAGE && param.custom_channel_type_ == CustomChannelType::SUBSCRIBE && param.custom_channel_id_ == local_channel_id) ||
-                (kind == aergo::module::IModule::ProcessingType::RESPONSE && param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == local_channel_id))
+                (kind == aergo::module::IModule::ProcessingType::RESPONSE && param.custom_channel_type_ == CustomChannelType::REQUEST && param.custom_channel_id_ == local_channel_id && msg.id_ == message_wait_.request_id_))
             {
                 return aergo::module::IModule::IngressDecision::ACCEPT;
             }
@@ -604,14 +604,20 @@ std::tuple<message_types::Response, aergo::module::message::SharedDataBlob> Acti
 
             if (custom_set_requested)
             {
+                if (param.custom_channel_type_ == CustomChannelType::REQUEST)
+                {
+                    bool success = activable_module_ref_->sendRequestFromActivation(parameters_->getParameters(), request.param_id_, message_wait_.request_id_);
+                    if (!success)
+                    {
+                        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "ActivationWrapper: Failed to send CUSTOM parameter request.");
+                        response.result_ = message_types::Result::FAIL;
+                        return {response, {}};
+                    }
+                }
+
                 message_wait_.param_id_ = request.param_id_;
                 message_wait_.list_id_ = list_id;
                 message_wait_.expected_.store(true, std::memory_order_release);
-
-                if (param.custom_channel_type_ == CustomChannelType::REQUEST)
-                {
-                    activable_module_ref_->sendRequestFromActivation(param.custom_channel_id_);
-                }
 
                 response.result_ = message_types::Result::RUNNING;
                 return {response, {}};
@@ -777,56 +783,87 @@ void ActivationWrapper::handleActivationTask()
 
 
 
-void ActivationWrapper::setCustomValueOnReceive(message::MessageHeader message)
+void ActivationWrapper::setCustomValueOnReceive(
+    IActivableModule::ProcessingChannelType channel_type, 
+    uint32_t subscribe_consumer_id, 
+    ChannelIdentifier source_channel, 
+    message::MessageHeader message
+)
 {
     
     auto& chosen_value = parameter_values_[message_wait_.param_id_][message_wait_.list_id_];
 
     std::vector<uint8_t> out;
 
-    // helper to append POD
-    auto append_pod = [&](const auto& v) {
-        const uint8_t* p = reinterpret_cast<const uint8_t*>(&v);
-        out.insert(out.end(), p, p + sizeof(v));
-    };
+    IActivableModule::ProcessingResult result = activable_module_ref_->processCustomMessageOrResponse(
+        channel_type,
+        subscribe_consumer_id,
+        source_channel,
+        message,
+        out
+    );
 
-    uint64_t message_data_len = (message.data_ == nullptr) ? 0 : message.data_len_;
-
-    // data_len_
-    append_pod(message_data_len);
-
-    // inline data
-    if (message_data_len > 0) {
-        out.insert(out.end(), message.data_, message.data_ + message_data_len);
-    }
-
-    // blob_count_
-    append_pod(message.blob_count_);
-
-    for (uint64_t blob_id = 0; blob_id < message.blob_count_; ++blob_id)
+    if (result == IActivableModule::ProcessingResult::DROP)
     {
-        if (message.blobs_[blob_id].valid())
+        if (channel_type == IActivableModule::ProcessingChannelType::MESSAGE)
         {
-            uint64_t blob_size = message.blobs_[blob_id].size();
-            uint8_t* blob_data = message.blobs_[blob_id].data();
-
-            if (blob_data == nullptr)
-            {
-                blob_size = 0;
-            }
-
-            append_pod(blob_size);
-            if (blob_size > 0)
-            {
-                out.insert(out.end(), blob_data, blob_data + blob_size);
-            }
+            return; // do not change chosen_value, just exit and wait for another message
         }
         else
         {
-            uint64_t blob_size = 0;
-            append_pod(blob_size);
+            result = IActivableModule::ProcessingResult::ACCEPT; // for responses, we cannot wait for another response, so treat DROP as ACCEPT
         }
     }
+    
+    if (result == IActivableModule::ProcessingResult::ACCEPT)
+    {
+        out.clear();
+
+        // helper to append POD
+        auto append_pod = [&](const auto& v) {
+            const uint8_t* p = reinterpret_cast<const uint8_t*>(&v);
+            out.insert(out.end(), p, p + sizeof(v));
+        };
+
+        uint64_t message_data_len = (message.data_ == nullptr) ? 0 : message.data_len_;
+
+        // data_len_
+        append_pod(message_data_len);
+
+        // inline data
+        if (message_data_len > 0) {
+            out.insert(out.end(), message.data_, message.data_ + message_data_len);
+        }
+
+        // blob_count_
+        append_pod(message.blob_count_);
+
+        for (uint64_t blob_id = 0; blob_id < message.blob_count_; ++blob_id)
+        {
+            if (message.blobs_[blob_id].valid())
+            {
+                uint64_t blob_size = message.blobs_[blob_id].size();
+                uint8_t* blob_data = message.blobs_[blob_id].data();
+
+                if (blob_data == nullptr)
+                {
+                    blob_size = 0;
+                }
+
+                append_pod(blob_size);
+                if (blob_size > 0)
+                {
+                    out.insert(out.end(), blob_data, blob_data + blob_size);
+                }
+            }
+            else
+            {
+                uint64_t blob_size = 0;
+                append_pod(blob_size);
+            }
+        }
+    }
+    // else only ACCEPT_REPLACE remains, but that already pushed its data to out
 
     chosen_value = std::move(out);
 

@@ -17,6 +17,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
     namespace cm = aergo::module::helpers::camera_messages;
     namespace cph = aergo::module::helpers::camera_pose_helper;
     namespace rc = aergo::module::helpers::robot_interface::robot_control;
+    namespace p_desc = aergo::module::helpers::parameter_description;
     using Pose = rc::Pose;
 
     class RobotStereoCameraCalibrationModule : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule
@@ -71,7 +72,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module
 
         bool deactivate(const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled) override;
 
-        void sendRequestFromActivation(uint32_t request_consumer_id) override {}
+        virtual bool sendRequestFromActivation(const std::vector<p_desc::ParameterDescription>& auto_parameters, const uint32_t param_id, uint64_t& out_request_id) override { return false; } // No activation-time requests needed.
+        virtual ProcessingResult processCustomMessageOrResponse(ProcessingChannelType channel_type, uint32_t consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message, std::vector<uint8_t>& out_data_replace) override { return ProcessingResult::ACCEPT; } // accept the default parameter serialization
 
         aergo::module::helpers::activation_wrapper::message_types::ProgressData getActivationProgress() override;
 
