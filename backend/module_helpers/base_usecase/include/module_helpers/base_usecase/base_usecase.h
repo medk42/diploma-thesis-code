@@ -48,7 +48,8 @@ namespace aergo::module::helpers::base_usecase
 
         ~BaseUsecase() noexcept override;
 
-        virtual uint64_t sendRequestFromUsecase(uint32_t request_consumer_id) override { return 0; } // implement for usecases that do not need to send requests
+        virtual bool sendRequestFromUsecase(const std::vector<p_desc::ParameterDescription>& auto_parameters, const uint32_t param_id, uint64_t& out_request_id) override { return false; } // implement for usecases that do not need to send requests
+        virtual ProcessingResult processCustomMessageOrResponse(ProcessingChannelType channel_type, uint32_t consumer_id, ChannelIdentifier source_channel, message::MessageHeader message, std::vector<uint8_t>& out_data_replace) override { return ProcessingResult::ACCEPT; } // implement for usecases that do not need custom parameter loading
 
         virtual void processMessage(uint32_t subscribe_consumer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override {} // ignore messages
         virtual aergo::module::ResponseData processRequest(uint32_t response_producer_id, ChannelIdentifier source_channel, message::MessageHeader message) noexcept override { return aergo::module::ResponseData::createFailure(); } // ignore requests

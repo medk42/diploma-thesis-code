@@ -91,7 +91,28 @@ void UsecaseWrapper::processMessage(uint32_t subscribe_consumer_id, ChannelIdent
                     .success_ = true,
                     .result_ = {}
                 };
-                serialize::pushMessage(done_info.result_, message);
+
+                IUsecaseModule::ProcessingResult result = usecase_module_ref_->processCustomMessageOrResponse(
+                    IUsecaseModule::ProcessingChannelType::MESSAGE,
+                    subscribe_consumer_id,
+                    source_channel,
+                    message,
+                    done_info.result_
+                );
+
+                if (result == IUsecaseModule::ProcessingResult::DROP)
+                {
+                    // drop message, wait for next
+                    it->seen_ = false; // mark as unseen for next time
+                    return;
+                }
+                else if (result == IUsecaseModule::ProcessingResult::ACCEPT)
+                {
+                    // serialize as is
+                    done_info.result_.clear();
+                    serialize::pushMessage(done_info.result_, message);
+                }
+                // else ACCEPT_REPLACE, done_info.result_ already filled with custom data
 
                 message_done_list_.emplace_back(std::move(done_info));
                 message_await_list_.erase(it);
@@ -133,26 +154,44 @@ void UsecaseWrapper::processResponse(uint32_t request_consumer_id, ChannelIdenti
                     return info.channel_id_ == request_consumer_id && info.request_id_ == response_id && info.seen_; // we already saw it in onIngress
                 }
             );
+            
             if (it != response_await_list_.end())
             {
+                CustomMessageDoneInfo done_info {
+                    .read_task_id_ = it->read_task_id_,
+                    .success_ = true,
+                    .result_ = {}
+                };
+
                 if (message.success_)
                 {
-                    CustomMessageDoneInfo done_info {
-                        .read_task_id_ = it->read_task_id_,
-                        .success_ = true,
-                        .result_ = {}
-                    };
-                    serialize::pushMessage(done_info.result_, message);
-                    response_done_list_.emplace_back(std::move(done_info));
+                    IUsecaseModule::ProcessingResult result = usecase_module_ref_->processCustomMessageOrResponse(
+                        IUsecaseModule::ProcessingChannelType::RESPONSE,
+                        request_consumer_id,
+                        source_channel,
+                        message,
+                        done_info.result_
+                    );
+
+                    if (result == IUsecaseModule::ProcessingResult::DROP)
+                    {
+                        done_info.result_.clear();
+                        done_info.success_ = false;
+                    }
+                    else if (result == IUsecaseModule::ProcessingResult::ACCEPT)
+                    {
+                        // serialize as is
+                        done_info.result_.clear();
+                        serialize::pushMessage(done_info.result_, message);
+                    }
+                    // else ACCEPT_REPLACE, done_info.result_ already filled with custom data
                 }
                 else
                 {
-                    response_done_list_.emplace_back(CustomMessageDoneInfo{
-                        .read_task_id_ = it->read_task_id_,
-                        .success_ = false,
-                        .result_ = {}
-                    });
+                    done_info.success_ = false;
                 }
+                
+                response_done_list_.emplace_back(std::move(done_info));
                 response_await_list_.erase(it);
                 return;
             }
@@ -442,7 +481,15 @@ aergo::module::ResponseData UsecaseWrapper::handleReadCustomParameterStart(uint3
     }
     else
     {
-        uint64_t request_id = usecase_module_ref_->sendRequestFromUsecase(param.custom_channel_id_);
+        uint64_t request_id;
+        bool success = usecase_module_ref_->sendRequestFromUsecase(parameters, param_id, request_id);
+        if (!success)
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: Failed to send custom parameter request to module.");
+            return ResponseData::createResponse(
+                message_types::Response{ .result_ = message_types::Result::FAIL }
+            );
+        }
         response_await_list_.emplace_back( 
             CustomMessageAwaitInfo{ 
                 .read_task_id_ = read_task_id, 
