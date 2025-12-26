@@ -2,13 +2,13 @@
 
 #include "module_common/base_module.h"
 #include "module_helpers/activation_wrapper/activable_module.h"
-#include "module_helpers/calibrated_camera_robot_messages/message_types.h"
+#include "module_helpers/calibrated_camera_world_messages/message_types.h"
 
 #include <atomic>
 
 namespace aergo::default_modules::pen_calibration_multicam_module
 {
-    namespace ccrm = aergo::module::helpers::calibrated_camera_robot_messages;
+    namespace ccrm = aergo::module::helpers::calibrated_camera_world_messages;
     namespace p_desc = aergo::module::helpers::parameter_description;
 
     class PenCalibrationMulticamModule : public aergo::module::BaseModule, public aergo::module::helpers::activation_wrapper::IActivableModule

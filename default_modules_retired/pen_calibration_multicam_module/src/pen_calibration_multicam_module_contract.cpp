@@ -6,7 +6,7 @@
 #include "module_helpers/activation_wrapper/message_types.h"
 #include "module_helpers/activation_wrapper/activation_wrapper.h"
 #include "module_helpers/parameter_description/parameter_description.h"
-#include "module_helpers/calibrated_camera_robot_messages/message_types.h"
+#include "module_helpers/calibrated_camera_world_messages/message_types.h"
 
 #define MODULE_A_API_VERSION 2
 
@@ -16,7 +16,7 @@ static_assert(MODULE_A_API_VERSION == PLUGIN_API_VERSION,
 using namespace aergo::module;
 using namespace aergo::default_modules::pen_calibration_multicam_module;
 namespace p_desc = aergo::module::helpers::parameter_description;
-namespace ccrm = aergo::module::helpers::calibrated_camera_robot_messages;
+namespace ccrm = aergo::module::helpers::calibrated_camera_world_messages;
 
 static constexpr communication_channel::Consumer subscribe_consumers[] = {
     {

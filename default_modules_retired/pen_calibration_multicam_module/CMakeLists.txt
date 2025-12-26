@@ -16,7 +16,7 @@ add_library(${MODULE_NAME} MODULE ${PROJECT_SOURCES})
 target_link_libraries(${MODULE_NAME} PRIVATE
     module_common
     helpers___activation_wrapper
-    helpers___calibrated_camera_robot_messages
+    helpers___calibrated_camera_world_messages
     opencv_core
     opencv_calib3d
     opencv_aruco
@@ -55,7 +55,7 @@ target_include_directories(${MODULE_NAME}_tests PRIVATE
 target_link_libraries(${MODULE_NAME}_tests PRIVATE
     module_common
     helpers___activation_wrapper
-    helpers___calibrated_camera_robot_messages
+    helpers___calibrated_camera_world_messages
     opencv_core
     opencv_calib3d
     opencv_aruco

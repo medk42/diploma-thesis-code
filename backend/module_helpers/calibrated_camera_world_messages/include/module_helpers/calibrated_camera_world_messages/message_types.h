@@ -5,18 +5,28 @@
 
 #include "module_common/module_interface_.h"
 #include "module_helpers/camera_messages/messages.h"
-#include "module_helpers/robot_interface/features/robot_control/structs.h"
 
-namespace aergo::module::helpers::calibrated_camera_robot_messages
+namespace aergo::module::helpers::calibrated_camera_world_messages
 {
-    namespace rc = aergo::module::helpers::robot_interface::robot_control;
     namespace cm = aergo::module::helpers::camera_messages;
+
+    struct Pose
+    {
+        double x{0.0};              // X position in world coordinate system, in meters
+        double y{0.0};              // Y position in world coordinate system, in meters
+        double z{0.0};              // Z position in world coordinate system, in meters
+
+        double qx{0.0};             // X component of orientation as a quaternion
+        double qy{0.0};             // Y component of orientation as a quaternion
+        double qz{0.0};             // Z component of orientation as a quaternion
+        double qw{1.0};             // W component of orientation as a quaternion
+    };
 
     struct CalibratedCameraSet
     {
         cm::CameraMessage camera_header;   // original camera header (blob stays external)
         uint32_t calibrated_count{0};      // number of filled calibration entries (max 4)
-        rc::Pose camera_pose[4]{};         // world <- cam_i
+        Pose camera_pose[4]{};             // world <- cam_i
         double K[4][9]{};                  // row-major 3x3 for each entry
         double D[4][5]{};                  // first 5 distortion coeffs for each entry
     };
@@ -41,7 +51,7 @@ namespace aergo::module::helpers::calibrated_camera_robot_messages
 
     inline bool addCalibData(CalibratedCameraSet& msg_out,
                              uint32_t index,
-                             const rc::Pose& cam_world,
+                             const Pose& cam_world,
                              const cv::Mat& K,
                              const cv::Mat& D)
     {
@@ -59,7 +69,7 @@ namespace aergo::module::helpers::calibrated_camera_robot_messages
 
     inline bool parseCalibData(const CalibratedCameraSet& msg,
                                uint32_t index,
-                               rc::Pose& cam_world_out,
+                               Pose& cam_world_out,
                                cv::Mat& K_out,
                                cv::Mat& D_out)
     {

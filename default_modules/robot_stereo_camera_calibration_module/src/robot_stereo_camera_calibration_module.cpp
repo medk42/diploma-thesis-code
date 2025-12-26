@@ -12,7 +12,7 @@
 #include "calib/handeye_calibrator.h"
 #include "calib/rig_refiner_ceres.h"
 #include "calib/pose_utils.h"
-#include "module_helpers/calibrated_camera_robot_messages/message_types.h"
+#include "module_helpers/calibrated_camera_world_messages/message_types.h"
 
 #include <cstring>
 #include <sstream>
@@ -23,7 +23,7 @@
 using namespace aergo::default_modules::robot_stereo_camera_calibration_module;
 using namespace aergo::module;
 using json = nlohmann::json;
-namespace messages = aergo::module::helpers::calibrated_camera_robot_messages;
+namespace messages = aergo::module::helpers::calibrated_camera_world_messages;
 
 namespace
 {
@@ -132,6 +132,20 @@ IModule::IngressDecision RobotStereoCameraCalibrationModule::onIngress(
 }
 
 
+messages::Pose rcPoseToCameraPose(const calib::Pose& in_pose)
+{
+    messages::Pose out_pose;
+    out_pose.x = in_pose.position.x;
+    out_pose.y = in_pose.position.y;
+    out_pose.z = in_pose.position.z;
+    out_pose.qx = in_pose.orientation.x;
+    out_pose.qy = in_pose.orientation.y;
+    out_pose.qz = in_pose.orientation.z;
+    out_pose.qw = in_pose.orientation.w;
+    return out_pose;
+}
+
+
 void RobotStereoCameraCalibrationModule::processMessage(
     uint32_t subscribe_consumer_id,
     aergo::module::ChannelIdentifier /*source_channel*/,
@@ -163,8 +177,8 @@ void RobotStereoCameraCalibrationModule::processMessage(
     messages::CalibratedCameraSet out_msg{};
     out_msg.camera_header = payload.camera_header;
     out_msg.calibrated_count = 2;
-    if (!messages::addCalibData(out_msg, 0, world_poses.pose_left, world_poses.intrinsics_left.K, world_poses.intrinsics_left.D) ||
-        !messages::addCalibData(out_msg, 1, world_poses.pose_right, world_poses.intrinsics_right.K, world_poses.intrinsics_right.D))
+    if (!messages::addCalibData(out_msg, 0, rcPoseToCameraPose(world_poses.pose_left), world_poses.intrinsics_left.K, world_poses.intrinsics_left.D) ||
+        !messages::addCalibData(out_msg, 1, rcPoseToCameraPose(world_poses.pose_right), world_poses.intrinsics_right.K, world_poses.intrinsics_right.D))
     {
         log(logging::LogType::WARNING, "RobotStereoCameraCalibration: failed to pack calibrated message (invalid intrinsics).");
         return;
