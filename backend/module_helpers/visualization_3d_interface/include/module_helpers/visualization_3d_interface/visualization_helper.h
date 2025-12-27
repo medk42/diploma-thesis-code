@@ -24,7 +24,7 @@ namespace aergo::module::helpers::visualization_3d_interface
         /// Calling after announce() is NOT allowed.
         ResourceId registerResource(const ComplexShape& resource_description);
 
-        /// @brief Call once when your module can start processing requests (e.g. at the end of your module constructor, or after activation if Activable).
+        /// @brief Call once when your module can start processing requests (e.g. on first message received or after activation if Activable).
         void announce();
 
         bool addObject(ResourceId resource_id, const Pose& pose, ObjectId& out_id);
@@ -44,6 +44,8 @@ namespace aergo::module::helpers::visualization_3d_interface
         aergo::module::ResponseData processVisualizationRequest(aergo::module::message::MessageHeader message);
 
         /// @brief Get the response producer channel ID used for visualization requests.
+        /// This method returns a constant value, so you can call it once and store the result or 
+        /// call it without using a mutex.
         uint32_t getResponseProducerChannel() const;
 
     private:

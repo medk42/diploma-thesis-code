@@ -10,7 +10,7 @@
 
 namespace aergo::module::helpers::pen_messages
 {
-    int64_t micros() 
+    inline int64_t micros() 
     {
         return std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now().time_since_epoch())
@@ -35,8 +35,8 @@ namespace aergo::module::helpers::pen_messages
     /// Allows access to low-level pen data.
     struct PenMessageRaw
     {
-        PenMessageRaw() : timestamp_us(micros()) {}
-        PenMessageRaw(Pose p, bool primary, bool secondary)
+        inline PenMessageRaw() : timestamp_us(micros()) {}
+        inline PenMessageRaw(Pose p, bool primary, bool secondary)
         : timestamp_us(micros()), pose(p), primary_down(primary), secondary_down(secondary) {}
 
         int64_t timestamp_us{0};    // Timestamp in microseconds
@@ -60,12 +60,12 @@ namespace aergo::module::helpers::pen_messages
     /// SPECIAL_ACTION: special action, no additional data
     struct PenMessageIntent
     {
-        PenMessageIntent(PenIntent i = PenIntent::POSE, Pose p = {})
+        inline PenMessageIntent(PenIntent i = PenIntent::POSE, Pose p = {})
         : timestamp_us(micros()), intent(i), pose(p) {}
 
-        static PenMessageIntent PoseIntent(const Pose& p) { return PenMessageIntent(PenIntent::POSE, p); }
-        static PenMessageIntent SpecialActionIntent() { return PenMessageIntent(PenIntent::SPECIAL_ACTION, {}); }
-        static PenMessageIntent TrajectoryIntent(std::span<const Pose> poses_span, std::vector<std::byte> out_blob)
+        inline static PenMessageIntent PoseIntent(const Pose& p) { return PenMessageIntent(PenIntent::POSE, p); }
+        inline static PenMessageIntent SpecialActionIntent() { return PenMessageIntent(PenIntent::SPECIAL_ACTION, {}); }
+        inline static PenMessageIntent TrajectoryIntent(std::span<const Pose> poses_span, std::vector<std::byte> out_blob)
         {
             out_blob.clear();
             out_blob.reserve(poses_span.size() * sizeof(Pose) + sizeof(uint64_t));
@@ -91,7 +91,7 @@ namespace aergo::module::helpers::pen_messages
     };
 
 
-    bool parseTrajectoryBlob(void* data, size_t size, std::vector<Pose>& out_poses)
+    inline bool parseTrajectoryBlob(void* data, size_t size, std::vector<Pose>& out_poses)
     {
         using aergo::module::helpers::serialization_helper::deserialization::BufferReader;
 

@@ -79,8 +79,10 @@ namespace aergo::module::helpers::calibrated_camera_world_messages
         }
 
         cam_world_out = msg.camera_pose[index];
-        K_out = cv::Mat(3, 3, CV_64F);
-        D_out = cv::Mat(1, 5, CV_64F);
+        
+        K_out.create(3, 3, CV_64F);
+        D_out.create(1, 5, CV_64F);
+        
         std::memcpy(K_out.ptr<double>(), msg.K[index], 9 * sizeof(double));
         std::memcpy(D_out.ptr<double>(), msg.D[index], 5 * sizeof(double));
         return true;
