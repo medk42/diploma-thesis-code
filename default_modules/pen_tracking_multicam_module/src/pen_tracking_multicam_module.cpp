@@ -39,6 +39,117 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
         return;
     }
     response_producer_id_visualization_ = visualization_helper_->getResponseProducerChannel();
+    registerResources();
+
+    if (!getSubscribeChannelByName(ccrm::calibrated_camera_publish_producer.channel_type_identifier_, subscribe_consumer_id_calibrated_camera_))
+    {
+        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to resolve calibrated camera subscribe channel.");
+        return;
+    }
+
+    if (!getPublishChannelByName(pm::pen_message_raw_publish_producer.channel_type_identifier_, publish_producer_id_pen_raw_))
+    {
+        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to resolve pen raw publish channel.");
+        return;
+    }
+
+    if (!getPublishChannelByName(pm::pen_message_intent_publish_producer.channel_type_identifier_, publish_producer_id_pen_intent_))
+    {
+        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to resolve pen intent publish channel.");
+        return;
+    }
+
+    valid_ = true;
+}
+
+
+vis3d::Quat alignZToDir(const vis3d::Vec3& dir_in) {
+    float norm = std::sqrt(dir_in.x * dir_in.x + dir_in.y * dir_in.y + dir_in.z * dir_in.z);
+    if (norm < 1e-6f) {
+        return vis3d::Quat::Identity();
+    }
+    const float dx = dir_in.x / norm;
+    const float dy = dir_in.y / norm;
+    const float dz = dir_in.z / norm;
+    // rotate +Z to dir
+    vis3d::Vec3 z{0.f, 0.f, 1.f};
+    vis3d::Vec3 v{z.y * dz - z.z * dy, z.z * dx - z.x * dz, z.x * dy - z.y * dx};  // cross
+    float dot = z.x * dx + z.y * dy + z.z * dz;
+    float s = std::sqrt((1.f + dot) * 2.f);
+    if (s < 1e-6f) {
+        // Opposite direction: rotate 180 deg about X
+        return vis3d::Quat::FromAxisDeg(1.f, 0.f, 0.f, 180.f);
+    }
+    float invs = 1.f / s;
+    vis3d::Quat q{v.x * invs, v.y * invs, v.z * invs, s * 0.5f};
+    return q.normalized();
+}
+
+
+void PenTrackingMulticamModule::registerFixedResources(
+    vis3d::Color trajectory_color,
+    ArrowConfig arrow_cfg
+)
+{
+    // Register arrow resource (TCP axes)
+    auto axis_shape = [&](const vis3d::Vec3& axis_dir, const vis3d::Color& color, vis3d::ComplexShape& out_shape) -> void {
+        float line_offset = arrow_cfg.line_length_m * 0.5f;
+
+        vis3d::PrimitiveShape line {
+            .type = vis3d::PrimitiveShapeType::CYLINDER,
+            .desc = vis3d::CylinderDesc {
+                .rBot = arrow_cfg.line_radius_m,
+                .rTop = arrow_cfg.line_radius_m,
+                .h = arrow_cfg.line_length_m
+            },
+            .origin = vis3d::Pose {
+                .t = vis3d::Vec3 {
+                    .x = axis_dir.x * line_offset,
+                    .y = axis_dir.y * line_offset,
+                    .z = axis_dir.z * line_offset
+                },
+                .q = alignZToDir(axis_dir)
+            },
+            .color = color
+        };
+
+        float tip_offset = arrow_cfg.line_length_m + (arrow_cfg.tip_length_m * 0.5f);
+
+        vis3d::PrimitiveShape tip {
+            .type = vis3d::PrimitiveShapeType::CYLINDER,
+            .desc = vis3d::CylinderDesc {
+                .rBot = arrow_cfg.tip_radius_m,
+                .rTop = 0.0f,
+                .h = arrow_cfg.tip_length_m
+            },
+            .origin = vis3d::Pose {
+                .t = vis3d::Vec3{ 
+                    .x = axis_dir.x * tip_offset, 
+                    .y = axis_dir.y * tip_offset, 
+                    .z = axis_dir.z * tip_offset
+                },
+                .q = alignZToDir(axis_dir)
+            },
+            .color = color
+        };
+
+        out_shape.parts.push_back(line);
+        out_shape.parts.push_back(tip);
+    };
+
+    vis3d::ComplexShape arrow_shape{};
+    axis_shape(vis3d::Vec3{1.f, 0.f, 0.f}, vis3d::Color{255, 0, 0, 255}, arrow_shape); // X axis - red
+    axis_shape(vis3d::Vec3{0.f, 1.f, 0.f}, vis3d::Color{0, 255, 0, 255}, arrow_shape); // Y axis - green
+    axis_shape(vis3d::Vec3{0.f, 0.f, 1.f}, vis3d::Color{0, 0, 255, 255}, arrow_shape); // Z axis - blue
+
+    arrow_resource_id_ = visualization_helper_->registerResource(arrow_shape);
+
+    trajectory_color_ = trajectory_color;
+}
+
+
+void PenTrackingMulticamModule::registerResources()
+{
     vis3d::Color color = {.r = 0x80, .g = 0x80, .b = 0xC0, .a = 0xFF};
     pen_resource_id_ = visualization_helper_->registerResource(vis3d::ComplexShape {
         .parts = {
@@ -73,25 +184,9 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
         }
     });
 
-    if (!getSubscribeChannelByName(ccrm::calibrated_camera_publish_producer.channel_type_identifier_, subscribe_consumer_id_calibrated_camera_))
-    {
-        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to resolve calibrated camera subscribe channel.");
-        return;
-    }
-
-    if (!getPublishChannelByName(pm::pen_message_raw_publish_producer.channel_type_identifier_, publish_producer_id_pen_raw_))
-    {
-        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to resolve pen raw publish channel.");
-        return;
-    }
-
-    if (!getPublishChannelByName(pm::pen_message_intent_publish_producer.channel_type_identifier_, publish_producer_id_pen_intent_))
-    {
-        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to resolve pen intent publish channel.");
-        return;
-    }
-
-    valid_ = true;
+    registerFixedResources(
+        vis3d::Color{ 0xff, 0x6b, 0xf0, 0xff } // pink
+    );
 }
 
 
@@ -167,10 +262,10 @@ bool PenTrackingMulticamModule::parseCalibrationHeader(message::MessageHeader me
 
         pu::SE3 T_world_cam = pu::SE3::fromQuatTvec(
             cv::Vec4d(
+                camera_pose.qw,
                 camera_pose.qx,
                 camera_pose.qy,
-                camera_pose.qz,
-                camera_pose.qw
+                camera_pose.qz
             ),
             cv::Vec3d(
                 camera_pose.x,
@@ -372,11 +467,11 @@ void PenTrackingMulticamModule::processMessage(
     pu::SE3 T_world_pen_tip = T_world_pen_filtered * T_pen_tip_;
 
     cv::Vec3d t_world_pen_tip;
-    cv::Vec4d q_world_pen_tip;
+    cv::Vec4d q_world_pen_tip; // qw, qx, qy, qz
     T_world_pen_tip.toQuatTvec(q_world_pen_tip, t_world_pen_tip, false);
 
     cv::Vec3d t_world_pen;
-    cv::Vec4d q_world_pen;
+    cv::Vec4d q_world_pen; // qw, qx, qy, qz
     T_world_pen_filtered.toQuatTvec(q_world_pen, t_world_pen, false);
     
 
@@ -393,7 +488,7 @@ void PenTrackingMulticamModule::processMessage(
         visualization_helper_->announce();
         announced_visualization_ = true;
     }
-    penVisualizationUpdate(t_world_pen, q_world_pen);
+    penVisualizationUpdate(t_world_pen, q_world_pen, t_world_pen_tip, q_world_pen_tip);
 }
 
 
@@ -419,18 +514,31 @@ void PenTrackingMulticamModule::penVisualizationRemove()
     {
         visualization_helper_->removeObject(pen_object_id_);
         pen_displayed_ = false;
-        visualization_helper_->sendUpdate();
     }
+    if (arrow_displayed_)
+    {
+        visualization_helper_->removeObject(arrow_object_id_);
+        arrow_displayed_ = false;
+    }
+    visualization_helper_->sendUpdate();
 }
 
 
-void PenTrackingMulticamModule::penVisualizationUpdate(const cv::Vec3d& t_world_pen, const cv::Vec4d& q_world_pen)
+void PenTrackingMulticamModule::penVisualizationUpdate(
+    const cv::Vec3d& t_world_pen, const cv::Vec4d& q_world_pen, 
+    const cv::Vec3d& t_world_arrow, const cv::Vec4d& q_world_arrow
+)
 {
     std::lock_guard<std::mutex> lock(vis3d_mutex_);
 
     vis3d::Pose pen_pose {
         .t = { static_cast<float>(t_world_pen[0]), static_cast<float>(t_world_pen[1]), static_cast<float>(t_world_pen[2]) },
         .q = { static_cast<float>(q_world_pen[1]), static_cast<float>(q_world_pen[2]), static_cast<float>(q_world_pen[3]), static_cast<float>(q_world_pen[0]) }
+    };
+
+    vis3d::Pose arrow_pose {
+        .t = { static_cast<float>(t_world_arrow[0]), static_cast<float>(t_world_arrow[1]), static_cast<float>(t_world_arrow[2]) },
+        .q = { static_cast<float>(q_world_arrow[1]), static_cast<float>(q_world_arrow[2]), static_cast<float>(q_world_arrow[3]), static_cast<float>(q_world_arrow[0]) }
     };
 
     if (!pen_displayed_)
@@ -443,6 +551,18 @@ void PenTrackingMulticamModule::penVisualizationUpdate(const cv::Vec3d& t_world_
     else
     {
         visualization_helper_->updateObject(pen_object_id_, pen_pose);
+    }
+
+    if (!arrow_displayed_)
+    {
+        if (visualization_helper_->addObject(arrow_resource_id_, arrow_pose, arrow_object_id_))
+        {
+            arrow_displayed_ = true;
+        }
+    }
+    else
+    {
+        visualization_helper_->updateObject(arrow_object_id_, arrow_pose);
     }
 
     visualization_helper_->sendUpdate();

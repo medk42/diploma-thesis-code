@@ -104,11 +104,24 @@ namespace aergo::default_modules::pen_tracking_multicam_module
         bool load(aergo::module::ISerializableModule::SaveData data) noexcept override { return true; }
 
     private:
+        struct ArrowConfig
+        {
+            float line_length_m = 0.06f;
+            float line_radius_m = 0.002f;
+            float tip_radius_m = 0.005f;
+            float tip_length_m = 0.01f;
+        };
+
         void onBlePacket(PenDataPacket packet);
         bool parseCalibrationHeader(aergo::module::message::MessageHeader message, uint32_t& out_camera_count); // never makes camerasDataBuffer_ smaller, ensure that you do not read past out_camera_count
         bool parseImageData(aergo::module::message::MessageHeader message, uint32_t expected_camera_count); // never makes cameraImagesBuffer_ smaller, ensure that you do not read past expected_camera_count
+        void registerResources();
+        void registerFixedResources(vis3d::Color trajectory_color = vis3d::Color{ 0xff, 0x6b, 0xf0, 0xFF }, ArrowConfig arrow_cfg = {});
         void penVisualizationRemove();
-        void penVisualizationUpdate(const cv::Vec3d& t_world_pen, const cv::Vec4d& q_world_pen);
+        void penVisualizationUpdate(
+            const cv::Vec3d& t_world_pen, const cv::Vec4d& q_world_pen, 
+            const cv::Vec3d& t_world_arrow, const cv::Vec4d& q_world_arrow
+        );
 
         bool valid_{false};
 
@@ -120,9 +133,16 @@ namespace aergo::default_modules::pen_tracking_multicam_module
 
         std::mutex vis3d_mutex_;
         bool announced_visualization_{ false };
+
         vis3d::ResourceId pen_resource_id_{ 0 };
+        vis3d::ResourceId arrow_resource_id_{ 0 };
+        vis3d::Color trajectory_color_{};
+
         bool pen_displayed_{ false };
         vis3d::ObjectId pen_object_id_{ 0 };
+        bool arrow_displayed_{ false };
+        vis3d::ObjectId arrow_object_id_{ 0 };
+        
         std::unique_ptr<vis3d::VisualizationHelper> visualization_helper_;
 
 
