@@ -31,7 +31,7 @@ static constexpr communication_channel::Consumer web_visualization_module_subscr
         .display_name_ = aergo::module::helpers::camera_messages::camera_image_consumer.display_name_,
         .display_description_ = aergo::module::helpers::camera_messages::camera_image_consumer.display_description_,
         .prioritized_ = false,
-        .message_queue_capacity_ = 1
+        .message_queue_capacity_ = 2
     },
     communication_channel::Consumer {
         .count_ = communication_channel::Consumer::Count::AUTO_ALL,
