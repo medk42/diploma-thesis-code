@@ -112,6 +112,16 @@
             "preLaunchTask": "Project: Build and Install"
         },
         {
+            "name": "core-lldb",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/binaries/core.exe",
+            "args": ["modules", "data"],
+            "cwd": "${workspaceFolder}/binaries",
+            "console": "integratedTerminal",
+            "preLaunchTask": "Project: Build and Install"
+        },
+        {
             "name": "core_test_1",
             "type": "cppvsdbg",
             "request": "launch",
