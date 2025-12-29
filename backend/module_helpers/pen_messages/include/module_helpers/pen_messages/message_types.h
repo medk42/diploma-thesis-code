@@ -65,7 +65,7 @@ namespace aergo::module::helpers::pen_messages
 
         inline static PenMessageIntent PoseIntent(const Pose& p) { return PenMessageIntent(PenIntent::POSE, p); }
         inline static PenMessageIntent SpecialActionIntent() { return PenMessageIntent(PenIntent::SPECIAL_ACTION, {}); }
-        inline static PenMessageIntent TrajectoryIntent(std::span<const Pose> poses_span, std::vector<std::byte> out_blob)
+        inline static PenMessageIntent TrajectoryIntent(std::span<const Pose> poses_span, std::vector<std::byte>& out_blob)
         {
             out_blob.clear();
             out_blob.reserve(poses_span.size() * sizeof(Pose) + sizeof(uint64_t));
