@@ -28,7 +28,8 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
         [this](PenDataPacket packet) { onBlePacket(packet); }
     ),
     T_pen_tip_(defaults::T_pen_tip()),
-    poseFilter_(PoseOneEuroFilter::Params{})
+    poseFilter_(PoseOneEuroFilter::Params{}),
+    pen_intent_detector_(this)
 {
     // should be 3, but preallocate more (10) for safety (reflections etc)
     poseEstimationResult_ = MulticamPoseEstimator::DetectionResult::preallocate(2, 10);
@@ -60,7 +61,34 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
         return;
     }
 
+    // Check pen intent detector validity (constructed in initializer list)
+    if (!pen_intent_detector_.valid())
+    {
+        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to initialize PenIntentDetector.");
+        return;
+    }
+
+    if (!ble_reader_.start())
+    {
+        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to start BLE reader.");
+        return;
+    }
+
     valid_ = true;
+}
+
+
+bool PenTrackingMulticamModule::threadStop(uint32_t timeout_ms) noexcept
+{
+    if (!valid_)
+    {
+        return true;
+    }
+    if (!ble_reader_.stop())
+    {
+        log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to stop BLE reader.");
+    }
+    return true;
 }
 
 
@@ -226,7 +254,16 @@ void PenTrackingMulticamModule::onBlePacket(PenDataPacket packet)
         return;
     }
 
-    pen_button_state_.update(packet.isPrimaryButtonPressed(), packet.isSecondaryButtonPressed());
+    bool primary_down = packet.isPrimaryButtonPressed();
+    bool secondary_down = packet.isSecondaryButtonPressed();
+    
+    pen_button_state_.update(primary_down, secondary_down);
+    
+    // Update intent detector with button state
+    if (pen_intent_detector_.valid())
+    {
+        pen_intent_detector_.updateButtonState(primary_down, secondary_down);
+    }
 }
 
 
@@ -483,6 +520,12 @@ void PenTrackingMulticamModule::processMessage(
     pm::PenMessageRaw pen_raw_message(toPenPose(t_world_pen_tip, q_world_pen_tip), button_state.primary_down, button_state.secondary_down);
     sendMessage(publish_producer_id_pen_raw_, message::MessageHeader::Message(&pen_raw_message));
 
+    // Update intent detector with pen pose
+    if (pen_intent_detector_.valid())
+    {
+        pm::Pose pen_tip_pose = toPenPose(t_world_pen_tip, q_world_pen_tip);
+        pen_intent_detector_.updatePenPose(pen_tip_pose);
+    }
 
     if (!announced_visualization_)
     {
@@ -522,7 +565,10 @@ void PenTrackingMulticamModule::penVisualizationRemove()
         visualization_helper_->removeObject(arrow_object_id_);
         arrow_displayed_ = false;
     }
-    visualization_helper_->sendUpdate();
+    if (pen_displayed_ || arrow_displayed_)
+    {
+        visualization_helper_->sendUpdate();
+    }
 }
 
 

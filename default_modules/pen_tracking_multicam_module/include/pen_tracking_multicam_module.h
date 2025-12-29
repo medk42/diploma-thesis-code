@@ -94,7 +94,7 @@ namespace aergo::default_modules::pen_tracking_multicam_module
 
         // all processing happens in processMessage
         bool threadStart(uint32_t timeout_ms) noexcept override { return true; }
-        bool threadStop(uint32_t timeout_ms) noexcept override { return true; }
+        bool threadStop(uint32_t timeout_ms) noexcept override;
 
         // State-less module, no saving/loading needed
         aergo::module::ISerializableModule::SaveData save() noexcept override
@@ -168,5 +168,6 @@ namespace aergo::default_modules::pen_tracking_multicam_module
 
 
         PenButtonState pen_button_state_; // protected by its own mutex
+        PenIntentDetector pen_intent_detector_;
     };
 }
