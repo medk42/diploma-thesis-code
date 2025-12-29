@@ -28,8 +28,7 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
         [this](PenDataPacket packet) { onBlePacket(packet); }
     ),
     T_pen_tip_(defaults::T_pen_tip()),
-    poseFilter_(PoseOneEuroFilter::Params{}),
-    pen_intent_detector_(this)
+    poseFilter_(PoseOneEuroFilter::Params{})
 {
     // should be 3, but preallocate more (10) for safety (reflections etc)
     poseEstimationResult_ = MulticamPoseEstimator::DetectionResult::preallocate(2, 10);
@@ -61,8 +60,16 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
         return;
     }
 
-    // Check pen intent detector validity (constructed in initializer list)
-    if (!pen_intent_detector_.valid())
+    // Initialize pen intent detector with visualization helper and arrow resource
+    pen_intent_detector_ = std::make_unique<PenIntentDetector>(
+        this,
+        visualization_helper_.get(),
+        arrow_resource_id_,
+        5.0,  // intent_visualization_timeout_s
+        250   // trajectory_time_threshold_ms
+    );
+    
+    if (!pen_intent_detector_ || !pen_intent_detector_->valid())
     {
         log(logging::LogType::ERROR, "PenTrackingMulticamModule: failed to initialize PenIntentDetector.");
         return;
@@ -260,9 +267,9 @@ void PenTrackingMulticamModule::onBlePacket(PenDataPacket packet)
     pen_button_state_.update(primary_down, secondary_down);
     
     // Update intent detector with button state
-    if (pen_intent_detector_.valid())
+    if (pen_intent_detector_ && pen_intent_detector_->valid())
     {
-        pen_intent_detector_.updateButtonState(primary_down, secondary_down);
+        pen_intent_detector_->updateButtonState(primary_down, secondary_down);
     }
 }
 
@@ -521,10 +528,10 @@ void PenTrackingMulticamModule::processMessage(
     sendMessage(publish_producer_id_pen_raw_, message::MessageHeader::Message(&pen_raw_message));
 
     // Update intent detector with pen pose
-    if (pen_intent_detector_.valid())
+    if (pen_intent_detector_ && pen_intent_detector_->valid())
     {
         pm::Pose pen_tip_pose = toPenPose(t_world_pen_tip, q_world_pen_tip);
-        pen_intent_detector_.updatePenPose(pen_tip_pose);
+        pen_intent_detector_->updatePenPose(pen_tip_pose);
     }
 
     if (!announced_visualization_)
