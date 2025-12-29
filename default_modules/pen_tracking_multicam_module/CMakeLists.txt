@@ -22,6 +22,7 @@ target_link_libraries(${MODULE_NAME} PRIVATE
     helpers___visualization_3d_interface
     helpers___pen_messages
     helpers___pose_utils
+    helpers___mixed_buffer_allocator
     
 
     opencv_core

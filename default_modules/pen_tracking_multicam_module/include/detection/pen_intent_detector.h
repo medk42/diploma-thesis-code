@@ -2,9 +2,10 @@
 
 #include "module_common/base_module.h"
 #include "module_helpers/pen_messages/message_types.h"
+#include "module_helpers/mixed_buffer_allocator/mixed_buffered_allocator.h"
 
 #include <cstdint>
-#include <vector>
+#include <memory>
 
 namespace aergo::default_modules::pen_tracking_multicam_module
 {
@@ -27,6 +28,9 @@ namespace aergo::default_modules::pen_tracking_multicam_module
         bool valid_;                          // True if output channel is valid
         uint32_t publish_channel_id_;         // Channel ID for publishing pen_message_intent
         
+        // Mixed buffer allocator for trajectory blob data
+        std::unique_ptr<aergo::module::helpers::mixed_buffer_allocator::MixedBufferedAllocator> trajectory_allocator_;
+        
         // Button state tracking
         bool primary_down_;
         bool secondary_down_;
@@ -36,6 +40,6 @@ namespace aergo::default_modules::pen_tracking_multicam_module
         // Trajectory tracking
         int64_t primary_press_time_us_;       // Timestamp when primary button was pressed
         std::vector<pm::Pose> trajectory_poses_;  // Buffer for trajectory poses (grows dynamically)
-        std::vector<std::byte> trajectory_blob_data_;  // Buffer for serialized trajectory data (cleared but not reserved, SharedDataBlob not allocated yet)
+        std::vector<std::byte> trajectory_blob_data_;  // Buffer for serialized trajectory data
     };
 };
