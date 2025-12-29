@@ -27,7 +27,8 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
         defaults::CHARACTERISTIC_UUID, 
         [this](PenDataPacket packet) { onBlePacket(packet); }
     ),
-    T_pen_tip_(defaults::T_pen_tip())
+    T_pen_tip_(defaults::T_pen_tip()),
+    poseFilter_(PoseOneEuroFilter::Params{})
 {
     // should be 3, but preallocate more (10) for safety (reflections etc)
     poseEstimationResult_ = MulticamPoseEstimator::DetectionResult::preallocate(2, 10);
@@ -87,8 +88,8 @@ vis3d::Quat alignZToDir(const vis3d::Vec3& dir_in) {
 
 
 void PenTrackingMulticamModule::registerFixedResources(
-    vis3d::Color trajectory_color,
-    ArrowConfig arrow_cfg
+    ArrowConfig arrow_cfg,
+    vis3d::Color trajectory_color
 )
 {
     // Register arrow resource (TCP axes)
@@ -185,6 +186,7 @@ void PenTrackingMulticamModule::registerResources()
     });
 
     registerFixedResources(
+        ArrowConfig{},
         vis3d::Color{ 0xff, 0x6b, 0xf0, 0xff } // pink
     );
 }

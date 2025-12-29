@@ -36,7 +36,7 @@ namespace aergo::default_modules::pen_tracking_multicam_module
         };
 
     public:
-        explicit PoseOneEuroFilter(const Params& p = Params{});
+        explicit PoseOneEuroFilter(const Params& p);
 
         void reset();                 // hard reset (forgets internal state; next update() re-inits)
         bool isInitialized() const;
