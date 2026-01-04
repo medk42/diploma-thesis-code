@@ -92,6 +92,15 @@ namespace aergo::module::helpers::serialization_helper
                 return const_cast<std::byte*>(current);
             }
 
+            /// @brief Get the number of remaining bytes in the buffer.
+            size_t remaining() const { return size_ - pos_; }
+
+            /// @brief Get the total size of the buffer.
+            size_t size() const { return size_; }
+
+            /// @brief Get the current read position in the buffer.
+            size_t pos() const { return pos_; }
+
         private:
             const std::byte* data_{ nullptr };
             size_t size_{ 0 };
