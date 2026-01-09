@@ -263,12 +263,6 @@ namespace aergo::module::helpers::scene_detection_helper
         }
     };
 
-    struct Message
-    {
-        uint64_t version{SCENE_DETECTION_MESSAGE_VERSION};  // Version of the message format
-        uint32_t count{0};         // Number of detected objects
-    };
-
     // Request: message contains ReqType as data (1 byte), no blobs
     // Response: message contains ReqType as data (1 byte, copied from request), 1 blob with data
     //    ReqType::READ_REGISTRY: blob contains array of RegisteredBox (count + RegisteredBox[])
