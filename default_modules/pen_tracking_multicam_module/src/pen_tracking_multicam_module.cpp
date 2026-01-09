@@ -562,17 +562,20 @@ aergo::module::ResponseData PenTrackingMulticamModule::processRequest(
 void PenTrackingMulticamModule::penVisualizationRemove()
 {
     std::lock_guard<std::mutex> lock(vis3d_mutex_);
+    bool send_update = false;
     if (pen_displayed_)
     {
         visualization_helper_->removeObject(pen_object_id_);
         pen_displayed_ = false;
+        send_update = true;
     }
     if (arrow_displayed_)
     {
         visualization_helper_->removeObject(arrow_object_id_);
         arrow_displayed_ = false;
+        send_update = true;
     }
-    if (pen_displayed_ || arrow_displayed_)
+    if (send_update)
     {
         visualization_helper_->sendUpdate();
     }
