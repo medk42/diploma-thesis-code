@@ -4,6 +4,7 @@
 #include "webapp/ui/helper/camera_container.h"
 #include "webapp/ui/helper/scene_container.h"
 #include "webapp/ui/helper/program_tree.h"
+#include "webapp/ui/helper/reusable_dialog.h"
 
 
 #include "module_common/base_module.h"
@@ -31,6 +32,17 @@ namespace aergo::default_modules::frontend_module::webapp::ui
     private:
         void programTreeButtonClicked(size_t index);
 
+        void scanSceneRequested();
+        void moveToPositionRequested();
+        void setPositionRequested();
+
+        void showMoveToPositionDialog();
+        void dismissMoveToPositionDialog();
+        void showSetPositionDialog();
+        void dismissSetPositionDialog();
+        void showInfoDialog(std::string title, std::string content);
+        void dismissInfoDialog();
+
         helper::CameraContainer* camera_container_{ nullptr };
         helper::SceneContainer* scene_container_{ nullptr };
         helper::ProgramTree* program_tree_{ nullptr };
@@ -39,5 +51,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui
 
         aergo::module::BaseModule* base_module_{ nullptr };
         std::function<void(std::function<void()>)> with_frontend_state_lock_;
+
+        helper::ReusableDialog* move_to_position_dialog_{ nullptr };
+        helper::ReusableDialog* set_position_dialog_{ nullptr };
+        helper::ReusableDialog* info_dialog_{ nullptr };
     };
 }

@@ -6,8 +6,11 @@ TopBar::TopBar(const std::string& title, std::vector<std::vector<ButtonDescripti
 {
     setStyleClass("top-bar");
 
-    auto title_widget = addWidget(std::make_unique<Wt::WText>(title));
-    title_widget->setStyleClass("top-bar-title");
+    if (!title.empty())
+    {
+        auto title_widget = addWidget(std::make_unique<Wt::WText>(title));
+        title_widget->setStyleClass("top-bar-title");
+    }
 
     auto button_container = addWidget(std::make_unique<Wt::WContainerWidget>());
     button_container->setStyleClass("top-bar-buttons");

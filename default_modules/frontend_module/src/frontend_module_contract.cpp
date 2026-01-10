@@ -7,7 +7,7 @@
 #include "module_helpers/visualization_3d_interface/message_types.h"
 #include "module_helpers/usecase_wrapper/message_types.h"
 #include "module_helpers/camera_messages/messages.h"
-
+#include "module_helpers/scene_detection_helper/message_types.h"
 
 #define MODULE_API_VERSION 2
 
@@ -16,12 +16,20 @@ static_assert(MODULE_API_VERSION == PLUGIN_API_VERSION,
 
     
 using namespace aergo::module;
-
+namespace sdh = aergo::module::helpers::scene_detection_helper;
 
 static constexpr communication_channel::Consumer web_visualization_module_request_consumers[] = {
     aergo::module::helpers::activation_wrapper::message_types::activation_request_consumer,
     aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_request_consumer,
-    aergo::module::helpers::usecase_wrapper::message_types::usecase_request_consumer
+    aergo::module::helpers::usecase_wrapper::message_types::usecase_request_consumer,
+    {
+        .count_ = communication_channel::Consumer::Count::AUTO_ALL,
+        .channel_type_identifier_ = sdh::scene_detection_request_consumer.channel_type_identifier_,
+        .display_name_ = sdh::scene_detection_request_consumer.display_name_,
+        .display_description_ = sdh::scene_detection_request_consumer.display_description_,
+        .prioritized_ = sdh::scene_detection_request_consumer.prioritized_,
+        .message_queue_capacity_ = sdh::scene_detection_request_consumer.message_queue_capacity_
+    }
 };
 
 static constexpr communication_channel::Consumer web_visualization_module_subscribe_consumers[] = {
