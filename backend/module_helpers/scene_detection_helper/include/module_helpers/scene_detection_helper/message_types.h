@@ -270,7 +270,7 @@ namespace aergo::module::helpers::scene_detection_helper
 
     constexpr aergo::module::communication_channel::Consumer scene_detection_request_consumer = {
         .count_ = aergo::module::communication_channel::Consumer::Count::SINGLE,
-        .channel_type_identifier_ = "scene_detection_req/v1:struct{req_type:uint8}",
+        .channel_type_identifier_ = "scene_detection_req/v1:struct{req_type:uint8};scene_detection_resp/v1:struct{req_type:uint8}+blob{count+data[]}",
         .display_name_ = "Scene Detection Request",
         .display_description_ = "Request channel for scene detection messages (read registry or perform scene detection).",
         .prioritized_ = false,
@@ -278,7 +278,7 @@ namespace aergo::module::helpers::scene_detection_helper
     };
 
     constexpr aergo::module::communication_channel::Producer scene_detection_response_producer = {
-        .channel_type_identifier_ = "scene_detection_resp/v1:struct{req_type:uint8}+blob{count+data[]}",
+        .channel_type_identifier_ = scene_detection_request_consumer.channel_type_identifier_,
         .display_name_ = "Scene Detection Response",
         .display_description_ = "Response channel for scene detection requests (registry list or detected objects list).",
         .prioritized_ = false,

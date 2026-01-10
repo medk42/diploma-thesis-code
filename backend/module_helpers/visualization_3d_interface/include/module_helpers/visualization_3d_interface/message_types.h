@@ -33,7 +33,7 @@ namespace aergo::module::helpers::visualization_3d_interface
 
     constexpr aergo::module::communication_channel::Consumer visualization_3d_interface_request_consumer = {
         .count_ = aergo::module::communication_channel::Consumer::Count::AUTO_ALL,
-        .channel_type_identifier_ = "visualization_3d_interface_req/v1:struct{req_type:uint8}",
+        .channel_type_identifier_ = "visualization_3d_interface_req/v1:struct{req_type:uint8};visualization_3d_interface_resp/v1:struct{req_type:uint8}+blob{[registrations,]objects,trajectories}",
         .display_name_ = "3D Visualization Interface Request",
         .display_description_ = "Request channel for 3D visualization interface messages (request full scene data, optionally with registrations).",
         .prioritized_ = true,
@@ -41,7 +41,7 @@ namespace aergo::module::helpers::visualization_3d_interface
     };
 
     constexpr aergo::module::communication_channel::Producer visualization_3d_interface_response_producer = {
-        .channel_type_identifier_ = "visualization_3d_interface_resp/v1:struct{req_type:uint8}+blob{[registrations,]objects,trajectories}",
+        .channel_type_identifier_ = visualization_3d_interface_request_consumer.channel_type_identifier_,
         .display_name_ = "3D Visualization Interface Response",
         .display_description_ = "Response channel for 3D visualization interface requests (full scene data, optionally with registrations).",
         .prioritized_ = true,

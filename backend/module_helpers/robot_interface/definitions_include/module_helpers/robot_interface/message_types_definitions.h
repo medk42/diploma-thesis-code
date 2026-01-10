@@ -14,7 +14,7 @@ namespace aergo::module::helpers::robot_interface
     };
 
     constexpr aergo::module::communication_channel::Producer robot_interface_response_producer = {
-        .channel_type_identifier_ = "robot_interface_req/v1:struct{req_type:uint8,feature:uint64,action_id:uint64}[+blob{data}];robot_interface_resp/v1:struct{resp_type:uint8,finished:bool,action_id:uint64}[+blob{data}]",
+        .channel_type_identifier_ = robot_interface_request_consumer.channel_type_identifier_,
         .display_name_ = "Robot Control Response",
         .display_description_ = "Response channel for robot control actions.",
         .prioritized_ = true,

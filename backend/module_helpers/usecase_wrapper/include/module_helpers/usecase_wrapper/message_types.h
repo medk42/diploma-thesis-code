@@ -82,7 +82,7 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
 
     constexpr aergo::module::communication_channel::Consumer usecase_request_consumer = {
         .count_ = aergo::module::communication_channel::Consumer::Count::AUTO_ALL,
-        .channel_type_identifier_ = "helpers__usecase_wrapper__req/v1:struct{enum:uint8_t,uint64_t,uint32_t}[+blob{filled_parameters|command_data}]",
+        .channel_type_identifier_ = "helpers__usecase_wrapper__req/v1:struct{enum:uint8_t,uint64_t,uint32_t}[+blob{filled_parameters|command_data}];helpers__usecase_wrapper__resp/v1:struct{enum:uint8_t,uint64_t,enum:uint8_t}[+blob{command_parameters|visualization_data|command_data}]",
         .display_name_ = "Registered Usecases",
         .display_description_ = "Request channel for usecase wrapper messages to control usecase commands.",
         .prioritized_ = true,
@@ -90,7 +90,7 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
     };
 
     constexpr aergo::module::communication_channel::Producer usecase_response_producer = {
-        .channel_type_identifier_ = "helpers__usecase_wrapper__resp/v1:struct{enum:uint8_t,uint64_t,enum:uint8_t}[+blob{command_parameters|visualization_data|command_data}]",
+        .channel_type_identifier_ = usecase_request_consumer.channel_type_identifier_,
         .display_name_ = "Registered Usecase Response",
         .display_description_ = "Response channel for usecase wrapper messages to control usecase commands.",
         .prioritized_ = true,

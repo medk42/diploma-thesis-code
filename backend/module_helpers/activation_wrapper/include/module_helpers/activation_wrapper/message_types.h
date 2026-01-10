@@ -85,7 +85,7 @@ namespace aergo::module::helpers::activation_wrapper::message_types
 
     constexpr aergo::module::communication_channel::Consumer activation_request_consumer = {
         .count_ = aergo::module::communication_channel::Consumer::Count::AUTO_ALL,
-        .channel_type_identifier_ = "helpers__activation_wrapper__req/v1:struct{enum,enum,size_t,size_t,uint64_t}",
+        .channel_type_identifier_ = "helpers__activation_wrapper__req/v1:struct{enum,enum,size_t,size_t,uint64_t};helpers__activation_wrapper__resp/v1:struct{enum,enum,struct{enum,uint32_t,double,uint32_t},bool,size_t}",
         .display_name_ = "Activation Wrapper Request",
         .display_description_ = "Request channel for activation wrapper messages to control module activation and parameters.",
         .prioritized_ = true,
@@ -93,7 +93,7 @@ namespace aergo::module::helpers::activation_wrapper::message_types
     };
 
     constexpr aergo::module::communication_channel::Producer activation_response_producer = {
-        .channel_type_identifier_ = "helpers__activation_wrapper__resp/v1:struct{enum,enum,struct{enum,uint32_t,double,uint32_t},bool,size_t}",
+        .channel_type_identifier_ = activation_request_consumer.channel_type_identifier_,
         .display_name_ = "Activation Wrapper Response",
         .display_description_ = "Response channel for activation wrapper messages to control module activation and parameters. Indicates that module implements activation wrapper and can be activated/deactivated.",
         .prioritized_ = true,
