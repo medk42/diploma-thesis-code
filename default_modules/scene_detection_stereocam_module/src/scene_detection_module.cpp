@@ -50,6 +50,15 @@ SceneDetectionStereocamModule::SceneDetectionStereocamModule(
         return;
     }
 
+    visualization_helper_ = std::make_unique<vis3d::VisualizationHelper>(this);
+    if (!visualization_helper_->valid())
+    {
+        log(logging::LogType::ERROR, "SceneDetectionStereocamModule: failed to initialize VisualizationHelper.");
+        return;
+    }
+    response_producer_id_visualization_ = visualization_helper_->getResponseProducerChannel();
+    registerBoxResources();
+
     if (!getSubscribeChannelByName(ccrm::calibrated_camera_publish_producer.channel_type_identifier_, subscribe_consumer_id_calibrated_camera_))
     {
         log(logging::LogType::ERROR, "SceneDetectionStereocamModule: failed to resolve calibrated camera subscribe channel.");
@@ -87,6 +96,10 @@ IModule::IngressDecision SceneDetectionStereocamModule::onIngress(
     if (kind == ProcessingType::REQUEST && local_channel_id == response_producer_id_scene_detection_)
     {
         return IngressDecision::ACCEPT; // accept all scene detection requests
+    }
+    if (kind == ProcessingType::REQUEST && local_channel_id == response_producer_id_visualization_)
+    {
+        return IngressDecision::ACCEPT; // accept all visualization requests for visualization_helper_
     }
     return IngressDecision::DROP; // drop all other messages
 }
@@ -266,6 +279,12 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
     aergo::module::ChannelIdentifier source_channel,
     aergo::module::message::MessageHeader message) noexcept
 {
+    if (response_producer_id == response_producer_id_visualization_)
+    {
+        std::lock_guard<std::mutex> lock(vis3d_mutex_);
+        return visualization_helper_->processVisualizationRequest(message);
+    }
+
     if (response_producer_id != response_producer_id_scene_detection_)
     {
         log(logging::LogType::WARNING, "SceneDetectionStereocamModule: received request on unexpected response producer.");
@@ -357,9 +376,91 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
     log_msg = "SceneDetectionStereocamModule: detected " + std::to_string(detected_boxes_.size()) + "/" + std::to_string(match_result_.matchedMarkers.size()) + " boxes:\n" + log_msg;
     log(logging::LogType::INFO, log_msg);
 
+    updateBoxVisualization();
+
     blob_buffer_.clear();
     sdh::Response response = sdh::Response::sceneResponse(detected_boxes_, blob_buffer_);
     return ResponseData::createResponse(response, std::span<std::byte>(blob_buffer_), mixed_buffered_allocator_.get());
+}
+
+
+void SceneDetectionStereocamModule::registerBoxResources()
+{
+    for (const auto& box : registered_boxes_)
+    {
+        vis3d::Color color = {.r = 0x80, .g = 0x80, .b = 0xC0, .a = 0xFF};
+        vis3d::ResourceId resource_id = visualization_helper_->registerResource(vis3d::ComplexShape {
+            .parts = {
+                vis3d::PrimitiveShape {
+                    .type = vis3d::PrimitiveShapeType::BOX,
+                    .desc = vis3d::BoxDesc {
+                        .sx = static_cast<float>(box.size_x),
+                        .sy = static_cast<float>(box.size_y),
+                        .sz = static_cast<float>(box.size_z)
+                    },
+                    .origin = vis3d::Pose(),
+                    .color = color
+                }
+            }
+        });
+        box_resource_ids_[box.id] = resource_id;
+    }
+}
+
+
+void SceneDetectionStereocamModule::updateBoxVisualization()
+{
+    if (!announced_visualization_)
+    {
+        std::lock_guard<std::mutex> lock(vis3d_mutex_);
+        visualization_helper_->announce();
+        announced_visualization_ = true;
+    }
+
+    std::lock_guard<std::mutex> lock(vis3d_mutex_);
+
+    // Remove all existing boxes
+    for (const auto& box : box_object_ids_)
+    {
+        if (!visualization_helper_->removeObject(box))
+        {
+            log(logging::LogType::ERROR, "SceneDetectionStereocamModule: failed to remove box object from visualization helper.");
+        }
+    }
+    box_object_ids_.clear();
+
+    // Add or update detected boxes
+    for (size_t i = 0; i < detected_boxes_.size(); ++i)
+    {
+        const auto& box = detected_boxes_[i];
+
+        vis3d::ResourceId resource_id = box_resource_ids_[box.id];
+        vis3d::Pose box_pose {
+            .t = { 
+                .x = static_cast<float>(box.pose.x), 
+                .y = static_cast<float>(box.pose.y), 
+                .z = static_cast<float>(box.pose.z) 
+            },
+            .q = { 
+                .x = static_cast<float>(box.pose.qx), 
+                .y = static_cast<float>(box.pose.qy), 
+                .z = static_cast<float>(box.pose.qz), 
+                .w = static_cast<float>(box.pose.qw)
+            }
+        };
+
+        vis3d::ObjectId box_object_id;
+        if (!visualization_helper_->addObject(resource_id, box_pose, box_object_id))
+        {
+            log(logging::LogType::ERROR, "SceneDetectionStereocamModule: failed to add box object to visualization helper.");
+        }
+        else
+        {
+            box_object_ids_.push_back(box_object_id);
+        }
+    }
+
+    visualization_helper_->sendUpdate();
 }
 
 

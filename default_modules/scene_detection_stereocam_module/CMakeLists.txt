@@ -21,6 +21,7 @@ target_link_libraries(${MODULE_NAME} PRIVATE
     helpers___scene_detection_helper
     helpers___serialization_helper
     helpers___mixed_buffer_allocator
+    helpers___visualization_3d_interface
     opencv_core
     opencv_calib3d
     opencv_aruco

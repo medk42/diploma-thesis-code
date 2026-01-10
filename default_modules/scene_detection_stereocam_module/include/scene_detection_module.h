@@ -3,6 +3,7 @@
 #include "module_common/base_module.h"
 #include "module_helpers/scene_detection_helper/message_types.h"
 #include "module_helpers/mixed_buffer_allocator/mixed_buffered_allocator.h"
+#include "module_helpers/visualization_3d_interface/visualization_helper.h"
 
 #include "detection/scene_marker_detector.h"
 #include "detection/stereo_marker_matcher.h"
@@ -20,6 +21,8 @@
 
 namespace aergo::default_modules::scene_detection_stereocam_module
 {
+    namespace vis3d = aergo::module::helpers::visualization_3d_interface;
+
     class SceneDetectionStereocamModule : public aergo::module::BaseModule
     {
     public:
@@ -76,11 +79,14 @@ namespace aergo::default_modules::scene_detection_stereocam_module
         bool loadRegisteredObjects();
         bool parseCalibrationHeader(aergo::module::message::MessageHeader message);
         bool parseImageData(aergo::module::message::MessageHeader message);
+        void registerBoxResources();
+        void updateBoxVisualization();
 
         bool valid_{false};
 
         uint32_t subscribe_consumer_id_calibrated_camera_{0};
         uint32_t response_producer_id_scene_detection_{0};
+        uint32_t response_producer_id_visualization_{0};
 
         std::map<int, SceneMarkerDetector::MarkerData> markers_data_;
         std::vector<aergo::module::helpers::scene_detection_helper::RegisteredBox> registered_boxes_;
@@ -107,6 +113,12 @@ namespace aergo::default_modules::scene_detection_stereocam_module
         std::vector<StereoMarkerOptimizer::Result> optimizer_results_;
 
         std::vector<aergo::module::helpers::scene_detection_helper::DetectedBox> detected_boxes_;
+
+        std::mutex vis3d_mutex_;
+        bool announced_visualization_{false};
+        std::unique_ptr<vis3d::VisualizationHelper> visualization_helper_;
+        std::map<uint64_t, vis3d::ResourceId> box_resource_ids_;  // box id -> resource id
+        std::vector<vis3d::ObjectId> box_object_ids_;
     };
 }
 

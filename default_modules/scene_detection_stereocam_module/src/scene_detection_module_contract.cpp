@@ -5,6 +5,7 @@
 
 #include "module_helpers/calibrated_camera_world_messages/message_types.h"
 #include "module_helpers/scene_detection_helper/message_types.h"
+#include "module_helpers/visualization_3d_interface/message_types.h"
 
 #define MODULE_A_API_VERSION 2
 
@@ -19,15 +20,20 @@ static constexpr communication_channel::Consumer subscribe_consumers[] = {
 };
 
 static constexpr communication_channel::Producer response_producers[] = {
+    aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_response_producer,
     aergo::module::helpers::scene_detection_helper::scene_detection_response_producer
+};
+
+static constexpr communication_channel::Producer publish_producers[] = {
+    aergo::module::helpers::visualization_3d_interface::visualization_3d_interface_publish_producer
 };
 
 static constexpr ModuleInfo module_info = {
     .module_type_identifier_ = "scene_detection_stereocam_module",
     .display_name_ = "Scene Detection (Stereo Camera)",
-    .display_description_ = "Module that performs scene detection using calibrated stereo camera input. Responds to scene detection requests (read registry or perform scene detection).",
-    .publish_producers_ = nullptr,
-    .publish_producer_count_ = 0,
+    .display_description_ = "Module that performs scene detection using calibrated stereo camera input. Responds to scene detection requests (read registry or perform scene detection). It also provides 3D visualization interface for visualizing detected boxes in a 3D scene.",
+    .publish_producers_ = publish_producers,
+    .publish_producer_count_ = std::size(publish_producers),
     .response_producers_ = response_producers,
     .response_producer_count_ = std::size(response_producers),
     .subscribe_consumers_ = subscribe_consumers,
@@ -36,7 +42,7 @@ static constexpr ModuleInfo module_info = {
     .request_consumer_count_ = 0,
     .auto_create_ = false,
     .prioritized_workers_count_ = 1,
-    .regular_workers_count_ = 2
+    .regular_workers_count_ = 3
 };
 
 
