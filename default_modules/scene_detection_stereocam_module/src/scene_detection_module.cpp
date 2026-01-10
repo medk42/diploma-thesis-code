@@ -235,7 +235,7 @@ void SceneDetectionStereocamModule::processMessage(
         return;
     }
 
-    if (!image_requested_.load(std::memory_order_relaxed))
+    if (!image_requested_.load(std::memory_order_acquire))
     {
         return;
     }
@@ -254,7 +254,7 @@ void SceneDetectionStereocamModule::processMessage(
             return;
         }
         
-        image_requested_.store(false, std::memory_order_relaxed);
+        image_requested_.store(false, std::memory_order_release);
     }
 
     image_ready_condition_.notify_all();
@@ -301,13 +301,22 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
     // Request is READ_SCENE, perform scene detection
 
     std::unique_lock<std::mutex> lock(image_access_mutex_);
-    image_requested_.store(true, std::memory_order_relaxed);
-    image_ready_condition_.wait(lock, [this]() { return !image_requested_.load(std::memory_order_relaxed); });
+
+    if (image_requested_.load(std::memory_order_acquire))
+    {
+        log(logging::LogType::WARNING, "SceneDetectionStereocamModule: previous read scene request is still being processed.");
+        return { .success_ = false };
+    }
+
+    image_requested_.store(true, std::memory_order_release);
+    image_ready_condition_.wait(lock, [this]() { return !image_requested_.load(std::memory_order_acquire); });
 
     marker_detector_->detectMarkers(left_cam_data_, left_cam_image_, detection_results_[0]);
     marker_detector_->detectMarkers(right_cam_data_, right_cam_image_, detection_results_[1]);
 
     stereo_marker_matcher_->matchMarkers(left_cam_data_, right_cam_data_, detection_results_[0], detection_results_[1], match_result_);
+
+    std::string log_msg;
 
     optimizer_results_.clear();
     detected_boxes_.clear();
@@ -337,8 +346,16 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
             box.pose.qy = q_ref_pose[2];
             box.pose.qz = q_ref_pose[3];
             detected_boxes_.push_back(box);
+
+            log_msg += "\tBox " + std::to_string(box.id) + ": [" + std::to_string(box.pose.x * 1000) + ", " + std::to_string(box.pose.y * 1000) + ", " + std::to_string(box.pose.z * 1000) + "] mm, [" + std::to_string(box.pose.qw) + ", " + std::to_string(box.pose.qx) + ", " + std::to_string(box.pose.qy) + ", " + std::to_string(box.pose.qz) + "]\n";
+        }
+        else
+        {
+            log_msg += "\tBox " + std::to_string(match.marker_id) + ": optimization failed.\n";
         }
     }
+    log_msg = "SceneDetectionStereocamModule: detected " + std::to_string(detected_boxes_.size()) + "/" + std::to_string(match_result_.matchedMarkers.size()) + " boxes:\n" + log_msg;
+    log(logging::LogType::INFO, log_msg);
 
     blob_buffer_.clear();
     sdh::Response response = sdh::Response::sceneResponse(detected_boxes_, blob_buffer_);

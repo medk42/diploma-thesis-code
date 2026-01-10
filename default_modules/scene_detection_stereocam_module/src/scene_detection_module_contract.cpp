@@ -36,7 +36,7 @@ static constexpr ModuleInfo module_info = {
     .request_consumer_count_ = 0,
     .auto_create_ = false,
     .prioritized_workers_count_ = 1,
-    .regular_workers_count_ = 1
+    .regular_workers_count_ = 2
 };
 
 
