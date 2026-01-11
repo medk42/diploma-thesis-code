@@ -8,6 +8,11 @@
 
 
 #include "module_common/base_module.h"
+#include "module_helpers/robot_interface/features/robot_control/messages.h"
+
+
+#include <vector>
+#include <mutex>
 
 
 #include <Wt/WContainerWidget.h>
@@ -16,10 +21,20 @@
 
 namespace aergo::default_modules::frontend_module::webapp::ui
 {
+    namespace ri = aergo::module::helpers::robot_interface;
+    namespace rc = ri::robot_control;
+    struct MainVisualizationState
+    {
+        std::mutex main_visualization_state_mutex_;
+        bool robot_status_message_valid_{ false };
+        rc::status_messages::deserialization::StatusMessage robot_status_message_{};
+    };
+
+
     class MainVisualizationUi : public Wt::WContainerWidget
     {
     public:
-        MainVisualizationUi(aergo::module::BaseModule* base_module, helper::ProgramTreeState& program_state_unsafe, std::function<void(std::function<void()>)> with_frontend_state_lock);
+        MainVisualizationUi(aergo::module::BaseModule* base_module, helper::ProgramTreeState& program_state_unsafe, MainVisualizationState& main_visualization_state_unsafe, std::function<void(std::function<void()>)> with_frontend_state_lock);
 
         void reloadAvailableUsecases() { program_tree_->reloadAvailableUsecases(); } // reload available usecases in program tree
 
@@ -32,13 +47,19 @@ namespace aergo::default_modules::frontend_module::webapp::ui
     private:
         void programTreeButtonClicked(size_t index);
 
-        void scanSceneRequested();
-        void moveToPositionRequested();
-        void setPositionRequested();
+        void setPositionPressed();
+        void moveToPositionPressed();
 
-        void showMoveToPositionDialog();
+        void scanSceneRequested();
+        void moveToPositionRequested(const std::vector<double>& joint_positions);
+        void setPositionRequested(const std::vector<double>& joint_positions);
+
+        bool loadDefaultJointPositions(std::vector<double>& out_joint_positions, std::string& out_err_msg);
+        void saveDefaultJointPositions(const std::vector<double>& joint_positions);
+
+        void showMoveToPositionDialog(std::vector<double> joint_positions);
         void dismissMoveToPositionDialog();
-        void showSetPositionDialog();
+        void showSetPositionDialog(std::vector<double> joint_positions);
         void dismissSetPositionDialog();
         void showInfoDialog(std::string title, std::string content);
         void dismissInfoDialog();
@@ -50,7 +71,10 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         Wt::Signal<> onSetupClicked_; // setup button clicked
 
         aergo::module::BaseModule* base_module_{ nullptr };
+        MainVisualizationState& main_visualization_state_unsafe_;
         std::function<void(std::function<void()>)> with_frontend_state_lock_;
+
+        aergo::module::BaseModule::AllocatorPtr allocator_;
 
         helper::ReusableDialog* move_to_position_dialog_{ nullptr };
         helper::ReusableDialog* set_position_dialog_{ nullptr };

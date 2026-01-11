@@ -110,6 +110,7 @@ void FrontendApp::setupUi()
     main_visualization_ui_ = main_container_->addWidget(std::make_unique<ui::MainVisualizationUi>(
         base_module_,
         frontend_state_->program_tree_state_,
+        frontend_state_->main_visualization_state_,
         [this](std::function<void()> func) { // function to access frontend_state_ with lock
             std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
             func();

@@ -1,9 +1,12 @@
 #include "frontend_module.h"
 
 
+#include "module_common/module_interface_.h"
 #include "webapp/frontend_app.h"
 
 #include "module_helpers/camera_messages/messages.h"
+#include "module_helpers/robot_interface/message_types_definitions.h"
+#include "module_helpers/robot_interface/message_types.h"
 
 #include <filesystem>
 #include <fstream>
@@ -18,6 +21,8 @@
 using namespace aergo::default_modules::frontend_module;
 using namespace aergo::module;
 namespace cm = aergo::module::helpers::camera_messages;
+namespace ri = aergo::module::helpers::robot_interface;
+namespace rc = ri::robot_control;
 
 
 
@@ -40,6 +45,18 @@ FrontendModule::FrontendModule(const char* data_path, ICore* core, InputChannelM
     if (!getSubscribeChannelByName(cm::camera_image_consumer.channel_type_identifier_, camera_subscribe_channel_id_))
     {
         log(aergo::module::logging::LogType::ERROR, "Failed to find camera image subscribe channel.");
+        return;
+    }
+
+    if (!getSubscribeChannelByName(helpers::robot_interface::robot_interface_status_consumer.channel_type_identifier_, robot_interface_status_subscribe_channel_id_))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to find robot interface status subscribe channel.");
+        return;
+    }
+
+    if (!getRequestChannelByName(helpers::robot_interface::robot_interface_request_consumer.channel_type_identifier_, robot_interface_request_channel_id_))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to find robot interface request channel.");
         return;
     }
 
@@ -103,7 +120,7 @@ IModule::IngressDecision FrontendModule::onIngress(ProcessingType kind, uint32_t
             log(aergo::module::logging::LogType::WARNING, "Message queue full, dropping message on channel " + std::to_string(local_channel_id));
         }
 
-        if (local_channel_id == 0) // accept camera input messages 
+        if (local_channel_id == camera_subscribe_channel_id_) // accept camera input messages 
         {
             if (!frontend_state_.has_camera_input_)
             {
@@ -121,6 +138,10 @@ IModule::IngressDecision FrontendModule::onIngress(ProcessingType kind, uint32_t
             }
         }
         if (local_channel_id == frontend_state_.scene_visualization_handler_->getSceneSubscribeChannelId()) // accept visualization messages
+        {
+            return IngressDecision::ACCEPT; // accept all, messages will be dropped automatically if queue is full
+        }
+        if (local_channel_id == robot_interface_status_subscribe_channel_id_) // accept robot interface status messages
         {
             return IngressDecision::ACCEPT; // accept all, messages will be dropped automatically if queue is full
         }
@@ -273,6 +294,43 @@ void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdent
     {
         std::lock_guard lock(frontend_state_.mutex_);
         frontend_state_.scene_visualization_handler_->processMessage(subscribe_consumer_id, source_channel, message);
+    }
+    else if (subscribe_consumer_id == robot_interface_status_subscribe_channel_id_) // robot interface status messages
+    {
+        ri::StatusMessage status_msg;
+        if (!message.readAs<ri::StatusMessage>(status_msg))
+        {
+            log(logging::LogType::WARNING, "FrontendModule: Failed to deserialize robot status message header.");
+            return;
+        }
+
+        if (status_msg.feature != ri::RobotFeature::ROBOT_CONTROL)
+        {
+            log(logging::LogType::WARNING, "FrontendModule: Received robot status message for unsupported feature.");
+            return;
+        }
+
+        if (message.blob_count_ != 1 || message.blobs_ == nullptr || !message.blobs_[0].valid())
+        {
+            log(logging::LogType::WARNING, "FrontendModule: Robot status message missing data blob.");
+            return;
+        }
+
+        message::SharedDataBlob blob = message.blobs_[0];
+        rc::BufferReader reader(blob.data(), blob.size());
+
+        rc::status_messages::deserialization::StatusMessage status;
+        if (!rc::status_messages::deserialization::deserializeStatusMessage(reader, status))
+        {
+            log(logging::LogType::WARNING, "FrontendModule: Failed to deserialize robot status message.");
+            return;
+        }
+
+        {
+            std::lock_guard lock(frontend_state_.main_visualization_state_.main_visualization_state_mutex_);
+            frontend_state_.main_visualization_state_.robot_status_message_valid_ = true;
+            frontend_state_.main_visualization_state_.robot_status_message_ = status;
+        }
     }
 }
 

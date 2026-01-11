@@ -8,6 +8,7 @@
 #include "module_helpers/usecase_wrapper/message_types.h"
 #include "module_helpers/camera_messages/messages.h"
 #include "module_helpers/scene_detection_helper/message_types.h"
+#include "module_helpers/robot_interface/message_types_definitions.h"
 
 #define MODULE_API_VERSION 2
 
@@ -29,6 +30,14 @@ static constexpr communication_channel::Consumer web_visualization_module_reques
         .display_description_ = sdh::scene_detection_request_consumer.display_description_,
         .prioritized_ = sdh::scene_detection_request_consumer.prioritized_,
         .message_queue_capacity_ = sdh::scene_detection_request_consumer.message_queue_capacity_
+    },
+    {
+        .count_ = communication_channel::Consumer::Count::AUTO_ALL,
+        .channel_type_identifier_ = aergo::module::helpers::robot_interface::robot_interface_request_consumer.channel_type_identifier_,
+        .display_name_ = aergo::module::helpers::robot_interface::robot_interface_request_consumer.display_name_,
+        .display_description_ = aergo::module::helpers::robot_interface::robot_interface_request_consumer.display_description_,
+        .prioritized_ = false,
+        .message_queue_capacity_ = 4
     }
 };
 
@@ -48,6 +57,14 @@ static constexpr communication_channel::Consumer web_visualization_module_subscr
         .display_description_ = "Subscribe to 3D announcements and scene updates from modules supporting 3D visualization.",
         .prioritized_ = true,
         .message_queue_capacity_ = 10
+    },
+    communication_channel::Consumer {
+        .count_ = communication_channel::Consumer::Count::AUTO_ALL,
+        .channel_type_identifier_ = aergo::module::helpers::robot_interface::robot_interface_status_consumer.channel_type_identifier_,
+        .display_name_ = aergo::module::helpers::robot_interface::robot_interface_status_consumer.display_name_,
+        .display_description_ = aergo::module::helpers::robot_interface::robot_interface_status_consumer.display_description_,
+        .prioritized_ = false,
+        .message_queue_capacity_ = 4
     }
 };
 
@@ -65,7 +82,7 @@ static constexpr ModuleInfo module_info = {
     .request_consumer_count_ = std::size(web_visualization_module_request_consumers),
     .auto_create_ = true,
     .prioritized_workers_count_ = 2,
-    .regular_workers_count_ = 1
+    .regular_workers_count_ = 2
 };
 
 

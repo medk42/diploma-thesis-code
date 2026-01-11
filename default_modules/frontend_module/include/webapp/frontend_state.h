@@ -10,6 +10,7 @@
 #include "module_common/base_module.h"
 #include "ui/helper/scene_visualization_handler.h"
 #include "ui/helper/program_tree.h"
+#include "ui/main_visualization_ui.h"
 
 #include <mutex>
 #include <vector>
@@ -143,5 +144,7 @@ namespace aergo::default_modules::frontend_module::webapp
 
         /// @brief State for the program tree (usecase tree). 
         ui::helper::ProgramTreeState program_tree_state_;
+
+        ui::MainVisualizationState main_visualization_state_; // state for the main visualization UI
     };
 }
