@@ -106,6 +106,7 @@ void RobotWrapper::processMessage(uint32_t subscribe_consumer_id, message::Messa
         if (!message.readAs(status_msg))
         {
             base_module_.log(logging::LogType::WARNING, "RobotWrapper: Failed to deserialize robot status message header.");
+            return;
         }
 
         if (status_msg.feature != ri::RobotFeature::ROBOT_CONTROL)
