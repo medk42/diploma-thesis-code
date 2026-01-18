@@ -254,6 +254,16 @@ void FrontendApp::setupCallbacks()
         frontend_state_->current_screen_ = webapp::FrontendScreen::SETUP_MODULES;
         main_container_->setCurrentIndex((int)frontend_state_->current_screen_);
     });
+
+    main_visualization_ui_->onReloadVisualizationClicked().connect([this]() {
+        if (!connected_) return;
+
+        std::lock_guard<std::mutex> lk(frontend_state_->mutex_);
+        if (frontend_state_->scene_visualization_handler_)
+        {
+            frontend_state_->scene_visualization_handler_->reload();
+        }
+    });
 }
 
 

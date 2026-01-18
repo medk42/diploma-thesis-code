@@ -87,6 +87,7 @@ MainVisualizationUi::MainVisualizationUi(
         },
         std::vector<std::vector<helper::ButtonDescription>>{
             std::vector<helper::ButtonDescription> {
+                {"Reload Visualization", helper::ButtonStyle::Secondary, true},
                 {"Scan Scene", helper::ButtonStyle::Secondary, true}
             }
         }
@@ -100,7 +101,11 @@ MainVisualizationUi::MainVisualizationUi(
         {
             setPositionPressed();
         }
-        else if (index == 2) // Scan Scene
+        else if (index == 2) // Reload Visualization
+        {
+            onReloadVisualizationClicked_.emit();
+        }
+        else if (index == 3) // Scan Scene
         {
             scanSceneRequested();
         }

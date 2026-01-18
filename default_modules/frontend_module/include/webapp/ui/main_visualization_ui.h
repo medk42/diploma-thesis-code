@@ -41,6 +41,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         void updateFrame(std::vector<uint8_t>&& jpeg_data) { camera_container_->updateFrame(std::move(jpeg_data)); } // update camera frame
         
         Wt::Signal<>& onSetupClicked() { return onSetupClicked_; } // setup button clicked
+        Wt::Signal<>& onReloadVisualizationClicked() { return onReloadVisualizationClicked_; } // reload visualization button clicked
 
         helper::SceneContainer* getSceneContainer() { return scene_container_; }
 
@@ -69,6 +70,7 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         helper::ProgramTree* program_tree_{ nullptr };
 
         Wt::Signal<> onSetupClicked_; // setup button clicked
+        Wt::Signal<> onReloadVisualizationClicked_; // reload visualization button clicked
 
         aergo::module::BaseModule* base_module_{ nullptr };
         MainVisualizationState& main_visualization_state_unsafe_;
