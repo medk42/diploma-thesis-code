@@ -106,7 +106,7 @@ p_desc::ParameterList advanced_parameters(std::move(std::vector<p_desc::Paramete
         .type_ = p_desc::ParameterType::BOOL,
         .param_name_ = "As Circle",
         .param_desc_ = "If enabled, treat the path as a circle instead of an arc segment defined by the three points.",
-        .default_value_ = "false"
+        .default_value_ = "0"
     },
     {
         .type_ = p_desc::ParameterType::DOUBLE,
