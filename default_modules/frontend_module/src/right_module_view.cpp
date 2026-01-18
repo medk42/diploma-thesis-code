@@ -237,7 +237,6 @@ void RightModuleView::updateParameterValidity()
                 if (!param->hasValue(index))
                 {
                     parameters_valid = false;
-                    return;
                 }
             }
         }
