@@ -1,5 +1,6 @@
 #include "detection/ble_reader.h"
 #include <algorithm>
+#include <iostream>
 
 #define CALLBACK_TIMEOUT_MS 500
 
@@ -265,7 +266,15 @@ void BleReader::backgroundThread()
         }
         else if (millis() > last_callback_ms + CALLBACK_TIMEOUT_MS)
         {
-            peripheral_->disconnect();
+            try
+            {
+                peripheral_->disconnect();
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << "Exception during BLE disconnect: " << e.what() << std::endl;
+            }
+            
             peripheral_ = std::nullopt;
         }
 
