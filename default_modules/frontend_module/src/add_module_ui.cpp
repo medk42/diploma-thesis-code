@@ -338,6 +338,14 @@ void AddModuleUi::updateRunningModules(
                     if (enum_widget)
                     {
                         enum_widget->setOptions(enum_values);
+                        if (enum_values.size() == 1)
+                        {
+                            detail_view->setValue(section_id, inner_param_index, 0, k);
+                        }
+                        else
+                        {
+                            detail_view->resetValue(section_id, inner_param_index, k);
+                        }
                     }
                 }
             }
