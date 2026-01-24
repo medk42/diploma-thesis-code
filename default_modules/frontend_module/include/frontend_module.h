@@ -85,6 +85,7 @@ namespace aergo::default_modules::frontend_module
         uint32_t activation_request_channel_id_{ 0 }; // request channel for activation wrapper requests
         uint32_t robot_interface_request_channel_id_{ 0 }; // request channel for robot interface requests
         uint32_t robot_interface_status_subscribe_channel_id_{ 0 }; // subscribe channel for robot interface status data
+        uint32_t pen_message_intent_subscribe_channel_id_{ 0 }; // subscribe channel for pen message intent data
 
         ServerParameters server_parameters_;
         std::unique_ptr<Wt::WServer> w_server_;

@@ -9,6 +9,7 @@
 #include "module_helpers/camera_messages/messages.h"
 #include "module_helpers/scene_detection_helper/message_types.h"
 #include "module_helpers/robot_interface/message_types_definitions.h"
+#include "module_helpers/pen_messages/message_types.h"
 
 #define MODULE_API_VERSION 2
 
@@ -63,6 +64,14 @@ static constexpr communication_channel::Consumer web_visualization_module_subscr
         .channel_type_identifier_ = aergo::module::helpers::robot_interface::robot_interface_status_consumer.channel_type_identifier_,
         .display_name_ = aergo::module::helpers::robot_interface::robot_interface_status_consumer.display_name_,
         .display_description_ = aergo::module::helpers::robot_interface::robot_interface_status_consumer.display_description_,
+        .prioritized_ = false,
+        .message_queue_capacity_ = 4
+    },
+    communication_channel::Consumer {
+        .count_ = communication_channel::Consumer::Count::AUTO_ALL,
+        .channel_type_identifier_ = aergo::module::helpers::pen_messages::pen_message_intent_subscribe_consumer.channel_type_identifier_,
+        .display_name_ = aergo::module::helpers::pen_messages::pen_message_intent_subscribe_consumer.display_name_,
+        .display_description_ = aergo::module::helpers::pen_messages::pen_message_intent_subscribe_consumer.display_description_,
         .prioritized_ = false,
         .message_queue_capacity_ = 4
     }

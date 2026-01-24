@@ -679,16 +679,107 @@ void ProgramTree::onTimerRefresh()
             closeReadCustomValueDialog();
             program_state_unsafe_.reading_custom_value_ = false;
 
+            bool was_auto_loading = program_state_unsafe_.auto_loading_in_progress_;
+            size_t auto_load_usecase_index = program_state_unsafe_.auto_load_usecase_index_;
+
             if (program_state_unsafe_.read_successful_)
             {
                 // reload parameter values for the affected usecase
                 reloadCommandValues(program_state_unsafe_.read_usecase_index);
+                
+                // if auto-loading, continue to next parameter
+                if (was_auto_loading)
+                {
+                    // advance to next position for auto-loading
+                    // if it was a list parameter, try next list index first, then next parameter
+                    const ut::structs::ExistingCommand& existing_usecase = (*program_state_unsafe_.usecase_tree_)[auto_load_usecase_index];
+                    const auto* parameters = existing_usecase.getParameters(ut::structs::ExistingCommand::ParamType::AUTO);
+                    if (parameters && program_state_unsafe_.auto_load_current_param_index_ < parameters->getParameters().size())
+                    {
+                        const auto& param = parameters->getParameters()[program_state_unsafe_.auto_load_current_param_index_];
+                        if (param.as_list_)
+                        {
+                            // for list parameters, try next list index
+                            program_state_unsafe_.auto_load_current_list_index_++;
+                        }
+                        else
+                        {
+                            // for non-list, move to next parameter
+                            program_state_unsafe_.auto_load_current_param_index_++;
+                            program_state_unsafe_.auto_load_current_list_index_ = 0;
+                        }
+                    }
+                    else
+                    {
+                        // move to next parameter
+                        program_state_unsafe_.auto_load_current_param_index_++;
+                        program_state_unsafe_.auto_load_current_list_index_ = 0;
+                    }
+                    
+                    // continue auto-loading sequence
+                    handleAutoLoading();
+                }
             }
             else if (!program_state_unsafe_.cancel_reading_custom_value_)
             {
-                displayErrorPopup("Failed to read custom parameter value from connected module.");
-                base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onTimerRefresh: Custom parameter value read failed.");
+                // read failed - stop auto-loading if it was active
+                if (was_auto_loading)
+                {
+                    program_state_unsafe_.auto_loading_in_progress_ = false;
+                    displayErrorPopup("Failed to read custom parameter value. Auto-loading stopped.");
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onTimerRefresh: Custom parameter value read failed during auto-loading.");
+                }
+                else
+                {
+                    displayErrorPopup("Failed to read custom parameter value from connected module.");
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::onTimerRefresh: Custom parameter value read failed.");
+                }
             }
+            else
+            {
+                // cancelled - if auto-loading, move to next parameter
+                if (was_auto_loading)
+                {
+                    // advance to next position for auto-loading
+                    const ut::structs::ExistingCommand& existing_usecase = (*program_state_unsafe_.usecase_tree_)[auto_load_usecase_index];
+                    const auto* parameters = existing_usecase.getParameters(ut::structs::ExistingCommand::ParamType::AUTO);
+                    if (parameters && program_state_unsafe_.auto_load_current_param_index_ < parameters->getParameters().size())
+                    {
+                        const auto& param = parameters->getParameters()[program_state_unsafe_.auto_load_current_param_index_];
+                        if (param.as_list_)
+                        {
+                            // for list parameters, try next list index
+                            program_state_unsafe_.auto_load_current_list_index_++;
+                        }
+                        else
+                        {
+                            // for non-list, move to next parameter
+                            program_state_unsafe_.auto_load_current_param_index_++;
+                            program_state_unsafe_.auto_load_current_list_index_ = 0;
+                        }
+                    }
+                    else
+                    {
+                        // move to next parameter
+                        program_state_unsafe_.auto_load_current_param_index_++;
+                        program_state_unsafe_.auto_load_current_list_index_ = 0;
+                    }
+                    
+                    // continue to next parameter
+                    handleAutoLoading();
+                }
+                else
+                {
+                    base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::onTimerRefresh: Custom parameter read cancelled.");
+                }
+            }
+        }
+
+        // check for auto-load trigger
+        if (program_state_unsafe_.auto_load_triggered_)
+        {
+            program_state_unsafe_.auto_load_triggered_ = false;
+            handleAutoLoading();
         }
 
         if (program_state_unsafe_.generating_command_data_json_ && program_state_unsafe_.generate_finished_)
@@ -1488,4 +1579,217 @@ void ProgramTree::pauseProgram()
 void ProgramTree::resumeProgram()
 {
     program_state_unsafe_.usecase_tree_->resume();
+}
+
+
+void ProgramTree::handleAutoLoading()
+{
+    // if already loading, cancel current load and move to next
+    if (program_state_unsafe_.auto_loading_in_progress_ && program_state_unsafe_.reading_custom_value_)
+    {
+        program_state_unsafe_.cancel_reading_custom_value_ = true;
+        // will continue in next timer tick after cancellation
+        return;
+    }
+
+    // get currently selected usecase
+    auto selected_index_opt = existing_usecases_list_->selectedCommandIndex();
+    if (!selected_index_opt)
+    {
+        base_module_->log(aergo::module::logging::LogType::WARNING, "ProgramTree::handleAutoLoading: No usecase selected.");
+        program_state_unsafe_.auto_loading_in_progress_ = false;
+        return;
+    }
+
+    size_t usecase_index = *selected_index_opt;
+    if (usecase_index >= program_state_unsafe_.usecase_tree_->size())
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Selected usecase index out of range.");
+        program_state_unsafe_.auto_loading_in_progress_ = false;
+        return;
+    }
+
+    const ut::structs::ExistingCommand& existing_usecase = (*program_state_unsafe_.usecase_tree_)[usecase_index];
+    const auto* parameters = existing_usecase.getParameters(ut::structs::ExistingCommand::ParamType::AUTO);
+    if (!parameters)
+    {
+        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to get auto parameters.");
+        program_state_unsafe_.auto_loading_in_progress_ = false;
+        return;
+    }
+
+    const auto& param_list = parameters->getParameters();
+    const auto& param_values = existing_usecase.getParameterValues(ut::structs::ExistingCommand::ParamType::AUTO);
+
+    // find next unloaded CUSTOM parameter
+    size_t start_param_index = program_state_unsafe_.auto_loading_in_progress_ ? 
+        program_state_unsafe_.auto_load_current_param_index_ : 0;
+    size_t start_list_index = program_state_unsafe_.auto_loading_in_progress_ ? 
+        program_state_unsafe_.auto_load_current_list_index_ : 0;
+
+    for (size_t param_idx = start_param_index; param_idx < param_list.size(); ++param_idx)
+    {
+        const auto& param = param_list[param_idx];
+        if (param.type_ != p_desc::ParameterType::CUSTOM)
+        {
+            continue;
+        }
+
+        if (param_idx >= param_values.size())
+        {
+            continue;
+        }
+
+        const auto& param_value_list = param_values[param_idx];
+        size_t list_start = (param_idx == start_param_index) ? start_list_index : 0;
+
+        if (param.as_list_)
+        {
+            // for list parameters, check if we can add a new value or if there's an unloaded one
+            size_t current_list_size = param_value_list.size();
+            size_t max_size = param.list_size_max_ == 0 ? SIZE_MAX : param.list_size_max_;
+
+            // check if there's an unloaded value in the list
+            bool found_unloaded = false;
+            for (size_t list_idx = list_start; list_idx < current_list_size; ++list_idx)
+            {
+                if (!param_value_list[list_idx].has_value())
+                {
+                    // found unloaded value, load it
+                    found_unloaded = true;
+                    program_state_unsafe_.auto_loading_in_progress_ = true;
+                    program_state_unsafe_.auto_load_current_param_index_ = param_idx;
+                    program_state_unsafe_.auto_load_current_list_index_ = list_idx;
+                    program_state_unsafe_.auto_load_usecase_index_ = usecase_index;
+                    program_state_unsafe_.cancel_reading_custom_value_ = false;
+
+                    auto program_state_unsafe_ptr = &program_state_unsafe_;
+                    if (program_state_unsafe_.usecase_tree_->readCustomValue(
+                        usecase_index,
+                        param_idx,
+                        list_idx,
+                        program_state_unsafe_.cancel_reading_custom_value_,
+                        [program_state_unsafe_ptr](bool read_success, size_t existing_usecase_index) {
+                            program_state_unsafe_ptr->read_finished_ = true;
+                            program_state_unsafe_ptr->read_successful_ = read_success;
+                            program_state_unsafe_ptr->read_usecase_index = existing_usecase_index;
+                        }
+                    ))
+                    {
+                        program_state_unsafe_.reading_custom_value_ = true;
+                        program_state_unsafe_.read_finished_ = false;
+                        showReadCustomValueDialog();
+                        return;
+                    }
+                    else
+                    {
+                        program_state_unsafe_.auto_loading_in_progress_ = false;
+                        base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to initiate readCustomValue.");
+                        return;
+                    }
+                }
+            }
+
+            // if no unloaded value found and we can add more, add a new one
+            if (!found_unloaded && current_list_size < max_size)
+            {
+                // add a new empty value to the list
+                if (!const_cast<ut::structs::ExistingCommand&>(existing_usecase).addValue(
+                    ut::structs::ExistingCommand::ParamType::AUTO,
+                    param_idx,
+                    std::nullopt))
+                {
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to add new list value.");
+                    program_state_unsafe_.auto_loading_in_progress_ = false;
+                    return;
+                }
+
+                // reload UI to show the new list value
+                reloadCommandValues(usecase_index);
+
+                // get updated parameter values to find the new list index
+                const auto& updated_param_values = existing_usecase.getParameterValues(ut::structs::ExistingCommand::ParamType::AUTO);
+                if (param_idx >= updated_param_values.size())
+                {
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Parameter index out of range after adding list value.");
+                    program_state_unsafe_.auto_loading_in_progress_ = false;
+                    return;
+                }
+                const auto& updated_param_value_list = updated_param_values[param_idx];
+                size_t new_list_idx = updated_param_value_list.size() - 1; // the index of the newly added value
+                program_state_unsafe_.auto_loading_in_progress_ = true;
+                program_state_unsafe_.auto_load_current_param_index_ = param_idx;
+                program_state_unsafe_.auto_load_current_list_index_ = new_list_idx;
+                program_state_unsafe_.auto_load_usecase_index_ = usecase_index;
+                program_state_unsafe_.cancel_reading_custom_value_ = false;
+
+                auto program_state_unsafe_ptr = &program_state_unsafe_;
+                if (program_state_unsafe_.usecase_tree_->readCustomValue(
+                    usecase_index,
+                    param_idx,
+                    new_list_idx,
+                    program_state_unsafe_.cancel_reading_custom_value_,
+                    [program_state_unsafe_ptr](bool read_success, size_t existing_usecase_index) {
+                        program_state_unsafe_ptr->read_finished_ = true;
+                        program_state_unsafe_ptr->read_successful_ = read_success;
+                        program_state_unsafe_ptr->read_usecase_index = existing_usecase_index;
+                    }
+                ))
+                {
+                    program_state_unsafe_.reading_custom_value_ = true;
+                    program_state_unsafe_.read_finished_ = false;
+                    showReadCustomValueDialog();
+                    return;
+                }
+                else
+                {
+                    program_state_unsafe_.auto_loading_in_progress_ = false;
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to initiate readCustomValue for new list value.");
+                    return;
+                }
+            }
+        }
+        else
+        {
+            // non-list parameter - check if it's loaded
+            if (param_value_list.empty() || !param_value_list[0].has_value())
+            {
+                // unloaded, start loading
+                program_state_unsafe_.auto_loading_in_progress_ = true;
+                program_state_unsafe_.auto_load_current_param_index_ = param_idx;
+                program_state_unsafe_.auto_load_current_list_index_ = 0;
+                program_state_unsafe_.auto_load_usecase_index_ = usecase_index;
+                program_state_unsafe_.cancel_reading_custom_value_ = false;
+
+                auto program_state_unsafe_ptr = &program_state_unsafe_;
+                if (program_state_unsafe_.usecase_tree_->readCustomValue(
+                    usecase_index,
+                    param_idx,
+                    0,
+                    program_state_unsafe_.cancel_reading_custom_value_,
+                    [program_state_unsafe_ptr](bool read_success, size_t existing_usecase_index) {
+                        program_state_unsafe_ptr->read_finished_ = true;
+                        program_state_unsafe_ptr->read_successful_ = read_success;
+                        program_state_unsafe_ptr->read_usecase_index = existing_usecase_index;
+                    }
+                ))
+                {
+                    program_state_unsafe_.reading_custom_value_ = true;
+                    program_state_unsafe_.read_finished_ = false;
+                    showReadCustomValueDialog();
+                    return;
+                }
+                else
+                {
+                    program_state_unsafe_.auto_loading_in_progress_ = false;
+                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to initiate readCustomValue.");
+                    return;
+                }
+            }
+        }
+    }
+
+    // no more unloaded parameters found
+    program_state_unsafe_.auto_loading_in_progress_ = false;
+    base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::handleAutoLoading: All CUSTOM parameters are loaded.");
 }

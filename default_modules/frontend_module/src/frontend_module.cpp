@@ -7,6 +7,7 @@
 #include "module_helpers/camera_messages/messages.h"
 #include "module_helpers/robot_interface/message_types_definitions.h"
 #include "module_helpers/robot_interface/message_types.h"
+#include "module_helpers/pen_messages/message_types.h"
 
 #include <filesystem>
 #include <fstream>
@@ -23,6 +24,7 @@ using namespace aergo::module;
 namespace cm = aergo::module::helpers::camera_messages;
 namespace ri = aergo::module::helpers::robot_interface;
 namespace rc = ri::robot_control;
+namespace pm = aergo::module::helpers::pen_messages;
 
 
 
@@ -57,6 +59,12 @@ FrontendModule::FrontendModule(const char* data_path, ICore* core, InputChannelM
     if (!getRequestChannelByName(helpers::robot_interface::robot_interface_request_consumer.channel_type_identifier_, robot_interface_request_channel_id_))
     {
         log(aergo::module::logging::LogType::ERROR, "Failed to find robot interface request channel.");
+        return;
+    }
+
+    if (!getSubscribeChannelByName(helpers::pen_messages::pen_message_intent_subscribe_consumer.channel_type_identifier_, pen_message_intent_subscribe_channel_id_))
+    {
+        log(aergo::module::logging::LogType::ERROR, "Failed to find pen message intent subscribe channel.");
         return;
     }
 
@@ -144,6 +152,10 @@ IModule::IngressDecision FrontendModule::onIngress(ProcessingType kind, uint32_t
         if (local_channel_id == robot_interface_status_subscribe_channel_id_) // accept robot interface status messages
         {
             return IngressDecision::ACCEPT; // accept all, messages will be dropped automatically if queue is full
+        }
+        if (local_channel_id == pen_message_intent_subscribe_channel_id_) // accept pen message intent messages
+        {
+            return IngressDecision::ACCEPT; // accept all, keep only the latest message
         }
 
         return IngressDecision::DROP; // drop all other messages (they are not expected)
@@ -330,6 +342,22 @@ void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdent
             std::lock_guard lock(frontend_state_.main_visualization_state_.main_visualization_state_mutex_);
             frontend_state_.main_visualization_state_.robot_status_message_valid_ = true;
             frontend_state_.main_visualization_state_.robot_status_message_ = status;
+        }
+    }
+    else if (subscribe_consumer_id == pen_message_intent_subscribe_channel_id_) // pen message intent messages
+    {
+        pm::PenMessageIntent intent_msg;
+        if (!message.readAs<pm::PenMessageIntent>(intent_msg))
+        {
+            log(logging::LogType::WARNING, "FrontendModule: Failed to deserialize pen message intent header.");
+            return;
+        }
+
+        if (intent_msg.intent == pm::PenIntent::SPECIAL_ACTION)
+        {
+            std::lock_guard lock(frontend_state_.mutex_);
+            // Trigger auto-loading of next unloaded CUSTOM parameter
+            frontend_state_.program_tree_state_.auto_load_triggered_ = true;
         }
     }
 }

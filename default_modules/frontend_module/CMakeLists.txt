@@ -62,6 +62,7 @@ target_link_libraries(${MODULE_NAME} PRIVATE
     helpers___scene_detection_helper
     helpers___robot_interface
     helpers___robot_wrapper
+    helpers___pen_messages
     helpers___serialization_helper
 )
 target_link_libraries(${MODULE_NAME} PRIVATE Wt::Wt Wt::HTTP libzippp::libzippp opencv_core opencv_imgcodecs)

@@ -53,6 +53,13 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         std::string save_file_path_;
 
         std::unique_ptr<helpers::async_helpers::AsyncTask<std::expected<void, std::optional<std::string>>>> load_program_task_; // async task for loading program from file
+
+        // Auto-loading state for sequential loading of CUSTOM parameters
+        bool auto_load_triggered_ = false; // set to true when SPECIAL_ACTION pen intent is received
+        bool auto_loading_in_progress_ = false; // true when auto-loading is currently active
+        size_t auto_load_current_param_index_ = 0; // current parameter index being loaded
+        size_t auto_load_current_list_index_ = 0; // current list index being loaded
+        size_t auto_load_usecase_index_ = 0; // usecase index for which we're loading
     };
 
     struct ProgramTreeButtonState
@@ -160,6 +167,8 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         void stopProgram();
         void pauseProgram();
         void resumeProgram();
+
+        void handleAutoLoading(); // handle auto-loading of CUSTOM parameters triggered by SPECIAL_ACTION pen intent
 
         const char* AERGO_PROGRAM_EXTENSION = ".paergo";
 
