@@ -99,6 +99,10 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
 
         Wt::Signal<ProgramTreeButtonState>& onButtonStateChanged() { return onButtonStateChanged_; } // emitted when button states change
 
+        Wt::Signal<>& existing_usecase_selection_cleared() { return existing_usecase_selection_cleared_; } // emitted when existing usecase selection is cleared
+        Wt::Signal<size_t>& existing_usecase_selection_changed() { return existing_usecase_selection_changed_; } // emitted when existing usecase selection is changed
+        Wt::Signal<size_t, bool>& existing_usecase_confirmation_changed() { return existing_usecase_confirmation_changed_; } // emitted when existing usecase confirmation is changed
+
     private:
         void setupCallbacks();
         ReusableDialog* showParameterDescriptionPopup(const std::string& title, const std::string& description);
@@ -202,5 +206,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui::helper
         bool all_existing_usecases_valid_{ false };
         size_t last_existing_usecase_count_{ 0 };
         Wt::Signal<ProgramTreeButtonState> onButtonStateChanged_; // emitted when button states change
+
+        Wt::Signal<> existing_usecase_selection_cleared_; // emitted when existing usecase selection is cleared
+        Wt::Signal<size_t> existing_usecase_selection_changed_; // emitted when existing usecase selection is changed
+        Wt::Signal<size_t, bool> existing_usecase_confirmation_changed_; // emitted when existing usecase confirmation is changed
     };
 }

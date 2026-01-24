@@ -18,7 +18,8 @@ std::expected<void, uw::helper::ErrorInfo> DemoUsecase1::createCommandFromParame
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& required_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& advanced_parameter_values,
-    nlohmann::json& out_command_json
+    nlohmann::json& out_command_json,
+    uw::IUsecaseModule::UsecaseVisualization& out_visualization
 )
 {
 

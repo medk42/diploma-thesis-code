@@ -55,7 +55,6 @@ namespace aergo::module::helpers::usecase_wrapper
         aergo::module::ResponseData handleReadCustomParameterStart(uint32_t param_id) noexcept;
         aergo::module::ResponseData handleReadCustomParameterCheck(uint64_t task_id, bool cancel_flag) noexcept;
         aergo::module::ResponseData handleCreateCommand(message::SharedDataBlob& blob) noexcept;
-        aergo::module::ResponseData handleProgramReadVisualization(message::SharedDataBlob& blob) noexcept;
         aergo::module::ResponseData handleProgramStart(message::SharedDataBlob& blob, bool simulated) noexcept;
         aergo::module::ResponseData handleProgramCommand(message_types::ReqType command_type, uint64_t task_id) noexcept;
 

@@ -7,8 +7,7 @@
 // READ_CUSTOM_PARAMETER_START (+ parameter_id) -> SUCCESS (+task_id, parameter read started), FAIL (invalid parameter id or failed to start read)
 // READ_CUSTOM_PARAMETER_CHECK (+ task_id, + cancel flag) -> SUCCESS (+ blob with serialized response & blobs; or without blobs if cancelled), 
 //    IN_PROGRESS (read is in progress), FAIL (failed to allocate memory or invalid response), ID_INVALID (invalid task_id)
-// CREATE_COMMAND (+ blob with filled parameters (3x ParameterValues)) -> SUCCESS (+ blob representing command data), FAIL (failed to allocate memory or invalid parameters, optionally blob with error description)
-// PROGRAM_READ_VISUALIZATION (+ blob with command data) -> SUCCESS (+ blob with visualization data), FAIL (failed to allocate memory or invalid command data)
+// CREATE_COMMAND (+ blob with filled parameters (3x ParameterValues)) -> SUCCESS (+ blob representing command data, + optionally second blob with visualization data if provided), FAIL (failed to allocate memory or invalid parameters, optionally blob with error description)
 // PROGRAM_START_REAL (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command, optionally blob with error description)
 // PROGRAM_START_SIMULATED (+ blob with command data) -> SUCCESS (+ task_id), FAIL (invalid command data or unable to start command, optionally blob with error description)
 // PROGRAM_PAUSE (+ task_id) -> SUCCESS (paused), FAIL (pausing not supported), IN_PROGRESS (pause request was accepted, check status), ID_INVALID (task_id does not exist)
@@ -36,7 +35,6 @@ namespace aergo::module::helpers::usecase_wrapper::message_types
         READ_CUSTOM_PARAMETER_START,  // start a read of a custom parameter value from the modules input (for CUSTOM parameter types)
         READ_CUSTOM_PARAMETER_CHECK,  // check if the custom parameter value is ready, if yes, get the value (allows also cancelling the read)
         CREATE_COMMAND,               // create a command with filled parameters, get command data blob representing the created command
-        PROGRAM_READ_VISUALIZATION,   // create a visualization of the command in its current state, get visualization data blob
         PROGRAM_START_REAL,           // start executing the command in real mode, get command ID
         PROGRAM_START_SIMULATED,      // start executing the command in simulated mode, get command ID
         PROGRAM_PAUSE,                // pause executing the command (if supported)

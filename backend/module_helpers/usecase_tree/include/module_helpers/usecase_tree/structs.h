@@ -5,11 +5,12 @@
 
 #include "module_helpers/parameter_description/parameter_description.h"
 #include "module_common/module_interface_.h"
+#include "module_helpers/usecase_wrapper/usecase_module_interface.h"
 
 namespace aergo::module::helpers::usecase_tree::structs
 {
     namespace p_desc = aergo::module::helpers::parameter_description;
-
+    namespace uw = aergo::module::helpers::usecase_wrapper;
 
     
     class AvailableUsecase
@@ -65,7 +66,8 @@ namespace aergo::module::helpers::usecase_tree::structs
             p_desc::ParameterValueOptListList&& required_parameter_values, 
             p_desc::ParameterValueOptListList&& advanced_parameter_values,
             std::optional<std::string> command_data_json = std::nullopt,
-            bool command_data_json_in_sync = false
+            bool command_data_json_in_sync = false,
+            uw::IUsecaseModule::UsecaseVisualization visualization = uw::IUsecaseModule::UsecaseVisualization { .supports_visualization = false }
         );
 
         ExistingCommand(ExistingCommand&& other, uint64_t new_command_id);
@@ -79,6 +81,7 @@ namespace aergo::module::helpers::usecase_tree::structs
         const bool hasCommandDataJson() const { return has_command_data_json_; }
         const bool isCommandDataJsonInSync() const { return command_data_json_in_sync_; }
         std::optional<p_desc::ParameterValueOpt> getValue(ParamType type, size_t param_index, size_t list_index) const; // returns std::nullopt if value out of range
+        const uw::IUsecaseModule::UsecaseVisualization& getVisualization() const { return visualization_; }
 
         const AvailableUsecase* getUsecaseReference() const // returns pointer to AvailableUsecase if usecase_identifier_ exists in available_usecases_map_, nullptr otherwise
         {
@@ -96,6 +99,10 @@ namespace aergo::module::helpers::usecase_tree::structs
         bool removeValue(ParamType type, size_t param_index, size_t list_index);
 
         void setCommandDataJson(std::string&& json);
+        void setVisualization(uw::IUsecaseModule::UsecaseVisualization&& visualization)
+        {
+            visualization_ = std::move(visualization);
+        }
 
     private:
         p_desc::ParameterValueOptListList& getParameterValues(ParamType type);
@@ -114,5 +121,7 @@ namespace aergo::module::helpers::usecase_tree::structs
         bool command_data_json_in_sync_ = false; // indicates whether command_data_json_ matches the parameter values
         bool has_command_data_json_ = false; // indicates whether command_data_json_ has been generated
         std::string command_data_json_;
+
+        uw::IUsecaseModule::UsecaseVisualization visualization_;
     };
 }

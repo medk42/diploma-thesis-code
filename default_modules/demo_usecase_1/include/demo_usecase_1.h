@@ -38,7 +38,8 @@ namespace aergo::default_modules::demo_usecase_1
             std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values,
             std::vector<std::vector<uw::helper::ParameterTypeValue>>& required_parameter_values,
             std::vector<std::vector<uw::helper::ParameterTypeValue>>& advanced_parameter_values,
-            nlohmann::json& out_command_json
+            nlohmann::json& out_command_json,
+            uw::IUsecaseModule::UsecaseVisualization& out_visualization
         ) override;
 
         virtual std::expected<void, uw::helper::ErrorInfo> validateParameters(

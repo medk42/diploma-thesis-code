@@ -139,7 +139,8 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::createCommandF
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& required_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& advanced_parameter_values,
-    nlohmann::json& out_command_json
+    nlohmann::json& out_command_json,
+    uw::IUsecaseModule::UsecaseVisualization& out_visualization
 )
 {
     if (auto_parameter_values.size() != 1)
@@ -173,8 +174,15 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::createCommandF
         return std::unexpected(uw::helper::ErrorInfo::WithDetails(5, "UsecaseMoveTrajectory: Trajectory must contain at least 2 poses, got " + std::to_string(pose_count)));
     }
 
-    // Read all poses into JSON array
+    // Initialize visualization
+    out_visualization.supports_visualization = true;
+    out_visualization.trajectories.resize(1);
+    out_visualization.trajectories[0].reserve(pose_count);
+
+    // Read all poses into JSON array and visualization in one pass
     json trajectory_array = json::array();
+    bool first_pose_added = false;
+    
     for (size_t i = 0; i < pose_count; ++i)
     {
         pm::Pose pose;
@@ -189,6 +197,7 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::createCommandF
             return std::unexpected(uw::helper::ErrorInfo::WithDetails(6, "UsecaseMoveTrajectory: Failed to read pose " + std::to_string(i) + " from auto parameter value."));
         }
 
+        // Add to JSON array
         json pose_json = json::object();
         pose_json["x"] = pose.x;
         pose_json["y"] = pose.y;
@@ -198,6 +207,32 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::createCommandF
         pose_json["qz"] = pose.qz;
         pose_json["qw"] = pose.qw;
         trajectory_array.push_back(pose_json);
+
+        // Add first pose to poses vector (with orientation)
+        if (!first_pose_added)
+        {
+            out_visualization.poses.push_back({
+                .position = {
+                    .x = pose.x,
+                    .y = pose.y,
+                    .z = pose.z
+                },
+                .orientation = {
+                    .qw = pose.qw,
+                    .qx = pose.qx,
+                    .qy = pose.qy,
+                    .qz = pose.qz
+                }
+            });
+            first_pose_added = true;
+        }
+
+        // Add all points to trajectory (just position)
+        out_visualization.trajectories[0].push_back({
+            .x = pose.x,
+            .y = pose.y,
+            .z = pose.z
+        });
     }
 
     if (advanced_parameter_values.size() != 3)

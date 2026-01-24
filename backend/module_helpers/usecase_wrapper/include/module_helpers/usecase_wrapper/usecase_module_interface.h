@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <vector>
 
 namespace aergo::module::helpers::usecase_wrapper
 {
@@ -33,6 +34,36 @@ namespace aergo::module::helpers::usecase_wrapper
         {
             MESSAGE = 0,
             RESPONSE = 1,
+        };
+
+        struct Vector3
+        {
+            double x, y, z;
+        };
+
+        struct Quaternion
+        {
+            double qw, qx, qy, qz;
+        };
+
+        /// @brief Pose with position and orientation.
+        /// Represents the transformation world <- object (points in object coordinates transformed to world coordinates).
+        struct Pose
+        {
+            Vector3 position;
+            Quaternion orientation;
+        };
+
+        /// @brief Visualization data produced by the usecase.
+        /// This data can be used by the frontend to visualize the results of a confirmed usecase.
+        /// You can visualize poses (dot in 3d space with axes), points (dots in 3d space) and trajectories (lines in 3d space).
+        /// Set supports_visualization_ to true if any data is present or false if your usecase does not support visualization.
+        struct UsecaseVisualization
+        {
+            bool supports_visualization = false; // whether visualization data is supported
+            std::vector<Pose> poses;
+            std::vector<Vector3> points;
+            std::vector<std::vector<Vector3>> trajectories;
         };
 
         virtual ~IUsecaseModule() noexcept = default;
@@ -66,6 +97,7 @@ namespace aergo::module::helpers::usecase_wrapper
         /// @param required_parameter_values parameter values for required_parameters
         /// @param advanced_parameter_values parameter values for advanced_parameters
         /// @param out_command_json output parameter to store created command in JSON format
+        /// @param out_visualization output parameter to store visualization data produced by the usecase (if no visualization is supported, you do not need to use this parameter)
         /// @return {} if command creation was successful, std::unexpected(ErrorInfo) otherwise
         virtual std::expected<void, helper::ErrorInfo> createCommandFromParameters(
             const p_desc::ParameterList& auto_parameters,
@@ -74,7 +106,8 @@ namespace aergo::module::helpers::usecase_wrapper
             std::vector<std::vector<helper::ParameterTypeValue>>& auto_parameter_values,
             std::vector<std::vector<helper::ParameterTypeValue>>& required_parameter_values,
             std::vector<std::vector<helper::ParameterTypeValue>>& advanced_parameter_values,
-            nlohmann::json& out_command_json
+            nlohmann::json& out_command_json,
+            UsecaseVisualization& out_visualization
         ) = 0;
 
         /// @brief Start execution of a command. Command is represented as a string in JSON format.

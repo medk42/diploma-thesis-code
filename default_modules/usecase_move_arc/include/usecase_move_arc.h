@@ -50,7 +50,8 @@ namespace aergo::default_modules::usecase_move_arc
             std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values,
             std::vector<std::vector<uw::helper::ParameterTypeValue>>& required_parameter_values,
             std::vector<std::vector<uw::helper::ParameterTypeValue>>& advanced_parameter_values,
-            nlohmann::json& out_command_json
+            nlohmann::json& out_command_json,
+            uw::IUsecaseModule::UsecaseVisualization& out_visualization
         ) override;
 
     protected:
@@ -68,6 +69,15 @@ namespace aergo::default_modules::usecase_move_arc
         bool readPose(const std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values, size_t index, nlohmann::json& out_pose_json);
         std::expected<void, uw::helper::ErrorInfo> validatePose(const nlohmann::json& command_json, const std::string& pose_key, int error_code_base);
         rc::Pose extractPoseFromJson(const nlohmann::json& pose_json);
+        
+        void calculateArcTrajectory(
+            const rc::Pose& start,
+            const rc::Pose& through,
+            const rc::Pose& end,
+            bool as_circle,
+            double circle_degrees,
+            std::vector<uw::IUsecaseModule::Vector3>& out_trajectory_points
+        );
 
         rc::RobotWrapper robot_wrapper_;
         bool valid_{ false };

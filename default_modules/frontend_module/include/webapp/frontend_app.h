@@ -80,7 +80,7 @@ namespace aergo::default_modules::frontend_module::webapp
 
         FrontendState* frontend_state_;
         Wt::WServer* server_;
-        aergo::module::BaseModule* base_module_;
+        aergo::module::BaseModule * const base_module_;
         aergo::module::ICoreControl* core_; // cached pointer
 
         std::string session_id_;

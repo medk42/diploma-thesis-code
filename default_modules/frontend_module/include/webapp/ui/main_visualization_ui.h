@@ -5,6 +5,7 @@
 #include "webapp/ui/helper/scene_container.h"
 #include "webapp/ui/helper/program_tree.h"
 #include "webapp/ui/helper/reusable_dialog.h"
+#include "webapp/ui/helper/usecase_visualization.h"
 
 
 #include "module_common/base_module.h"
@@ -13,6 +14,8 @@
 
 #include <vector>
 #include <mutex>
+#include <memory>
+#include <optional>
 
 
 #include <Wt/WContainerWidget.h>
@@ -68,6 +71,9 @@ namespace aergo::default_modules::frontend_module::webapp::ui
         helper::CameraContainer* camera_container_{ nullptr };
         helper::SceneContainer* scene_container_{ nullptr };
         helper::ProgramTree* program_tree_{ nullptr };
+        std::unique_ptr<helper::UsecaseVisualization> usecase_visualization_{ nullptr };
+        
+        std::optional<size_t> current_selected_usecase_index_{ std::nullopt };
 
         Wt::Signal<> onSetupClicked_; // setup button clicked
         Wt::Signal<> onReloadVisualizationClicked_; // reload visualization button clicked

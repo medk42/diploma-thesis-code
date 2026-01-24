@@ -257,7 +257,14 @@ void BleReader::backgroundThread()
         }
         else if (!peripheral_->is_connected())
         {
-            peripheral_->connect();
+            try
+            {
+                peripheral_->connect();
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << "Exception during BLE connect: " << e.what() << std::endl;
+            }
             if (!peripheral_->is_connected())
             {
                 peripheral_ = std::nullopt;

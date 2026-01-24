@@ -118,7 +118,8 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveLinear::createCommandFromP
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& required_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& advanced_parameter_values,
-    nlohmann::json& out_command_json
+    nlohmann::json& out_command_json,
+    uw::IUsecaseModule::UsecaseVisualization& out_visualization
 )
 {
     if (auto_parameter_values.size() != 1)
@@ -178,6 +179,25 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveLinear::createCommandFromP
     command_json["target_pose"]["qw"] = pose.qw;
     command_json["speed_mm_s"] = speed;
     command_json["acceleration_mm_s2"] = acceleration;
+
+    out_visualization = uw::IUsecaseModule::UsecaseVisualization{
+        .supports_visualization = true,
+        .poses = {
+            {
+                .position = {
+                    .x = pose.x,
+                    .y = pose.y,
+                    .z = pose.z
+                },
+                .orientation = {
+                    .qw = pose.qw,
+                    .qx = pose.qx,
+                    .qy = pose.qy,
+                    .qz = pose.qz
+                }
+            }
+        }
+    };
 
     out_command_json = command_json;
     return std::expected<void, uw::helper::ErrorInfo>{};

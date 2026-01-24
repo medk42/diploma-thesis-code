@@ -166,7 +166,8 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveArc::createCommandFromPara
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& required_parameter_values,
     std::vector<std::vector<uw::helper::ParameterTypeValue>>& advanced_parameter_values,
-    nlohmann::json& out_command_json
+    nlohmann::json& out_command_json,
+    uw::IUsecaseModule::UsecaseVisualization& out_visualization
 )
 {
     if (auto_parameter_values.size() != 3)
@@ -272,6 +273,45 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveArc::createCommandFromPara
     command_json["as_circle"] = as_circle;
     command_json["circle_degrees_deg"] = circle_degrees;
     command_json["orientation_type"] = orientation_type_index;
+
+    // Build visualization
+    out_visualization.supports_visualization = true;
+    
+    // Extract poses for visualization
+    rc::Pose start_pose = extractPoseFromJson(arc_start_pose);
+    rc::Pose through_pose = extractPoseFromJson(arc_through_pose);
+    rc::Pose end_pose = extractPoseFromJson(arc_end_pose);
+    
+    // Add start pose (with orientation)
+    out_visualization.poses.push_back({
+        .position = {
+            .x = start_pose.position.x,
+            .y = start_pose.position.y,
+            .z = start_pose.position.z
+        },
+        .orientation = {
+            .qw = start_pose.orientation.w,
+            .qx = start_pose.orientation.x,
+            .qy = start_pose.orientation.y,
+            .qz = start_pose.orientation.z
+        }
+    });
+    
+    // Add through and end as points (just positions)
+    out_visualization.points.push_back({
+        .x = through_pose.position.x,
+        .y = through_pose.position.y,
+        .z = through_pose.position.z
+    });
+    out_visualization.points.push_back({
+        .x = end_pose.position.x,
+        .y = end_pose.position.y,
+        .z = end_pose.position.z
+    });
+    
+    // Calculate and add arc trajectory
+    out_visualization.trajectories.resize(1);
+    calculateArcTrajectory(start_pose, through_pose, end_pose, as_circle, circle_degrees, out_visualization.trajectories[0]);
 
     out_command_json = command_json;
     return std::expected<void, uw::helper::ErrorInfo>{};
@@ -446,6 +486,241 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveArc::runProgram(const nloh
     if (!async_res) return async_res;
 
     return std::expected<void, uw::helper::ErrorInfo>{};
+}
+
+
+void UsecaseMoveArc::calculateArcTrajectory(
+    const rc::Pose& start,
+    const rc::Pose& through,
+    const rc::Pose& end,
+    bool as_circle,
+    double circle_degrees,
+    std::vector<uw::IUsecaseModule::Vector3>& out_trajectory_points
+)
+{
+    // Extract positions
+    const double* p1 = &start.position.x;
+    const double* p2 = &through.position.x;
+    const double* p3 = &end.position.x;
+    
+    // Calculate vectors in the plane
+    double v1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]};
+    double v2[3] = {p3[0] - p2[0], p3[1] - p2[1], p3[2] - p2[2]};
+    
+    // Calculate normal to the plane
+    double normal[3] = {
+        v1[1] * v2[2] - v1[2] * v2[1],
+        v1[2] * v2[0] - v1[0] * v2[2],
+        v1[0] * v2[1] - v1[1] * v2[0]
+    };
+    
+    double normal_len = std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+    if (normal_len < 1e-9)
+    {
+        // Points are collinear, return linear interpolation
+        out_trajectory_points.push_back({.x = p1[0], .y = p1[1], .z = p1[2]});
+        out_trajectory_points.push_back({.x = p2[0], .y = p2[1], .z = p2[2]});
+        out_trajectory_points.push_back({.x = p3[0], .y = p3[1], .z = p3[2]});
+        return;
+    }
+    
+    // Normalize normal
+    normal[0] /= normal_len;
+    normal[1] /= normal_len;
+    normal[2] /= normal_len;
+    
+    // Calculate circle center using perpendicular bisectors
+    // Midpoints
+    double m1[3] = {(p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5, (p1[2] + p2[2]) * 0.5};
+    double m2[3] = {(p2[0] + p3[0]) * 0.5, (p2[1] + p3[1]) * 0.5, (p2[2] + p3[2]) * 0.5};
+    
+    // Direction vectors of perpendicular bisectors
+    double d1[3] = {v1[1] * normal[2] - v1[2] * normal[1],
+                    v1[2] * normal[0] - v1[0] * normal[2],
+                    v1[0] * normal[1] - v1[1] * normal[0]};
+    double d2[3] = {v2[1] * normal[2] - v2[2] * normal[1],
+                    v2[2] * normal[0] - v2[0] * normal[2],
+                    v2[0] * normal[1] - v2[1] * normal[0]};
+    
+    // Normalize direction vectors
+    double d1_len = std::sqrt(d1[0] * d1[0] + d1[1] * d1[1] + d1[2] * d1[2]);
+    double d2_len = std::sqrt(d2[0] * d2[0] + d2[1] * d2[1] + d2[2] * d2[2]);
+    
+    if (d1_len < 1e-9 || d2_len < 1e-9)
+    {
+        // Degenerate case
+        out_trajectory_points.push_back({.x = p1[0], .y = p1[1], .z = p1[2]});
+        out_trajectory_points.push_back({.x = p2[0], .y = p2[1], .z = p2[2]});
+        out_trajectory_points.push_back({.x = p3[0], .y = p3[1], .z = p3[2]});
+        return;
+    }
+    
+    d1[0] /= d1_len; d1[1] /= d1_len; d1[2] /= d1_len;
+    d2[0] /= d2_len; d2[1] /= d2_len; d2[2] /= d2_len;
+    
+    // Find intersection of two lines: m1 + t1*d1 = m2 + t2*d2
+    // Solve for t1 and t2
+    double cross_d[3] = {
+        d1[1] * d2[2] - d1[2] * d2[1],
+        d1[2] * d2[0] - d1[0] * d2[2],
+        d1[0] * d2[1] - d1[1] * d2[0]
+    };
+    double cross_d_len = std::sqrt(cross_d[0] * cross_d[0] + cross_d[1] * cross_d[1] + cross_d[2] * cross_d[2]);
+    
+    double center[3];
+    if (cross_d_len < 1e-9)
+    {
+        // Lines are parallel, use average of midpoints projected onto plane
+        double avg[3] = {(m1[0] + m2[0]) * 0.5, (m1[1] + m2[1]) * 0.5, (m1[2] + m2[2]) * 0.5};
+        double dist_to_plane = (avg[0] - p1[0]) * normal[0] + (avg[1] - p1[1]) * normal[1] + (avg[2] - p1[2]) * normal[2];
+        center[0] = avg[0] - dist_to_plane * normal[0];
+        center[1] = avg[1] - dist_to_plane * normal[1];
+        center[2] = avg[2] - dist_to_plane * normal[2];
+    }
+    else
+    {
+        // Find closest point between two skew lines
+        double m_diff[3] = {m2[0] - m1[0], m2[1] - m1[1], m2[2] - m1[2]};
+        double dot_d1_d2 = d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2];
+        double dot_d1_m = d1[0] * m_diff[0] + d1[1] * m_diff[1] + d1[2] * m_diff[2];
+        double dot_d2_m = d2[0] * m_diff[0] + d2[1] * m_diff[1] + d2[2] * m_diff[2];
+        
+        double denom = 1.0 - dot_d1_d2 * dot_d1_d2;
+        if (std::abs(denom) < 1e-9)
+        {
+            // Parallel case
+            double t1 = dot_d1_m;
+            center[0] = m1[0] + t1 * d1[0];
+            center[1] = m1[1] + t1 * d1[1];
+            center[2] = m1[2] + t1 * d1[2];
+        }
+        else
+        {
+            double t1 = (dot_d1_m - dot_d1_d2 * dot_d2_m) / denom;
+            center[0] = m1[0] + t1 * d1[0];
+            center[1] = m1[1] + t1 * d1[1];
+            center[2] = m1[2] + t1 * d1[2];
+        }
+    }
+    
+    // Calculate radius
+    double radius = std::sqrt((p1[0] - center[0]) * (p1[0] - center[0]) +
+                              (p1[1] - center[1]) * (p1[1] - center[1]) +
+                              (p1[2] - center[2]) * (p1[2] - center[2]));
+    
+    // Create coordinate system in the plane
+    double u[3] = {p1[0] - center[0], p1[1] - center[1], p1[2] - center[2]};
+    double u_len = std::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    if (u_len > 1e-9)
+    {
+        u[0] /= u_len; u[1] /= u_len; u[2] /= u_len;
+    }
+    else
+    {
+        u[0] = 1.0; u[1] = 0.0; u[2] = 0.0;
+    }
+    
+    // Create perpendicular vector in plane
+    double w[3] = {
+        normal[1] * u[2] - normal[2] * u[1],
+        normal[2] * u[0] - normal[0] * u[2],
+        normal[0] * u[1] - normal[1] * u[0]
+    };
+    double w_len = std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
+    if (w_len > 1e-9)
+    {
+        w[0] /= w_len; w[1] /= w_len; w[2] /= w_len;
+    }
+    else
+    {
+        w[0] = 0.0; w[1] = 1.0; w[2] = 0.0;
+    }
+    
+    // Calculate angles for each point
+    auto angleInPlane = [&](const double* point) -> double {
+        double vec[3] = {point[0] - center[0], point[1] - center[1], point[2] - center[2]};
+        double vec_len = std::sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]);
+        if (vec_len < 1e-9) return 0.0;
+        vec[0] /= vec_len; vec[1] /= vec_len; vec[2] /= vec_len;
+        
+        double dot_u = vec[0] * u[0] + vec[1] * u[1] + vec[2] * u[2];
+        double dot_w = vec[0] * w[0] + vec[1] * w[1] + vec[2] * w[2];
+        return std::atan2(dot_w, dot_u);
+    };
+    
+    double angle1 = angleInPlane(p1);
+    double angle2 = angleInPlane(p2);
+    double angle3 = angleInPlane(p3);
+    
+    // Determine arc range
+    double start_angle, end_angle, total_angle;
+    if (as_circle)
+    {
+        // Use circle_degrees
+        start_angle = angle1;
+        total_angle = circle_degrees * std::numbers::pi / 180.0;
+        end_angle = start_angle + total_angle;
+    }
+    else
+    {
+        // Arc from start through through to end
+        start_angle = angle1;
+        end_angle = angle3;
+        
+        // Normalize angles to [0, 2π)
+        while (start_angle < 0) start_angle += 2.0 * std::numbers::pi;
+        while (start_angle >= 2.0 * std::numbers::pi) start_angle -= 2.0 * std::numbers::pi;
+        while (end_angle < 0) end_angle += 2.0 * std::numbers::pi;
+        while (end_angle >= 2.0 * std::numbers::pi) end_angle -= 2.0 * std::numbers::pi;
+        while (angle2 < 0) angle2 += 2.0 * std::numbers::pi;
+        while (angle2 >= 2.0 * std::numbers::pi) angle2 -= 2.0 * std::numbers::pi;
+        
+        // Determine which arc goes through the middle point
+        double diff = end_angle - start_angle;
+        if (diff < 0) diff += 2.0 * std::numbers::pi;
+        
+        // Check if middle point is on the shorter arc
+        double mid_diff1 = angle2 - start_angle;
+        if (mid_diff1 < 0) mid_diff1 += 2.0 * std::numbers::pi;
+        double mid_diff2 = end_angle - angle2;
+        if (mid_diff2 < 0) mid_diff2 += 2.0 * std::numbers::pi;
+        
+        // If middle point is not between start and end on shorter arc, take longer arc
+        if (mid_diff1 > diff || mid_diff2 > diff)
+        {
+            diff = 2.0 * std::numbers::pi - diff;
+            end_angle = start_angle - (2.0 * std::numbers::pi - diff);
+            if (end_angle < 0) end_angle += 2.0 * std::numbers::pi;
+        }
+        
+        total_angle = diff;
+    }
+    
+    // Sample points every 5 degrees
+    const double step_degrees = 5.0;
+    const double step_rad = step_degrees * std::numbers::pi / 180.0;
+    int num_samples = static_cast<int>(std::ceil(total_angle / step_rad)) + 1;
+    
+    for (int i = 0; i < num_samples; ++i)
+    {
+        double t = (num_samples > 1) ? static_cast<double>(i) / static_cast<double>(num_samples - 1) : 0.0;
+        double angle = start_angle + t * (end_angle - start_angle);
+        
+        // Normalize angle
+        while (angle < 0) angle += 2.0 * std::numbers::pi;
+        while (angle >= 2.0 * std::numbers::pi) angle -= 2.0 * std::numbers::pi;
+        
+        double cos_a = std::cos(angle);
+        double sin_a = std::sin(angle);
+        
+        double point[3] = {
+            center[0] + radius * (cos_a * u[0] + sin_a * w[0]),
+            center[1] + radius * (cos_a * u[1] + sin_a * w[1]),
+            center[2] + radius * (cos_a * u[2] + sin_a * w[2])
+        };
+        
+        out_trajectory_points.push_back({.x = point[0], .y = point[1], .z = point[2]});
+    }
 }
 
 

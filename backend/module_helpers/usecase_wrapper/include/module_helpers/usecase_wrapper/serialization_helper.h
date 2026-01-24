@@ -4,6 +4,7 @@
 #include "module_helpers/parameter_description/parameter_description.h"
 #include "helper_types.h"
 #include "module_helpers/serialization_helper/serialization_helper.h"
+#include "usecase_module_interface.h"
 
 #include <cstdint>
 #include <vector>
@@ -197,6 +198,95 @@ namespace aergo::module::helpers::usecase_wrapper
                 ser::push<bool>(buf, error_info.is_exception_); // [bool is_exception_]
                 ser::push<uint32_t>(buf, error_info.error_code_); // [u32 error_code_]
                 pushString(buf, error_info.error_message_.c_str(), error_info.error_message_.size()); // [u64 error_message_len, error_message_len * u8 error_message]
+            }
+        }
+
+        /// @brief Push Vector3 to buffer: [double x][double y][double z]
+        template<typename ByteT>
+        inline void pushUsecaseVector3(
+            std::vector<ByteT>& buf,
+            const IUsecaseModule::Vector3& vec
+        )
+        {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
+            ser::push<double>(buf, vec.x); // [double x]
+            ser::push<double>(buf, vec.y); // [double y]
+            ser::push<double>(buf, vec.z); // [double z]
+        }
+
+        /// @brief Push Quaternion to buffer: [double qx][double qy][double qz][double qw]
+        template<typename ByteT>
+        inline void pushUsecaseQuaternion(
+            std::vector<ByteT>& buf,
+            const IUsecaseModule::Quaternion& quat
+        )
+        {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
+            ser::push<double>(buf, quat.qx); // [double qx]
+            ser::push<double>(buf, quat.qy); // [double qy]
+            ser::push<double>(buf, quat.qz); // [double qz]
+            ser::push<double>(buf, quat.qw); // [double qw]
+        }
+
+        /// @brief Push Pose to buffer: [Vector3 position][Quaternion orientation]
+        template<typename ByteT>
+        inline void pushUsecasePose(
+            std::vector<ByteT>& buf,
+            const IUsecaseModule::Pose& pose
+        )
+        {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
+            pushUsecaseVector3(buf, pose.position);    // [Vector3 position]
+            pushUsecaseQuaternion(buf, pose.orientation); // [Quaternion orientation]
+        }
+
+        /// @brief Push UsecaseVisualization to buffer:
+        /// [bool supports_visualization]
+        /// if (supports_visualization) {
+        ///     [u64 pose_count]
+        ///     repeat pose_count times:
+        ///         [Pose]
+        ///     [u64 point_count]
+        ///     repeat point_count times:
+        ///         [Vector3]
+        ///     [u64 trajectory_count]
+        ///     repeat trajectory_count times:
+        ///         [u64 trajectory_point_count]
+        ///         repeat trajectory_point_count times:
+        ///             [Vector3]
+        template <typename ByteT>
+        inline void pushUsecaseVisualization(
+            std::vector<ByteT>& buf,
+            const IUsecaseModule::UsecaseVisualization& visualization_info
+        )
+        {
+            static_assert(sizeof(ByteT) == 1, "ByteT must be 1 byte");
+
+            ser::push<bool>(buf, visualization_info.supports_visualization); // [bool supports_visualization]
+            if (visualization_info.supports_visualization)
+            {
+                ser::push<uint64_t>(buf, static_cast<uint64_t>(visualization_info.poses.size())); // [u64 pose_count]
+                for (const auto& pose : visualization_info.poses)
+                {
+                    pushUsecasePose(buf, pose); // [Pose]
+                }
+                ser::push<uint64_t>(buf, static_cast<uint64_t>(visualization_info.points.size())); // [u64 point_count]
+                for (const auto& point : visualization_info.points)
+                {
+                    pushUsecaseVector3(buf, point); // [Vector3]
+                }
+                ser::push<uint64_t>(buf, static_cast<uint64_t>(visualization_info.trajectories.size())); // [u64 trajectory_count]
+                for (const auto& trajectory : visualization_info.trajectories)
+                {
+                    ser::push<uint64_t>(buf, static_cast<uint64_t>(trajectory.size())); // [u64 trajectory_point_count]
+                    for (const auto& traj_point : trajectory)
+                    {
+                        pushUsecaseVector3(buf, traj_point); // [Vector3]
+                    }
+                }
             }
         }
     }
@@ -508,6 +598,132 @@ namespace aergo::module::helpers::usecase_wrapper
                 out_error_info.is_exception_ = false;
                 out_error_info.error_code_ = 0;
                 out_error_info.error_message_.clear();
+            }
+            return true;
+        }
+
+        /// @brief Read Vector3 from buffer: [double x][double y][double z]
+        inline bool readUsecaseVector3(
+            des::BufferReader& reader,
+            IUsecaseModule::Vector3& out_vec
+        )
+        {
+            if (!reader.read<double>(out_vec.x)) return false; // failed to read x
+            if (!reader.read<double>(out_vec.y)) return false; // failed to read y
+            if (!reader.read<double>(out_vec.z)) return false; // failed to read z
+            return true;
+        }
+
+        /// @brief Read Quaternion from buffer: [double qx][double qy][double qz][double qw]
+        inline bool readUsecaseQuaternion(
+            des::BufferReader& reader,
+            IUsecaseModule::Quaternion& out_quat
+        )
+        {
+            if (!reader.read<double>(out_quat.qx)) return false; // failed to read qx
+            if (!reader.read<double>(out_quat.qy)) return false; // failed to read qy
+            if (!reader.read<double>(out_quat.qz)) return false; // failed to read qz
+            if (!reader.read<double>(out_quat.qw)) return false; // failed to read qw
+            return true;
+        }
+
+        /// @brief Read Pose from buffer: [Vector3 position][Quaternion orientation]
+        inline bool readUsecasePose(
+            des::BufferReader& reader,
+            IUsecaseModule::Pose& out_pose
+        )
+        {
+            if (!readUsecaseVector3(reader, out_pose.position)) return false; // failed to read position
+            if (!readUsecaseQuaternion(reader, out_pose.orientation)) return false; // failed to read orientation
+            return true;
+        }
+
+        /// @brief Read UsecaseVisualization from buffer:
+        /// [bool supports_visualization]
+        /// if (supports_visualization) {
+        ///     [u64 pose_count]
+        ///     repeat pose_count times:
+        ///         [Pose]
+        ///     [u64 point_count]
+        ///     repeat point_count times:
+        ///         [Vector3]
+        ///     [u64 trajectory_count]
+        ///     repeat trajectory_count times:
+        ///         [u64 trajectory_point_count]
+        ///         repeat trajectory_point_count times:
+        ///             [Vector3]
+        inline bool readUsecaseVisualization(
+            des::BufferReader& reader,
+            IUsecaseModule::UsecaseVisualization& out_visualization_info
+        )
+        {
+            if (!reader.read<bool>(out_visualization_info.supports_visualization))
+            {
+                return false; // failed to read supports_visualization
+            }
+            if (out_visualization_info.supports_visualization)
+            {
+                uint64_t pose_count = 0;
+                if (!reader.read<uint64_t>(pose_count))
+                {
+                    return false; // failed to read pose_count
+                }
+                out_visualization_info.poses.clear();
+                out_visualization_info.poses.resize(pose_count);
+                for (uint64_t i = 0; i < pose_count; ++i)
+                {
+                    if (!readUsecasePose(reader, out_visualization_info.poses[i]))
+                    {
+                        return false; // failed to read Pose
+                    }
+                }
+
+                uint64_t point_count = 0;
+                if (!reader.read<uint64_t>(point_count))
+                {
+                    return false; // failed to read point_count
+                }
+                out_visualization_info.points.clear();
+                out_visualization_info.points.resize(point_count);
+                for (uint64_t i = 0; i < point_count; ++i)
+                {
+                    if (!readUsecaseVector3(reader, out_visualization_info.points[i]))
+                    {
+                        return false; // failed to read Vector3
+                    }
+                }
+
+                uint64_t trajectory_count = 0;
+                if (!reader.read<uint64_t>(trajectory_count))
+                {
+                    return false; // failed to read trajectory_count
+                }
+                out_visualization_info.trajectories.clear();
+                out_visualization_info.trajectories.resize(trajectory_count);
+                for (uint64_t i = 0; i < trajectory_count; ++i)
+                {
+                    uint64_t trajectory_point_count = 0;
+                    if (!reader.read<uint64_t>(trajectory_point_count))
+                    {
+                        return false; // failed to read trajectory_point_count
+                    }
+                    out_visualization_info.trajectories[i].clear();
+                    out_visualization_info.trajectories[i].resize(trajectory_point_count);
+                    for (uint64_t j = 0; j < trajectory_point_count; ++j)
+                    {
+                        if (!readUsecaseVector3(reader, out_visualization_info.trajectories[i][j]))
+                        {
+                            return false; // failed to read Vector3
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // no visualization data
+                out_visualization_info.poses.clear();
+                out_visualization_info.points.clear();
+                out_visualization_info.trajectories.clear();
             }
             return true;
         }

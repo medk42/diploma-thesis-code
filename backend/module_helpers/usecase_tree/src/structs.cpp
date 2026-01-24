@@ -12,7 +12,8 @@ ExistingCommand::ExistingCommand(
     p_desc::ParameterValueOptListList&& required_parameter_values, 
     p_desc::ParameterValueOptListList&& advanced_parameter_values,
     std::optional<std::string> command_data_json,
-    bool command_data_json_in_sync)
+    bool command_data_json_in_sync,
+    uw::IUsecaseModule::UsecaseVisualization visualization)
     : usecase_identifier_(std::move(usecase_identifier)),
       usecase_name_(std::move(usecase_name)),
       command_id_(command_id),
@@ -20,7 +21,8 @@ ExistingCommand::ExistingCommand(
       auto_parameter_values_(std::move(auto_parameter_values)),
       required_parameter_values_(std::move(required_parameter_values)),
       advanced_parameter_values_(std::move(advanced_parameter_values)),
-      command_data_json_in_sync_(command_data_json_in_sync)
+      command_data_json_in_sync_(command_data_json_in_sync),
+      visualization_(std::move(visualization))
 {
     if (command_data_json.has_value())
     {

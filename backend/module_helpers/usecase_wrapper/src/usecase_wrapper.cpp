@@ -386,7 +386,6 @@ aergo::module::ResponseData UsecaseWrapper::processUsecaseRequest(message::Messa
     }
     
     if ((request.req_type_ == message_types::ReqType::CREATE_COMMAND ||
-         request.req_type_ == message_types::ReqType::PROGRAM_READ_VISUALIZATION ||
          request.req_type_ == message_types::ReqType::PROGRAM_START_REAL ||
          request.req_type_ == message_types::ReqType::PROGRAM_START_SIMULATED) &&
         (message.blob_count_ == 0 || message.blobs_ == nullptr || !message.blobs_[0].valid()))
@@ -405,8 +404,6 @@ aergo::module::ResponseData UsecaseWrapper::processUsecaseRequest(message::Messa
             return handleReadCustomParameterCheck(request.task_id_, request.cancel_);
         case message_types::ReqType::CREATE_COMMAND:
             return handleCreateCommand(message.blobs_[0]);
-        case message_types::ReqType::PROGRAM_READ_VISUALIZATION:
-            return handleProgramReadVisualization(message.blobs_[0]);
         case message_types::ReqType::PROGRAM_START_REAL:
             return handleProgramStart(message.blobs_[0], false);
         case message_types::ReqType::PROGRAM_START_SIMULATED:
@@ -656,6 +653,7 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
     }
 
     nlohmann::json command_data_json;
+    IUsecaseModule::UsecaseVisualization visualization_info { .supports_visualization = false };
     auto res = usecase_module_ref_->createCommandFromParameters(
         auto_parameters_,
         manual_parameters_,
@@ -663,7 +661,8 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
         auto_parameter_values_,
         required_parameter_values_,
         advanced_parameter_values_,
-        command_data_json
+        command_data_json,
+        visualization_info
     );
     if (!res)
     {
@@ -704,13 +703,26 @@ aergo::module::ResponseData UsecaseWrapper::handleCreateCommand(message::SharedD
             message_types::Response{ .result_ = message_types::Result::FAIL }
         );
     }
-    
 
-    return ResponseData::createResponse(
-        message_types::Response{ .result_ = message_types::Result::SUCCESS },
-        std::span(reinterpret_cast<const uint8_t*>(command_data_json_str.data()), command_data_json_str.size()),
-        dynamic_allocator_.get()
-    );
+
+    ResponseData response { .success_ = true };
+
+    message::SharedDataBlob command_blob = dynamic_allocator_->allocateFromData(std::span(reinterpret_cast<const uint8_t*>(command_data_json_str.data()), command_data_json_str.size()));
+    response.blobs_.emplace_back(std::move(command_blob));
+
+    if (visualization_info.supports_visualization)
+    {
+        std::vector<std::byte> visualization_data;
+        serialize::pushUsecaseVisualization(visualization_data, visualization_info);
+        message::SharedDataBlob shared_blob = dynamic_allocator_->allocateFromData(std::span(visualization_data));
+        response.blobs_.emplace_back(std::move(shared_blob));
+    }
+
+    message_types::Response response_header { .result_ = message_types::Result::SUCCESS };
+    response.data_.resize(sizeof(message_types::Response));
+    std::memcpy(response.data_.data(), reinterpret_cast<uint8_t*>(&response_header), sizeof(message_types::Response));
+
+    return response;
 }
 
 
@@ -750,27 +762,6 @@ bool UsecaseWrapper::validateParameterValues(const p_desc::ParameterList& param_
 
     return true;
 }
-
-
-
-aergo::module::ResponseData UsecaseWrapper::handleProgramReadVisualization(message::SharedDataBlob& blob) noexcept
-{
-    if (!blob.valid())
-    {
-        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseWrapper: handleProgramReadVisualization received invalid blob.");
-        return ResponseData::createResponse(
-            message_types::Response{ .result_ = message_types::Result::FAIL }
-        );
-    }
-
-    std::string command_data_json(reinterpret_cast<const char*>(blob.data()), blob.size());
-    
-    // TODO we don't support visualization yet
-    return ResponseData::createResponse(
-        message_types::Response{ .result_ = message_types::Result::FAIL }
-    );
-}
-
 
 
 aergo::module::ResponseData UsecaseWrapper::handleProgramStart(message::SharedDataBlob& blob, bool simulated) noexcept

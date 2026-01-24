@@ -69,6 +69,8 @@ ProgramTree::~ProgramTree()
 
 void ProgramTree::reloadAvailableUsecases() // called with UI and frontend_state_ locks held
 {
+    existing_usecase_selection_cleared_.emit();
+
     showReloadUsecasePopup();
     base_module_->log(aergo::module::logging::LogType::INFO, "ProgramTree::reloadAvailableUsecases: Reloading available usecases...");
 
@@ -130,6 +132,8 @@ void ProgramTree::setupCallbacks()
             insertExistingUsecase(new_command, existing_usecases_list_->commandCount());
             existing_usecases_list_->setCommandSelected(existing_usecases_list_->commandCount() - 1); // show newly added usecase
             parameters_container_->setCurrentIndex(parameters_container_->count() - 1); // show parameters of newly added usecase
+
+            existing_usecase_selection_changed_.emit(existing_usecases_list_->commandCount() - 1);
         });
     });
 
@@ -141,6 +145,10 @@ void ProgramTree::setupCallbacks()
             return;
         }
         parameters_container_->setCurrentIndex(index + 1); // +1 because child 0 is empty
+
+        with_frontend_state_lock_([this, index]() {
+            existing_usecase_selection_changed_.emit(index);
+        });
     });
 }
 
@@ -233,6 +241,8 @@ void ProgramTree::setupOnValueAddedCallback(ProgramTreeParameters* parameter_con
             {
                 updateCommandStatus(*existing_usecase_index_opt);
             }
+            
+            existing_usecase_confirmation_changed_.emit(*existing_usecase_index_opt, false);
         });
     });
 }
@@ -262,6 +272,8 @@ void ProgramTree::setupOnValueRemovedCallback(ProgramTreeParameters* parameter_c
             {
                 updateCommandStatus(*existing_usecase_index_opt);
             }
+            
+            existing_usecase_confirmation_changed_.emit(*existing_usecase_index_opt, false);
         });
     });
 }
@@ -351,6 +363,8 @@ void ProgramTree::setupOnValueChangedCallback(ProgramTreeParameters* parameter_c
                     updateCommandStatus(*existing_usecase_index_opt);
                 }   
             }
+            
+            existing_usecase_confirmation_changed_.emit(*existing_usecase_index_opt, false);
             
         });
     });
@@ -788,6 +802,8 @@ void ProgramTree::onTimerRefresh()
             closeGenerateCommandDataPopup();
             program_state_unsafe_.generating_command_data_json_ = false;
 
+            existing_usecase_confirmation_changed_.emit(program_state_unsafe_.generate_usecase_index, program_state_unsafe_.generate_successful_);
+
             if (program_state_unsafe_.generate_successful_)
             {
                 // this should disable the confirm button and update the command status to Normal
@@ -1206,6 +1222,8 @@ void ProgramTree::onCutCommand()
     existing_usecase_parameter_widgets_.erase(existing_usecase_parameter_widgets_.begin() + selected_index);
 
     parameters_container_->setCurrentIndex(0); // show empty page after removal
+
+    existing_usecase_selection_cleared_.emit(); // frontend_state_ lock is held from MainVisualizationUi
 }
 
 
@@ -1261,6 +1279,8 @@ void ProgramTree::onPasteCommand()
     insertExistingUsecase(new_command, copy_target_index);
     existing_usecases_list_->setCommandSelected(copy_target_index); // show newly pasted usecase
     parameters_container_->setCurrentIndex(static_cast<int>(copy_target_index + 1)); // show parameters of newly pasted usecase
+
+    existing_usecase_selection_changed_.emit(copy_target_index);
 }
 
 
@@ -1289,6 +1309,8 @@ void ProgramTree::onNewProgram()
 
                 // clear UI
                 clearExistingUsecases();
+
+                existing_usecase_selection_cleared_.emit();
             });
         }
 
@@ -1399,6 +1421,7 @@ void ProgramTree::onLoadProgram()
             
             program_state_unsafe_.usecase_tree_->clearCommands(); // clear program tree
             clearExistingUsecases(); // clear UI
+            existing_usecase_selection_cleared_.emit();
 
             program_state_unsafe_.load_program_task_ = std::make_unique<helpers::async_helpers::AsyncTask<std::expected<void, std::optional<std::string>>>>(
                 [usecase_tree_ptr, file_content = std::move(file_content)](const std::atomic<bool>& cancel_flag, std::atomic<bool>& cancelled_flag) -> std::expected<void, std::optional<std::string>> {

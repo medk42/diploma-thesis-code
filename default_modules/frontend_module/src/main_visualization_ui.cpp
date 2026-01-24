@@ -1,6 +1,7 @@
 #include "webapp/ui/main_visualization_ui.h"
 
 #include "webapp/ui/helper/topbar.h"
+#include "webapp/ui/helper/usecase_visualization.h"
 
 #include "module_helpers/scene_detection_helper/message_types.h"
 #include "module_common/module_interface_.h"
@@ -118,12 +119,72 @@ MainVisualizationUi::MainVisualizationUi(
     ));
     camera_container_ = content_container->addWidget(std::make_unique<helper::CameraContainer>());
 
+    // Initialize usecase visualization
+    usecase_visualization_ = std::make_unique<helper::UsecaseVisualization>(scene_container_);
+
     program_tree_->onButtonStateChanged().connect([top_bar](helper::ProgramTreeButtonState state){
         top_bar->setEnabled(7, state.start_program_enabled);     // Start
         top_bar->setEnabled(8, state.simulate_program_enabled);  // Simulate
         top_bar->setEnabled(9, state.stop_program_enabled);      // Stop
         top_bar->setEnabled(10, state.pause_program_enabled);    // Pause
         top_bar->setEnabled(11, state.resume_program_enabled);   // Resume
+    });
+
+    program_tree_->existing_usecase_selection_cleared().connect([this](){
+        base_module_->log(aergo::module::logging::LogType::INFO, "Frontend module: existing usecase selection cleared");
+        current_selected_usecase_index_ = std::nullopt;
+        if (usecase_visualization_)
+        {
+            usecase_visualization_->clearVisualization();
+        }
+    });
+    program_tree_->existing_usecase_selection_changed().connect([this, &program_state_unsafe](size_t index){
+        current_selected_usecase_index_ = index;
+
+        if (index >= program_state_unsafe.usecase_tree_->size())
+        {
+            return;
+        }
+        
+        const auto& existing_usecase = (*program_state_unsafe.usecase_tree_)[index];
+        bool is_confirmed = existing_usecase.hasCommandDataJson() && existing_usecase.isCommandDataJsonInSync();
+        const auto& visualization = existing_usecase.getVisualization();
+        
+        if (is_confirmed && visualization.supports_visualization && usecase_visualization_)
+        {
+            usecase_visualization_->displayVisualization(visualization);
+        }
+        else if (usecase_visualization_)
+        {
+            usecase_visualization_->clearVisualization();
+        }
+    });
+    program_tree_->existing_usecase_confirmation_changed().connect([this, &program_state_unsafe](size_t index, bool confirmed){
+        
+        // If confirmation changed to false and this is the current index, clear visualization
+        if (!confirmed && current_selected_usecase_index_.has_value() && current_selected_usecase_index_.value() == index)
+        {
+            if (usecase_visualization_)
+            {
+                usecase_visualization_->clearVisualization();
+            }
+        }
+        // If confirmation changed to true and this is the current index, show visualization if available
+        else if (confirmed && current_selected_usecase_index_.has_value() && current_selected_usecase_index_.value() == index)
+        {
+            if (index >= program_state_unsafe.usecase_tree_->size())
+            {
+                return;
+            }
+            
+            const auto& existing_usecase = (*program_state_unsafe.usecase_tree_)[index];
+            const auto& visualization = existing_usecase.getVisualization();
+            
+            if (visualization.supports_visualization && usecase_visualization_)
+            {
+                usecase_visualization_->displayVisualization(visualization);
+            }
+        }
     });
 
     allocator_ = base_module_->createDynamicAllocator();

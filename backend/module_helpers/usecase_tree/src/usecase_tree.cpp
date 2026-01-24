@@ -438,7 +438,7 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
             return;
         }
 
-        if (response_message.blobs_ == nullptr || response_message.blob_count_ != 1 || !response_message.blobs_[0].valid())
+        if (response_message.blobs_ == nullptr || response_message.blob_count_ == 0 || response_message.blob_count_ > 2 || !response_message.blobs_[0].valid())
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::generateCommandDataJson: Empty response data for command with ID: " + std::to_string(command_id) + ", usecase_identifier: " + usecase_identifier + ".");
             if (on_finish) (*on_finish)(false, uw::helper::ErrorInfo::WithDetails(0, "Module responded with SUCCESS state, but no data."), 0);
@@ -448,6 +448,19 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
         auto command_data_blob = response_message.blobs_[0];
         std::string command_data_json(reinterpret_cast<const char*>(command_data_blob.data()), command_data_blob.size());
 
+        uw::IUsecaseModule::UsecaseVisualization visualization_data;
+        if (response_message.blob_count_ == 2 && response_message.blobs_[1].valid())
+        {
+            auto& visualization_blob = response_message.blobs_[1];
+            uw::deserialize::des::BufferReader reader(visualization_blob.data(), visualization_blob.size());
+
+            if (!uw::deserialize::readUsecaseVisualization(reader, visualization_data))
+            {
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::generateCommandDataJson: Failed to read visualization data for command with ID: " + std::to_string(command_id) + ", usecase_identifier: " + usecase_identifier + ".");
+                visualization_data = uw::IUsecaseModule::UsecaseVisualization { .supports_visualization = false }; // reset visualization data
+            }
+        }
+        
         if (!command_id_to_index_map_.contains(command_id))
         {
             base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::generateCommandDataJson: Command ID to index map does not contain command ID: " + std::to_string(command_id) + ", usecase_identifier: " + usecase_identifier + ".");
@@ -457,6 +470,7 @@ bool UsecaseTree::generateCommandDataJson(size_t list_index, std::optional<std::
 
         size_t list_index = command_id_to_index_map_.at(command_id);
         existing_commands_list_[list_index].setCommandDataJson(std::move(command_data_json));
+        existing_commands_list_[list_index].setVisualization(std::move(visualization_data));
         if (on_finish) (*on_finish)(true, uw::helper::ErrorInfo::WithoutDetails(), list_index);
     };
 
@@ -941,6 +955,57 @@ std::optional<std::string> UsecaseTree::toJson() const
             single_command_json["command_data_json"] = command.getCommandDataJson();
         }
         single_command_json["command_data_json_in_sync"] = command.isCommandDataJsonInSync();
+        json visualization_json;
+        const auto& visualization_data = command.getVisualization();
+        if (visualization_data.supports_visualization)
+        {
+            visualization_json["supports_visualization"] = true;
+
+            visualization_json["poses"] = json::array();
+            for (const auto& pose : visualization_data.poses)
+            {
+                json j_pose;
+                j_pose["x"] = pose.position.x;
+                j_pose["y"] = pose.position.y;
+                j_pose["z"] = pose.position.z;
+                j_pose["qx"] = pose.orientation.qx;
+                j_pose["qy"] = pose.orientation.qy;
+                j_pose["qz"] = pose.orientation.qz;
+                j_pose["qw"] = pose.orientation.qw;
+                visualization_json["poses"].push_back(j_pose);
+            }
+
+            visualization_json["points"] = json::array();
+            for (const auto& point : visualization_data.points)
+            {
+                json j_point;
+                j_point["x"] = point.x;
+                j_point["y"] = point.y;
+                j_point["z"] = point.z;
+                visualization_json["points"].push_back(j_point);
+            }
+
+            visualization_json["trajectories"] = json::array();
+            for (const auto& trajectory : visualization_data.trajectories)
+            {
+                json j_trajectory;
+                j_trajectory["points"] = json::array();
+                for (const auto& point : trajectory)
+                {
+                    json j_point;
+                    j_point["x"] = point.x;
+                    j_point["y"] = point.y;
+                    j_point["z"] = point.z;
+                    j_trajectory["points"].push_back(j_point);
+                }
+                visualization_json["trajectories"].push_back(j_trajectory);
+            }
+        }
+        else
+        {
+            visualization_json["supports_visualization"] = false;
+        }
+        single_command_json["visualization"] = visualization_json;
 
         j["program"].push_back(single_command_json);
     }
@@ -1163,6 +1228,103 @@ bool UsecaseTree::fromJson(const std::string& json_str, std::string& out_missing
         }
         command_data_json_in_sync = cmd_json["command_data_json_in_sync"].get<bool>();
 
+        uw::IUsecaseModule::UsecaseVisualization visualization_data;
+        if (!cmd_json.contains("visualization") || !cmd_json["visualization"].is_object())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: 'visualization' missing or not an object.");
+            return false;
+        }
+        auto visualization_json = cmd_json["visualization"];
+        if (!visualization_json.contains("supports_visualization") || !visualization_json["supports_visualization"].is_boolean())
+        {
+            base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: 'supports_visualization' missing or not a boolean.");
+            return false;
+        }
+        visualization_data.supports_visualization = visualization_json["supports_visualization"].get<bool>();
+        if (visualization_data.supports_visualization)
+        {
+            if (!visualization_json.contains("poses") || !visualization_json["poses"].is_array() ||
+                !visualization_json.contains("points") || !visualization_json["points"].is_array() ||
+                !visualization_json.contains("trajectories") || !visualization_json["trajectories"].is_array())
+            {
+                base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Visualization data missing required arrays.");
+                return false;
+            }
+
+            for (const auto& j_pose : visualization_json["poses"])
+            {
+                if (!j_pose.is_object() ||
+                    !j_pose.contains("x") || !j_pose["x"].is_number() ||
+                    !j_pose.contains("y") || !j_pose["y"].is_number() ||
+                    !j_pose.contains("z") || !j_pose["z"].is_number() ||
+                    !j_pose.contains("qx") || !j_pose["qx"].is_number() ||
+                    !j_pose.contains("qy") || !j_pose["qy"].is_number() ||
+                    !j_pose.contains("qz") || !j_pose["qz"].is_number() ||
+                    !j_pose.contains("qw") || !j_pose["qw"].is_number())
+                {
+                    base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Invalid pose entry in visualization data.");
+                    return false;
+                }
+
+                uw::IUsecaseModule::Pose pose;
+                pose.position.x = j_pose["x"].get<double>();
+                pose.position.y = j_pose["y"].get<double>();
+                pose.position.z = j_pose["z"].get<double>();
+                pose.orientation.qx = j_pose["qx"].get<double>();
+                pose.orientation.qy = j_pose["qy"].get<double>();
+                pose.orientation.qz = j_pose["qz"].get<double>();
+                pose.orientation.qw = j_pose["qw"].get<double>();
+                visualization_data.poses.push_back(pose);
+            }
+
+            for (const auto& j_point : visualization_json["points"])
+            {
+                if (!j_point.is_object() ||
+                    !j_point.contains("x") || !j_point["x"].is_number() ||
+                    !j_point.contains("y") || !j_point["y"].is_number() ||
+                    !j_point.contains("z") || !j_point["z"].is_number())
+                {
+                    base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Invalid point entry in visualization data.");
+                    return false;
+                }
+
+                uw::IUsecaseModule::Vector3 point;
+                point.x = j_point["x"].get<double>();
+                point.y = j_point["y"].get<double>();
+                point.z = j_point["z"].get<double>();
+                visualization_data.points.push_back(point);
+            }
+
+            for (const auto& j_trajectory : visualization_json["trajectories"])
+            {
+                if (!j_trajectory.is_object() || !j_trajectory.contains("points") || !j_trajectory["points"].is_array())
+                {
+                    base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Invalid trajectory entry in visualization data.");
+                    return false;
+                }
+
+                std::vector<uw::IUsecaseModule::Vector3> trajectory;
+                for (const auto& j_point : j_trajectory["points"])
+                {
+                    if (!j_point.is_object() ||
+                        !j_point.contains("x") || !j_point["x"].is_number() ||
+                        !j_point.contains("y") || !j_point["y"].is_number() ||
+                        !j_point.contains("z") || !j_point["z"].is_number())
+                    {
+                        base_module_ref_->log(aergo::module::logging::LogType::ERROR, "UsecaseTree::fromJson: Invalid point entry in trajectory visualization data.");
+                        return false;
+                    }
+
+                    uw::IUsecaseModule::Vector3 point;
+                    point.x = j_point["x"].get<double>();
+                    point.y = j_point["y"].get<double>();
+                    point.z = j_point["z"].get<double>();
+                    trajectory.push_back(point);
+                }
+                visualization_data.trajectories.push_back(trajectory);
+            }
+        }
+
         // Create command with a new ID and insert into list
         uint64_t command_id = next_command_id_++;
         existing_commands_list_.push_back(std::move(structs::ExistingCommand(
@@ -1174,7 +1336,8 @@ bool UsecaseTree::fromJson(const std::string& json_str, std::string& out_missing
             std::move(required_values),
             std::move(advanced_values),
             std::move(command_data_json),
-            command_data_json_in_sync
+            command_data_json_in_sync,
+            std::move(visualization_data)
         )));
         command_id_to_index_map_[command_id] = existing_commands_list_.size() - 1;
     }
