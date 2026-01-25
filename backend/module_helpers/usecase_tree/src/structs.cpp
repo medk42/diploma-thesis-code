@@ -42,7 +42,8 @@ ExistingCommand::ExistingCommand(ExistingCommand&& other, uint64_t new_command_i
       advanced_parameter_values_(std::move(other.advanced_parameter_values_)),
       command_data_json_(std::move(other.command_data_json_)),
       has_command_data_json_(other.has_command_data_json_),
-      command_data_json_in_sync_(other.command_data_json_in_sync_)
+      command_data_json_in_sync_(other.command_data_json_in_sync_),
+      visualization_(std::move(other.visualization_))
 {}
 
 
