@@ -59,8 +59,11 @@ namespace aergo::module::helpers::base_usecase
         virtual void* query_capability(const std::type_info& id) noexcept override;
         virtual bool threadStart(uint32_t timeout_ms) noexcept override { return true; } // threads are started only on programStart() call
         virtual bool threadStop(uint32_t timeout_ms) noexcept override;
-        virtual ISerializableModule::SaveData save() noexcept override final; // usecases are stateless, no need to save anything
-        virtual bool load(ISerializableModule::SaveData data) noexcept override final { return true; }; // usecases are stateless, no need to save anything
+
+        // usecases should be stateless, they are expected to answer requests as soon as they are created, not hide behind the activation layer until activated
+        // however if there is a need for stateful usecases, these methods can be overridden
+        virtual ISerializableModule::SaveData save() noexcept override;
+        virtual bool load(ISerializableModule::SaveData data) noexcept override { return true; };
 
         virtual message_types::Result programStart(const nlohmann::json& command_json, bool simulated, uint64_t& out_task_id, usecase_wrapper_helper::ErrorInfo& out_error_info) override;
         virtual message_types::Result programPause(uint64_t task_id) override;
