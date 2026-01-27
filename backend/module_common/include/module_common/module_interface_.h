@@ -472,7 +472,7 @@ namespace aergo::module
 
             // create shared data blob
             message::SharedDataBlob shared_blob = allocator->allocate(blob.size());
-            if (!shared_blob.valid() || shared_blob.size() != blob.size())
+            if (!shared_blob.valid() || shared_blob.size() < blob.size())
             {
                 response.success_ = false;
                 return response;

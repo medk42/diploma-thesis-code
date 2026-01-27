@@ -695,7 +695,7 @@ aergo::module::message::SharedDataBlob DllModuleWrapper::save(aergo::module::IAl
     }
 
     auto blob = allocator->allocate(serialized_data.size());
-    if (!blob.valid() || blob.size() != serialized_data.size())
+    if (!blob.valid() || blob.size() < serialized_data.size())
     {
         return aergo::module::message::SharedDataBlob(); // invalid blob
     }

@@ -1629,7 +1629,7 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
     aergo::module::save_toolkit::serializeSaveState(state_data_str, modules_binary_data, serialized_data);
 
     aergo::module::message::SharedDataBlob blob = core_dynamic_allocator_->allocate(serialized_data.size());
-    if (!blob.valid() || blob.size() != serialized_data.size())
+    if (!blob.valid() || blob.size() < serialized_data.size())
     {
         return aergo::module::message::SharedDataBlob(); // return invalid blob
     }
