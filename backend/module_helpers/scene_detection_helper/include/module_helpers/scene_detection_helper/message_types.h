@@ -207,12 +207,6 @@ namespace aergo::module::helpers::scene_detection_helper
                 out_boxes.push_back(box);
             }
 
-            // Check if all data was consumed
-            if (reader.remaining() != 0)
-            {
-                return false; // data remains
-            }
-
             return true;
         }
 
@@ -251,12 +245,6 @@ namespace aergo::module::helpers::scene_detection_helper
                     return false; // data too short
                 }
                 out_boxes.push_back(box);
-            }
-
-            // Check if all data was consumed
-            if (reader.remaining() != 0)
-            {
-                return false; // data remains
             }
 
             return true;
