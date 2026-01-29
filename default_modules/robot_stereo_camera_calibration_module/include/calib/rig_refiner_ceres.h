@@ -53,7 +53,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             std::string message;
         };
 
-        explicit RigRefinerCeres(const Options& o = Options());
+        explicit RigRefinerCeres(const Options& o);
         Result refine(const Input& in) const;
 
     private:

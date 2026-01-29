@@ -24,7 +24,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             int minPairs{8};
         };
 
-        explicit HandEyeCalibrator(const Params& p = Params());
+        explicit HandEyeCalibrator(const Params& p);
 
         Result run(const std::vector<Pose>& robotBase_from_flange,
                    const std::vector<cv::Vec3d>& rvec_target_from_cam,

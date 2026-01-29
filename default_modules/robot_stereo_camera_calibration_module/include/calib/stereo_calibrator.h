@@ -35,7 +35,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             std::string message;
         };
 
-        explicit StereoCalibrator(const Params& p = Params());
+        explicit StereoCalibrator(const Params& p);
 
         Result calibrate(const std::vector<CharucoDetector::Result>& viewsL,
                          const std::vector<CharucoDetector::Result>& viewsR,

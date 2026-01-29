@@ -42,7 +42,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             bool ok{false};
         };
 
-        explicit CharucoDetector(const CharucoBoardModel& model, const Params& p = {});
+        explicit CharucoDetector(const CharucoBoardModel& model, const Params& p);
 
         CharucoDetector::Result detect(const cv::Mat& img) const;
 
