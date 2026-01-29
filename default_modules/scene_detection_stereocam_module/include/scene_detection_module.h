@@ -80,7 +80,7 @@ namespace aergo::default_modules::scene_detection_stereocam_module
         bool parseCalibrationHeader(aergo::module::message::MessageHeader message);
         bool parseImageData(aergo::module::message::MessageHeader message);
         void registerBoxResources();
-        void updateBoxVisualization();
+        void updateBoxVisualization(const std::vector<aergo::module::helpers::scene_detection_helper::DetectedBox>& detected_boxes);
 
         bool valid_{false};
 
@@ -95,7 +95,6 @@ namespace aergo::default_modules::scene_detection_stereocam_module
         std::mutex image_access_mutex_;
         std::condition_variable image_ready_condition_;
 
-        std::vector<std::byte> blob_buffer_;
         std::unique_ptr<aergo::module::helpers::mixed_buffer_allocator::MixedBufferedAllocator> mixed_buffered_allocator_;
         SceneMarkerDetector::CameraData left_cam_data_, right_cam_data_;
         cv::Mat left_cam_image_, right_cam_image_;
@@ -111,8 +110,6 @@ namespace aergo::default_modules::scene_detection_stereocam_module
 
         std::unique_ptr<StereoMarkerOptimizer> stereo_marker_optimizer_;
         std::vector<StereoMarkerOptimizer::Result> optimizer_results_;
-
-        std::vector<aergo::module::helpers::scene_detection_helper::DetectedBox> detected_boxes_;
 
         std::mutex vis3d_mutex_;
         bool announced_visualization_{false};

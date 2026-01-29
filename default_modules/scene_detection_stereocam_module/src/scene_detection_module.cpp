@@ -306,9 +306,9 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
 
     if (request.req_type == sdh::ReqType::READ_REGISTRY)
     {
-        blob_buffer_.clear();
-        sdh::Response response = sdh::Response::registryResponse(registered_boxes_, blob_buffer_);
-        return ResponseData::createResponse(response, std::span<std::byte>(blob_buffer_), mixed_buffered_allocator_.get());
+        std::vector<std::byte> blob_buffer;
+        sdh::Response response = sdh::Response::registryResponse(registered_boxes_, blob_buffer);
+        return ResponseData::createResponse(response, std::span<std::byte>(blob_buffer), mixed_buffered_allocator_.get());
     }
 
     if (request.req_type != sdh::ReqType::READ_SCENE)
@@ -338,7 +338,7 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
     std::string log_msg;
 
     optimizer_results_.clear();
-    detected_boxes_.clear();
+    std::vector<aergo::module::helpers::scene_detection_helper::DetectedBox> detected_boxes;
     for (const auto& match : match_result_.matchedMarkers)
     {
         optimizer_results_.push_back(StereoMarkerOptimizer::Result{});
@@ -364,7 +364,7 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
             box.pose.qx = q_ref_pose[1];
             box.pose.qy = q_ref_pose[2];
             box.pose.qz = q_ref_pose[3];
-            detected_boxes_.push_back(box);
+            detected_boxes.push_back(box);
 
             log_msg += "\tBox " + std::to_string(box.id) + ": [" + std::to_string(box.pose.x * 1000) + ", " + std::to_string(box.pose.y * 1000) + ", " + std::to_string(box.pose.z * 1000) + "] mm, [" + std::to_string(box.pose.qw) + ", " + std::to_string(box.pose.qx) + ", " + std::to_string(box.pose.qy) + ", " + std::to_string(box.pose.qz) + "]\n";
         }
@@ -373,14 +373,14 @@ aergo::module::ResponseData SceneDetectionStereocamModule::processRequest(
             log_msg += "\tBox " + std::to_string(match.marker_id) + ": optimization failed.\n";
         }
     }
-    log_msg = "SceneDetectionStereocamModule: detected " + std::to_string(detected_boxes_.size()) + "/" + std::to_string(match_result_.matchedMarkers.size()) + " boxes:\n" + log_msg;
+    log_msg = "SceneDetectionStereocamModule: detected " + std::to_string(detected_boxes.size()) + "/" + std::to_string(match_result_.matchedMarkers.size()) + " boxes:\n" + log_msg;
     log(logging::LogType::INFO, log_msg);
 
-    updateBoxVisualization();
+    updateBoxVisualization(detected_boxes);
 
-    blob_buffer_.clear();
-    sdh::Response response = sdh::Response::sceneResponse(detected_boxes_, blob_buffer_);
-    return ResponseData::createResponse(response, std::span<std::byte>(blob_buffer_), mixed_buffered_allocator_.get());
+    std::vector<std::byte> blob_buffer;
+    sdh::Response response = sdh::Response::sceneResponse(detected_boxes, blob_buffer);
+    return ResponseData::createResponse(response, std::span<std::byte>(blob_buffer), mixed_buffered_allocator_.get());
 }
 
 
@@ -408,16 +408,14 @@ void SceneDetectionStereocamModule::registerBoxResources()
 }
 
 
-void SceneDetectionStereocamModule::updateBoxVisualization()
+void SceneDetectionStereocamModule::updateBoxVisualization(const std::vector<aergo::module::helpers::scene_detection_helper::DetectedBox>& detected_boxes)
 {
+    std::lock_guard<std::mutex> lock(vis3d_mutex_);
     if (!announced_visualization_)
     {
-        std::lock_guard<std::mutex> lock(vis3d_mutex_);
         visualization_helper_->announce();
         announced_visualization_ = true;
     }
-
-    std::lock_guard<std::mutex> lock(vis3d_mutex_);
 
     // Remove all existing boxes
     for (const auto& box : box_object_ids_)
@@ -430,9 +428,9 @@ void SceneDetectionStereocamModule::updateBoxVisualization()
     box_object_ids_.clear();
 
     // Add or update detected boxes
-    for (size_t i = 0; i < detected_boxes_.size(); ++i)
+    for (size_t i = 0; i < detected_boxes.size(); ++i)
     {
-        const auto& box = detected_boxes_[i];
+        const auto& box = detected_boxes[i];
 
         vis3d::ResourceId resource_id = box_resource_ids_[box.id];
         vis3d::Pose box_pose {
