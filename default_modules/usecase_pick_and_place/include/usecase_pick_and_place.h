@@ -7,12 +7,9 @@
 #include "module_helpers/scene_detection_helper/message_types.h"
 #include "module_helpers/pose_utils/pose_utils.h"
 #include "module_helpers/synchronous_request_helper/synchronous_request_helper.h"
+#include "module_helpers/scene_detection_helper/registry_request_handler.h"
 
 #include <expected>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
 #include <vector>
 
 namespace aergo::default_modules::usecase_pick_and_place
@@ -21,6 +18,7 @@ namespace aergo::default_modules::usecase_pick_and_place
     namespace rc = aergo::module::helpers::robot_interface::robot_control;
     namespace p_desc = aergo::module::helpers::parameter_description;
     namespace sync_req = aergo::module::helpers::synchronous_request_helper;
+    namespace sdh = aergo::module::helpers::scene_detection_helper;
 
     class UsecasePickAndPlace : public aergo::module::helpers::base_usecase::BaseUsecase
     {
@@ -37,7 +35,7 @@ namespace aergo::default_modules::usecase_pick_and_place
             bool supports_stop
         );
 
-        ~UsecasePickAndPlace() noexcept;
+        ~UsecasePickAndPlace() noexcept = default;
 
         virtual bool valid() noexcept override { return robot_wrapper_.valid(); }
 
@@ -79,7 +77,6 @@ namespace aergo::default_modules::usecase_pick_and_place
     private:
         std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id);
         std::expected<void, uw::helper::ErrorInfo> moveLinear(const rc::Pose& pose, double speed, double acceleration);
-        void registryRequestThread();
         bool sendSceneDetectionRequest(uint64_t& out_request_id);
 
         
@@ -123,14 +120,7 @@ namespace aergo::default_modules::usecase_pick_and_place
         bool valid_{ false };
         uint32_t pen_message_intent_subscribe_channel_id_{ 0 };
         uint32_t scene_detection_request_channel_id_{ 0 };
-        
-        // Thread for requesting object registry
-        std::thread registry_request_thread_;
-        std::atomic<bool> registry_thread_stop_{ false };
-        std::mutex registry_mutex_;
-        std::condition_variable registry_cv_;
-        bool registry_received_{ false };
-        uint64_t registry_request_id_{ 0 };
-        std::vector<aergo::module::helpers::scene_detection_helper::RegisteredBox> registered_boxes_;
+
+        std::unique_ptr<sdh::RegistryRequestHandler> registry_request_handler_;
     };
 }

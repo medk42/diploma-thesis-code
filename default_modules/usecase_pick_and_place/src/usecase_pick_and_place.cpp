@@ -14,7 +14,6 @@
 using namespace aergo::default_modules::usecase_pick_and_place;
 using namespace aergo::module;
 using namespace aergo::module::helpers::usecase_wrapper;
-namespace ri = aergo::module::helpers::robot_interface;
 namespace pm = aergo::module::helpers::pen_messages;
 namespace sdh = aergo::module::helpers::scene_detection_helper;
 namespace pu = aergo::module::helpers::pose_utils;
@@ -69,28 +68,19 @@ UsecasePickAndPlace::UsecasePickAndPlace(
         request_type_to_channel, *this
     );
 
+    // Create registry request handler which validates the channel and launches background thread
+    registry_request_handler_ = std::make_unique<sdh::RegistryRequestHandler>(
+        scene_detection_request_channel_id_,
+        this
+    );
+
+    if (!registry_request_handler_ || !registry_request_handler_->valid())
+    {
+        log(logging::LogType::ERROR, "UsecasePickAndPlace: Failed to create registry request handler.");
+        return;
+    }
+
     valid_ = true;
-    
-    // Start thread to request object registry
-    registry_thread_stop_ = false;
-    registry_received_ = false;
-    registry_request_thread_ = std::thread(&UsecasePickAndPlace::registryRequestThread, this);
-}
-
-
-UsecasePickAndPlace::~UsecasePickAndPlace() noexcept
-{
-    // Stop the registry request thread
-    {
-        std::lock_guard<std::mutex> lock(registry_mutex_);
-        registry_thread_stop_ = true;
-    }
-    registry_cv_.notify_one();
-    
-    if (registry_request_thread_.joinable())
-    {
-        registry_request_thread_.join();
-    }
 }
 
 
@@ -129,6 +119,11 @@ bool UsecasePickAndPlace::sendSceneDetectionRequest(uint64_t& out_request_id)
 
 aergo::module::IModule::IngressDecision UsecasePickAndPlace::onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, ChannelIdentifier src, const message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept
 {
+    if (registry_request_handler_ && registry_request_handler_->handlesIngress(kind, local_channel_id, src, msg))
+    {
+        return registry_request_handler_->processIngress(kind, local_channel_id, src, msg, queue_status);
+    }
+
     if (sync_request_helper_->handlesIngress(kind, local_channel_id, src))
     {
         return sync_request_helper_->onIngress(kind, msg, queue_status);
@@ -153,42 +148,11 @@ void UsecasePickAndPlace::processResponse(uint32_t request_consumer_id, ChannelI
         return;
     }
 
-    // Check if this is a scene detection registry response
-    if (request_consumer_id == scene_detection_request_channel_id_)
+    if (registry_request_handler_ && registry_request_handler_->handlesResponse(request_consumer_id, source_channel, message))
     {
-        sdh::Response response;
-        if (message.readAs(response) && response.req_type == sdh::ReqType::READ_REGISTRY)
+        if (registry_request_handler_->processResponse(message))
         {
-            // Check if this matches our pending request
-            {
-                std::lock_guard<std::mutex> lock(registry_mutex_);
-                if (!registry_received_ && message.id_ == registry_request_id_)
-                {
-                    // Parse the registry response
-                    if (message.blob_count_ == 1 && message.blobs_ != nullptr)
-                    {
-                        if (response.parseRegistry(message.blobs_[0].data(), message.blobs_[0].size(), registered_boxes_))
-                        {
-                            log(logging::LogType::INFO, "UsecasePickAndPlace: Received object registry with " + std::to_string(registered_boxes_.size()) + " registered objects.");
-                            registry_received_ = true;
-                            registry_cv_.notify_one();
-                        }
-                        else
-                        {
-                            log(logging::LogType::WARNING, "UsecasePickAndPlace: Failed to parse registry response.");
-                        }
-                    }
-                    else
-                    {
-                        log(logging::LogType::WARNING, "UsecasePickAndPlace: Registry response missing blob data.");
-                    }
-                }
-                else
-                {
-                    log(logging::LogType::WARNING, "UsecasePickAndPlace: Received registry response, but ID does not match pending request or already received.");
-                }
-            }
-            return; // Don't pass to BaseUsecase, we handled it
+            return; // handled by registry handler
         }
     } 
 
@@ -827,52 +791,6 @@ std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::asyncWaitForFini
     return std::expected<void, uw::helper::ErrorInfo>{};
 }
 
-
-void UsecasePickAndPlace::registryRequestThread()
-{
-    // Get channel info for the scene detection request channel
-    InputChannelMapInfo::IndividualChannelInfo channel_info = getRequestChannelInfo(scene_detection_request_channel_id_);
-        
-    if (channel_info.channel_identifier_ == nullptr || channel_info.channel_identifier_count_ == 0)
-    {
-        log(logging::LogType::ERROR, "UsecasePickAndPlace: There should be exactly one scene detection request channel by contract, invalid state");
-        return; // Exit thread
-    }
-
-    // Pick the first channel (there's exactly one by contract)
-    ChannelIdentifier target_channel = channel_info.channel_identifier_[0];
-    sdh::Request request = sdh::Request::readRegistry();
-    message::MessageHeader message = message::MessageHeader::Message(&request);
-
-    while (!registry_thread_stop_.load())
-    {
-        std::unique_lock<std::mutex> lock(registry_mutex_);
-        registry_request_id_ = sendRequest(scene_detection_request_channel_id_, target_channel, message);
-        
-        log(logging::LogType::INFO, "UsecasePickAndPlace: Sent registry request, waiting for response...");
-        
-        // Wait for response or timeout (10 seconds)
-        if (registry_cv_.wait_for(lock, std::chrono::seconds(10), [this]() { 
-            return registry_received_ || registry_thread_stop_.load(); 
-        }))
-        {
-            if (registry_received_)
-            {
-                log(logging::LogType::INFO, "UsecasePickAndPlace: Registry received successfully, thread finishing.");
-                break; // Exit thread
-            }
-            // else thread_stop was set, exit loop
-        }
-        else
-        {
-            log(logging::LogType::WARNING, "UsecasePickAndPlace: Registry request timeout, will retry in 10s.");
-        }
-    }
-    
-    log(logging::LogType::INFO, "UsecasePickAndPlace: Registry request thread exiting.");
-}
-
-
 std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::deserializeSceneResponse(
     const std::vector<uint8_t>& scene_data,
     std::vector<sdh::DetectedBox>& out_detected_boxes
@@ -1113,14 +1031,29 @@ std::expected<UsecasePickAndPlace::PickDetectionResult, uw::helper::ErrorInfo> U
 
     double min_distance = std::numeric_limits<double>::max();
     const sdh::DetectedBox* closest_box = nullptr;
-    
-    std::lock_guard<std::mutex> lock(registry_mutex_);
+
+    // Get a snapshot of the registered boxes from the registry handler
+    std::optional<std::vector<sdh::RegisteredBox>> registered_boxes_opt;
+    if (registry_request_handler_)
+    {
+        registered_boxes_opt = registry_request_handler_->getRegisteredBoxesSnapshot();
+    }
+
+    if (!registered_boxes_opt)
+    {
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(18, "UsecasePickAndPlace: Failed to get registered boxes snapshot from registry request handler."));
+    }
+
+    const auto& registered_boxes = registered_boxes_opt.value();
+
     for (const auto& detected_box : detected_boxes)
     {
-        auto it = std::find_if(registered_boxes_.begin(), registered_boxes_.end(), [detected_box](const sdh::RegisteredBox& box) { 
-            return box.id == detected_box.id; 
-        });
-        if (it == registered_boxes_.end())
+        auto it = std::find_if(registered_boxes.begin(), registered_boxes.end(),
+            [detected_box](const sdh::RegisteredBox& box)
+            {
+                return box.id == detected_box.id;
+            });
+        if (it == registered_boxes.end())
         {
             continue;
         }
