@@ -37,7 +37,7 @@ namespace aergo::module::helpers::scene_detection_helper
         ) const noexcept
         {
             std::lock_guard<std::mutex> lock(registry_mutex_);
-            return kind == aergo::module::IModule::ProcessingType::REQUEST && local_channel_id == scene_detection_request_channel_id_ && src == target_channel_
+            return kind == aergo::module::IModule::ProcessingType::RESPONSE && local_channel_id == scene_detection_request_channel_id_ && src == target_channel_
             && message.id_ == registry_request_id_;
         }
 
@@ -50,7 +50,7 @@ namespace aergo::module::helpers::scene_detection_helper
         ) noexcept
         {
             std::lock_guard<std::mutex> lock(registry_mutex_);
-            return kind == aergo::module::IModule::ProcessingType::REQUEST && local_channel_id == scene_detection_request_channel_id_ && src == target_channel_
+            return kind == aergo::module::IModule::ProcessingType::RESPONSE && local_channel_id == scene_detection_request_channel_id_ && src == target_channel_
             && message.id_ == registry_request_id_ ? aergo::module::IModule::IngressDecision::ACCEPT : aergo::module::IModule::IngressDecision::DROP;
         }
 
