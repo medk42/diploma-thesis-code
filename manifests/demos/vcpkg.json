@@ -1,6 +1,7 @@
 {
   "name": "aergo-demos",
   "version-string": "0.1.0",
+  "builtin-baseline": "cfcbdb245f1179a5a493890a0b69531d66969e62",
   "dependencies": [
     {
       "name": "opencv4",
