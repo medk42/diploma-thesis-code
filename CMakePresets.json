@@ -12,7 +12,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-linux-pic-static",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
         "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/core",
-        "VCPKG_INSTALL_OPTIONS": "--clean-buildtrees-after-build;--clean-packages-after-build",
+        "VCPKG_INSTALL_OPTIONS": "--clean-after-build",
         "AERGO_BUILD_BACKEND": "ON",
         "AERGO_BUILD_DEFAULT_MODULES": "ON",
         "AERGO_BUILD_DEMOS": "OFF"
@@ -28,7 +28,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
         "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/demos",
-        "VCPKG_INSTALL_OPTIONS": "--clean-buildtrees-after-build;--clean-packages-after-build",
+        "VCPKG_INSTALL_OPTIONS": "--clean-after-build",
         "AERGO_BUILD_BACKEND": "OFF",
         "AERGO_BUILD_DEFAULT_MODULES": "OFF",
         "AERGO_BUILD_DEMOS": "ON"
@@ -44,7 +44,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
         "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/core",
-        "VCPKG_INSTALL_OPTIONS": "--clean-buildtrees-after-build;--clean-packages-after-build",
+        "VCPKG_INSTALL_OPTIONS": "--clean-after-build",
         "AERGO_BUILD_BACKEND": "ON",
         "AERGO_BUILD_DEFAULT_MODULES": "ON",
         "AERGO_BUILD_DEMOS": "OFF"
@@ -60,7 +60,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-dynamic",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
         "VCPKG_MANIFEST_DIR": "${sourceDir}/manifests/demos",
-        "VCPKG_INSTALL_OPTIONS": "--clean-buildtrees-after-build;--clean-packages-after-build",
+        "VCPKG_INSTALL_OPTIONS": "--clean-after-build",
         "AERGO_BUILD_BACKEND": "OFF",
         "AERGO_BUILD_DEFAULT_MODULES": "OFF",
         "AERGO_BUILD_DEMOS": "ON"
