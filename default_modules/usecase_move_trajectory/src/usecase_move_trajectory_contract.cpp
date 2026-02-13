@@ -94,6 +94,12 @@ p_desc::ParameterList advanced_parameters(std::move(std::vector<p_desc::Paramete
         .param_desc_ = "Orientation behavior during trajectory movement: Fixed keeps orientation constant, Tangent aligns orientation with the path tangent.",
         .enum_values_ = { "Fixed", "Tangent" },
         .default_value_ = "1"
+    },
+    {
+        .type_ = p_desc::ParameterType::BOOL,
+        .param_name_ = "Linear Move To First Pose",
+        .param_desc_ = "Whether to move linearly to the first pose of the trajectory before starting the trajectory movement.",
+        .default_value_ = "1"
     }
 }));
 

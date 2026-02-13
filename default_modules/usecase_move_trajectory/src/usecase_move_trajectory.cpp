@@ -235,12 +235,12 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::createCommandF
         });
     }
 
-    if (advanced_parameter_values.size() != 3)
+    if (advanced_parameter_values.size() != 4)
     {
-        return std::unexpected(uw::helper::ErrorInfo::WithDetails(7, "UsecaseMoveTrajectory: Expected 3 advanced parameter value groups, got " + std::to_string(advanced_parameter_values.size())));
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(7, "UsecaseMoveTrajectory: Expected 4 advanced parameter value groups, got " + std::to_string(advanced_parameter_values.size())));
     }
 
-    if (advanced_parameter_values[0].size() != 1 || advanced_parameter_values[1].size() != 1 || advanced_parameter_values[2].size() != 1)
+    if (advanced_parameter_values[0].size() != 1 || advanced_parameter_values[1].size() != 1 || advanced_parameter_values[2].size() != 1 || advanced_parameter_values[3].size() != 1)
     {
         return std::unexpected(uw::helper::ErrorInfo::WithDetails(8, "UsecaseMoveTrajectory: Expected 1 value per advanced parameter group."));
     }
@@ -270,6 +270,12 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::createCommandF
         return std::unexpected(uw::helper::ErrorInfo::WithDetails(12, "UsecaseMoveTrajectory: Orientation type index must be 0 (Fixed) or 1 (Tangent), got " + std::to_string(orientation_type_index)));
     }
 
+    if (!std::holds_alternative<bool>(advanced_parameter_values[3][0].value_))
+    {
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(13, "UsecaseMoveTrajectory: Expected bool for linear move to first pose, got " + std::to_string(advanced_parameter_values[3][0].value_.index())));
+    }
+    bool linear_move_to_first_pose = std::get<bool>(advanced_parameter_values[3][0].value_);
+
     // Validate speed and acceleration
     if (speed <= 0 || acceleration <= 0)
     {
@@ -282,6 +288,7 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::createCommandF
     command_json["speed_mm_s"] = speed;
     command_json["acceleration_mm_s2"] = acceleration;
     command_json["orientation_type"] = orientation_type_index;
+    command_json["linear_move_to_first_pose"] = linear_move_to_first_pose;
 
     out_command_json = command_json;
     return std::expected<void, uw::helper::ErrorInfo>{};
@@ -384,6 +391,12 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::validateParame
         return std::unexpected(uw::helper::ErrorInfo::WithDetails(105, "UsecaseMoveTrajectory: Orientation type must be 0 (Fixed) or 1 (Tangent), got " + std::to_string(orientation_type)));
     }
 
+    // Validate linear_move_to_first_pose
+    if (!command_json.contains("linear_move_to_first_pose") || !command_json["linear_move_to_first_pose"].is_boolean())
+    {
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(106, "UsecaseMoveTrajectory: command JSON missing 'linear_move_to_first_pose' boolean."));
+    }
+
     // all checks passed, return success
     return std::expected<void, uw::helper::ErrorInfo>{};
 }
@@ -422,11 +435,24 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveTrajectory::runProgram(con
     const double acceleration_m_s2 = command_json["acceleration_mm_s2"].get<double>() / 1000.0;
     const int32_t orientation_type_index = command_json["orientation_type"].get<int32_t>();
     const rc::OrientationType orientation_type = (orientation_type_index == 0) ? rc::OrientationType::FIXED : rc::OrientationType::TANGENT;
+    const bool linear_move_to_first_pose = command_json["linear_move_to_first_pose"].get<bool>();
+
+    if (linear_move_to_first_pose)
+    {
+        rc::MoveRequestResult res = robot_wrapper_.moveLinear(trajectory.front(), speed_m_s, acceleration_m_s2, false);
+        if (!res.success_)
+        {
+            return std::unexpected(uw::helper::ErrorInfo::WithDetails(1, "UsecaseMoveTrajectory: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)));
+        }
+
+        auto async_res = asyncWaitForFinish(res.action_id_);
+        if (!async_res) return async_res;
+    }
 
     rc::MoveRequestResult res = robot_wrapper_.moveTrajectory(trajectory, speed_m_s, acceleration_m_s2, orientation_type, false);
     if (!res.success_)
     {
-        return std::unexpected(uw::helper::ErrorInfo::WithDetails(1, "UsecaseMoveTrajectory: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)));
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(1, "UsecaseMoveTrajectory: Failed to send move trajectory command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)));
     }
 
     auto async_res = asyncWaitForFinish(res.action_id_);
