@@ -129,13 +129,13 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
 
         response_handlers_[request_id] = [this](ChannelIdentifier source_channel, const aergo::module::message::MessageHeader& response_message)
         {
-            if (pending_modules_for_update_.find(source_channel.producer_module_id_) == pending_modules_for_update_.end())
+            if (pending_modules_for_update_.find(source_channel.module_id_) == pending_modules_for_update_.end())
             {
-                base_module_ref_->log(logging::LogType::WARNING, "UsecaseTree::updateAvailableUsecases: Received unexpected response from module " + std::to_string(source_channel.producer_module_id_));
+                base_module_ref_->log(logging::LogType::WARNING, "UsecaseTree::updateAvailableUsecases: Received unexpected response from module " + std::to_string(source_channel.module_id_));
                 return;
             }
 
-            pending_modules_for_update_.erase(source_channel.producer_module_id_);
+            pending_modules_for_update_.erase(source_channel.module_id_);
 
             if (!response_message.success_)
             {
@@ -144,7 +144,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
                 pending_update_on_finish_ = std::nullopt;
                 on_finish_callback(false, available_usecases_map_);
 
-                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Module " + std::to_string(source_channel.producer_module_id_) + " reported failure in response.");
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Module " + std::to_string(source_channel.module_id_) + " reported failure in response.");
                 return;
             }
 
@@ -156,7 +156,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
                 pending_update_on_finish_ = std::nullopt;
                 on_finish_callback(false, available_usecases_map_);
 
-                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Failed to read response from module " + std::to_string(source_channel.producer_module_id_));    
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Failed to read response from module " + std::to_string(source_channel.module_id_));    
                 return;
             }
 
@@ -167,7 +167,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
                 pending_update_on_finish_ = std::nullopt;
                 on_finish_callback(false, available_usecases_map_);
 
-                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Module " + std::to_string(source_channel.producer_module_id_) + " reported failure in response.");
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Module " + std::to_string(source_channel.module_id_) + " reported failure in response.");
                 return;
             }
 
@@ -178,7 +178,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
                 pending_update_on_finish_ = std::nullopt;
                 on_finish_callback(false, available_usecases_map_);
 
-                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Invalid blobs in response from module " + std::to_string(source_channel.producer_module_id_));
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Invalid blobs in response from module " + std::to_string(source_channel.module_id_));
                 return;
             }
 
@@ -202,7 +202,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
                 pending_update_on_finish_ = std::nullopt;
                 on_finish_callback(false, available_usecases_map_);
 
-                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Failed to read usecase parameters from module " + std::to_string(source_channel.producer_module_id_));
+                base_module_ref_->log(logging::LogType::ERROR, "UsecaseTree::updateAvailableUsecases: Failed to read usecase parameters from module " + std::to_string(source_channel.module_id_));
                 return;
             }
 
@@ -230,7 +230,7 @@ bool UsecaseTree::updateAvailableUsecases(std::optional<std::function<void(bool,
             }
         };
 
-        pending_modules_for_update_.insert(channel.producer_module_id_);
+        pending_modules_for_update_.insert(channel.module_id_);
     }
 
     return true;

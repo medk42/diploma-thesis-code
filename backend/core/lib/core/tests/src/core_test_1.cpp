@@ -124,8 +124,8 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
         aergo::module::ChannelIdentifier channel_id_b {
-            .producer_module_id_ = 1,
-            .producer_channel_id_ = 1
+            .module_id_ = 1,
+            .local_channel_id_ = 1
         };
 
         aergo::module::InputChannelMapInfo::IndividualChannelInfo single_channel_info_b
@@ -172,24 +172,24 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
         REQUIRE(new_state_id == last_state_id);
         last_state_id = new_state_id;
 
-        channel_id_b.producer_module_id_ = 1;
-        channel_id_b.producer_channel_id_ = 0;
+        channel_id_b.module_id_ = 1;
+        channel_id_b.local_channel_id_ = 0;
         REQUIRE(core.addModule(1, channel_map_info_b) == false);
 
         new_state_id = core.getModulesMappingStateId();
         REQUIRE(new_state_id == last_state_id);
         last_state_id = new_state_id;
 
-        channel_id_b.producer_module_id_ = 0;
-        channel_id_b.producer_channel_id_ = 1;
+        channel_id_b.module_id_ = 0;
+        channel_id_b.local_channel_id_ = 1;
         REQUIRE(core.addModule(1, channel_map_info_b) == false);
 
-        channel_id_b.producer_module_id_ = 0;
-        channel_id_b.producer_channel_id_ = 100;
+        channel_id_b.module_id_ = 0;
+        channel_id_b.local_channel_id_ = 100;
         REQUIRE(core.addModule(1, channel_map_info_b) == false);
 
-        channel_id_b.producer_module_id_ = 100;
-        channel_id_b.producer_channel_id_ = 0;
+        channel_id_b.module_id_ = 100;
+        channel_id_b.local_channel_id_ = 0;
         REQUIRE(core.addModule(1, channel_map_info_b) == false);
 
         single_channel_info_b.channel_identifier_ = nullptr;
@@ -256,13 +256,13 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
         aergo::module::ChannelIdentifier channel_sub_id_c = {
-            .producer_module_id_ = 1,
-            .producer_channel_id_ = 1
+            .module_id_ = 1,
+            .local_channel_id_ = 1
         };
 
         aergo::module::ChannelIdentifier channel_req_id_c = {
-            .producer_module_id_ = 0,
-            .producer_channel_id_ = 0
+            .module_id_ = 0,
+            .local_channel_id_ = 0
         };
 
         aergo::module::InputChannelMapInfo::IndividualChannelInfo single_channel_sub_info_c
@@ -379,18 +379,18 @@ TEST_CASE( "Core Test 1", "[core_test_1]" )
 
 
         aergo::module::ChannelIdentifier channel_sub_id_d = {
-            .producer_module_id_ = 0,
-            .producer_channel_id_ = 0
+            .module_id_ = 0,
+            .local_channel_id_ = 0
         };
 
         aergo::module::ChannelIdentifier channel_req_ids_d[2] = {
             {
-                .producer_module_id_ = 2,
-                .producer_channel_id_ = 0
+                .module_id_ = 2,
+                .local_channel_id_ = 0
             },
             {
-                .producer_module_id_ = 3,
-                .producer_channel_id_ = 0
+                .module_id_ = 3,
+                .local_channel_id_ = 0
             }
         };
 

@@ -48,8 +48,8 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
 
     if (!message.success_)
     {
-        base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received failed response from module " + std::to_string(source_channel.producer_module_id_) + ", removing from awaiting list");
-        awaiting_full_read_.erase(source_channel.producer_module_id_);
+        base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received failed response from module " + std::to_string(source_channel.module_id_) + ", removing from awaiting list");
+        awaiting_full_read_.erase(source_channel.module_id_);
         return;
     }
 
@@ -72,18 +72,18 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
 
     if (req_type == vis3d::ReqType::READ_FULL)
     {
-        if (awaiting_full_read_.find(source_channel.producer_module_id_) == awaiting_full_read_.end())
+        if (awaiting_full_read_.find(source_channel.module_id_) == awaiting_full_read_.end())
         {
-            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received unexpected READ_FULL response from module " + std::to_string(source_channel.producer_module_id_));
+            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received unexpected READ_FULL response from module " + std::to_string(source_channel.module_id_));
         }
         else
         {
-            awaiting_full_read_.erase(source_channel.producer_module_id_);
+            awaiting_full_read_.erase(source_channel.module_id_);
         }
 
-        if (module_registered_resources_.find(source_channel.producer_module_id_) != module_registered_resources_.end())
+        if (module_registered_resources_.find(source_channel.module_id_) != module_registered_resources_.end())
         {
-            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received READ_FULL response from module " + std::to_string(source_channel.producer_module_id_) + " that already sent registrations, ignoring registrations");
+            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received READ_FULL response from module " + std::to_string(source_channel.module_id_) + " that already sent registrations, ignoring registrations");
         }
         else
         {
@@ -96,17 +96,17 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
             }
 
             // Ensure we have an entry for this module, even if no resources were registered (this avoids re-requesting registrations)
-            module_registered_resources_[source_channel.producer_module_id_];
-            module_existing_objects_[source_channel.producer_module_id_];
-            module_existing_trajectories_[source_channel.producer_module_id_];
+            module_registered_resources_[source_channel.module_id_];
+            module_existing_objects_[source_channel.module_id_];
+            module_existing_trajectories_[source_channel.module_id_];
 
             for (const auto& [res_id, shape] : registered_resources_)
             {
-                module_registered_resources_[source_channel.producer_module_id_][res_id] = RegisteredResource{shape, std::nullopt};
+                module_registered_resources_[source_channel.module_id_][res_id] = RegisteredResource{shape, std::nullopt};
                 if (scene_container_)
                 {
                     auto local_id = scene_container_->createObjectDescription(shape);
-                    module_registered_resources_[source_channel.producer_module_id_][res_id].local_id = local_id;   
+                    module_registered_resources_[source_channel.module_id_][res_id].local_id = local_id;   
                 }
             }
         }
@@ -131,19 +131,19 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
 
 
         // Find registered resources for this module, send READ_FULL if we don't have any
-        auto res_it = module_registered_resources_.find(source_channel.producer_module_id_);
+        auto res_it = module_registered_resources_.find(source_channel.module_id_);
         if (res_it == module_registered_resources_.end())
         {
-            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received response from unknown module " + std::to_string(source_channel.producer_module_id_) + ", sending READ_FULL request");
-            sendReadFullRequest(source_channel.producer_module_id_);
+            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received response from unknown module " + std::to_string(source_channel.module_id_) + ", sending READ_FULL request");
+            sendReadFullRequest(source_channel.module_id_);
             return;
         }
         auto& module_resource_map = res_it->second;
 
 
         // Clear existing objects and trajectories for this module
-        auto& existing_objects = module_existing_objects_[source_channel.producer_module_id_];
-        auto& existing_trajectories = module_existing_trajectories_[source_channel.producer_module_id_];
+        auto& existing_objects = module_existing_objects_[source_channel.module_id_];
+        auto& existing_trajectories = module_existing_trajectories_[source_channel.module_id_];
 
         if (scene_container_)
         {
@@ -175,7 +175,7 @@ void SceneVisualizationHandler::processVisualizationResponse(uint32_t request_co
             auto res_it2 = module_resource_map.find(obj_data.resource_id);
             if (res_it2 == module_resource_map.end())
             {
-                base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received object with unregistered resource from module " + std::to_string(source_channel.producer_module_id_) + ", resource ID: " + std::to_string(obj_data.resource_id.id));
+                base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processVisualizationResponse: received object with unregistered resource from module " + std::to_string(source_channel.module_id_) + ", resource ID: " + std::to_string(obj_data.resource_id.id));
                 continue;
             }
             auto& registered_resource = res_it2->second;
@@ -251,18 +251,18 @@ void SceneVisualizationHandler::processMessage(uint32_t subscribe_consumer_id, C
     if (pub_type == vis3d::PubType::ANNOUNCE)
     {
         // New module, request full scene (with registrations)
-        if (module_registered_resources_.find(source_channel.producer_module_id_) == module_registered_resources_.end())
+        if (module_registered_resources_.find(source_channel.module_id_) == module_registered_resources_.end())
         {
-            sendReadFullRequest(source_channel.producer_module_id_);
+            sendReadFullRequest(source_channel.module_id_);
         }
         // Otherwise ignore, we already know this module
     }
     else if (pub_type == vis3d::PubType::UPDATE)
     {
-        if (module_registered_resources_.find(source_channel.producer_module_id_) == module_registered_resources_.end())
+        if (module_registered_resources_.find(source_channel.module_id_) == module_registered_resources_.end())
         {
-            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processMessage: received UPDATE message from unknown module " + std::to_string(source_channel.producer_module_id_) + ", sending READ_FULL request");
-            sendReadFullRequest(source_channel.producer_module_id_);
+            base_module_->log(logging::LogType::WARNING, "SceneVisualizationHandler::processMessage: received UPDATE message from unknown module " + std::to_string(source_channel.module_id_) + ", sending READ_FULL request");
+            sendReadFullRequest(source_channel.module_id_);
             return;
         }
 
@@ -289,7 +289,7 @@ void SceneVisualizationHandler::processMessage(uint32_t subscribe_consumer_id, C
             return;
         }
 
-        processUpdate(source_channel.producer_module_id_, object_commands, trajectory_commands);
+        processUpdate(source_channel.module_id_, object_commands, trajectory_commands);
     }
     else
     {
@@ -313,7 +313,7 @@ void SceneVisualizationHandler::sendReadFullRequest(uint64_t module_id)
         available_scene_visualization_channels.begin(), 
         available_scene_visualization_channels.end(),
         [module_id](const ChannelIdentifier& ch_id) {
-            return ch_id.producer_module_id_ == module_id;
+            return ch_id.module_id_ == module_id;
         }
     );
 
@@ -338,7 +338,7 @@ void SceneVisualizationHandler::sendReadFullRequest(ChannelIdentifier target_cha
         .blob_count_ = 0
     };
 
-    awaiting_full_read_.insert(target_channel.producer_module_id_);
+    awaiting_full_read_.insert(target_channel.module_id_);
 
     base_module_->sendRequest(scene_request_channel_id_, target_channel, msg);
 }

@@ -140,7 +140,7 @@ IModule::IngressDecision RobotModuleKassow::onIngress(ProcessingType kind, uint3
         {
             if (queue_status != QueueStatus::NORMAL)
             {
-                log(logging::LogType::WARNING, "Kassow robot module dropping request due to request queue full: " + std::to_string(identifier.producer_module_id_) + "/" + std::to_string(identifier.producer_channel_id_));
+                log(logging::LogType::WARNING, "Kassow robot module dropping request due to request queue full: " + std::to_string(identifier.module_id_) + "/" + std::to_string(identifier.local_channel_id_));
                 return IngressDecision::DROP;
             }
             return IngressDecision::ACCEPT;

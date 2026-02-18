@@ -267,16 +267,16 @@ void Core::registerModuleChannelNames(uint64_t module_id, const aergo::module::M
     for (uint32_t channel_id = 0; channel_id < module_info->publish_producer_count_; ++channel_id)
     {
         existing_publish_channels_[module_info->publish_producers_[channel_id].channel_type_identifier_].push_back({
-            .producer_module_id_ = module_id,
-            .producer_channel_id_ = channel_id
+            .module_id_ = module_id,
+            .local_channel_id_ = channel_id
         });
     }
 
     for (uint32_t channel_id = 0; channel_id < module_info->response_producer_count_; ++channel_id)
     {
         existing_response_channels_[module_info->response_producers_[channel_id].channel_type_identifier_].push_back({
-            .producer_module_id_ = module_id,
-            .producer_channel_id_ = channel_id
+            .module_id_ = module_id,
+            .local_channel_id_ = channel_id
         });
     }
 
@@ -285,8 +285,8 @@ void Core::registerModuleChannelNames(uint64_t module_id, const aergo::module::M
         if (module_info->subscribe_consumers_[channel_id].count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
         {
             existing_subscribe_auto_all_channels_[module_info->subscribe_consumers_[channel_id].channel_type_identifier_].push_back({
-                .producer_module_id_ = module_id,
-                .producer_channel_id_ = channel_id
+                .module_id_ = module_id,
+                .local_channel_id_ = channel_id
             });
         }
     }
@@ -296,8 +296,8 @@ void Core::registerModuleChannelNames(uint64_t module_id, const aergo::module::M
         if (module_info->request_consumers_[channel_id].count_ == aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
         {
             existing_request_auto_all_channels_[module_info->request_consumers_[channel_id].channel_type_identifier_].push_back({
-                .producer_module_id_ = module_id,
-                .producer_channel_id_ = channel_id
+                .module_id_ = module_id,
+                .local_channel_id_ = channel_id
             });
         }
     }
@@ -363,12 +363,12 @@ void Core::registerConsumers(uint64_t module_id, aergo::module::InputChannelMapI
         {
             aergo::module::ChannelIdentifier channel_identifier = consumer_channel_info.channel_identifier_[channel_i];
 
-            auto& mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? running_modules_[channel_identifier.producer_module_id_]->mapping_publish_ : running_modules_[channel_identifier.producer_module_id_]->mapping_response_;
+            auto& mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? running_modules_[channel_identifier.module_id_]->mapping_publish_ : running_modules_[channel_identifier.module_id_]->mapping_response_;
             auto& mapping_consumer = (consumer_type == ConsumerType::SUBSCRIBE) ? running_module->mapping_subscribe_ : running_module->mapping_request_;
 
-            mapping_producer[channel_identifier.producer_channel_id_].push_back({
-                .producer_module_id_ = module_id,
-                .producer_channel_id_ = channel_id
+            mapping_producer[channel_identifier.local_channel_id_].push_back({
+                .module_id_ = module_id,
+                .local_channel_id_ = channel_id
             });
 
             mapping_consumer[channel_id].push_back(channel_identifier);
@@ -410,13 +410,13 @@ void Core::registerToProducersAutoAll(uint64_t module_id, aergo::module::InputCh
             const std::vector<aergo::module::ChannelIdentifier>& existing_channels = (consumer_type == ConsumerType::SUBSCRIBE) ? getExistingPublishChannelsImpl(consumer_info.channel_type_identifier_) : getExistingResponseChannelsImpl(consumer_info.channel_type_identifier_);
             for (aergo::module::ChannelIdentifier producer_channel_identifier : existing_channels)
             {
-                if (producer_channel_identifier.producer_module_id_ >= running_modules_.size())
+                if (producer_channel_identifier.module_id_ >= running_modules_.size())
                 {
                     log(aergo::module::logging::LogType::ERROR, "Invalid producer_channel_identifier in registerToProducersAutoAll, module id out of bounds.");
                     std::terminate();
                 }
 
-                aergo::core::structures::ModuleData* producer_module_data = running_modules_[producer_channel_identifier.producer_module_id_].get();
+                aergo::core::structures::ModuleData* producer_module_data = running_modules_[producer_channel_identifier.module_id_].get();
                 if (producer_module_data == nullptr)
                 {
                     log(aergo::module::logging::LogType::ERROR, "Invalid producer_channel_identifier in registerToProducersAutoAll, source module is already destroyed.");
@@ -426,15 +426,15 @@ void Core::registerToProducersAutoAll(uint64_t module_id, aergo::module::InputCh
                 auto& mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? producer_module_data->mapping_publish_ : producer_module_data->mapping_response_;
                 auto& mapping_consumer = (consumer_type == ConsumerType::SUBSCRIBE) ? running_module->mapping_subscribe_ : running_module->mapping_request_;
 
-                if (producer_channel_identifier.producer_channel_id_ >= mapping_producer.size())
+                if (producer_channel_identifier.local_channel_id_ >= mapping_producer.size())
                 {
                     log(aergo::module::logging::LogType::ERROR, "Invalid producer_channel_identifier in registerToProducersAutoAll, channel id out of bounds.");
                     std::terminate();
                 }
                 
-                mapping_producer[producer_channel_identifier.producer_channel_id_].push_back({
-                    .producer_module_id_ = module_id,
-                    .producer_channel_id_ = channel_id
+                mapping_producer[producer_channel_identifier.local_channel_id_].push_back({
+                    .module_id_ = module_id,
+                    .local_channel_id_ = channel_id
                 });
 
                 mapping_consumer[channel_id].push_back(producer_channel_identifier);
@@ -480,13 +480,13 @@ void Core::registerToConsumersAutoAll(uint64_t module_id, aergo::module::InputCh
         {
             for (aergo::module::ChannelIdentifier other_channel_id : it->second)
             {
-                if (other_channel_id.producer_module_id_ >= running_modules_.size())
+                if (other_channel_id.module_id_ >= running_modules_.size())
                 {
                     log(aergo::module::logging::LogType::ERROR, "Invalid other_channel_id in registerToConsumersAutoAll, module id out of bounds.");
                     std::terminate();
                 }
 
-                aergo::core::structures::ModuleData* consumer_module_data = running_modules_[other_channel_id.producer_module_id_].get();
+                aergo::core::structures::ModuleData* consumer_module_data = running_modules_[other_channel_id.module_id_].get();
                 if (consumer_module_data == nullptr)
                 {
                     log(aergo::module::logging::LogType::ERROR, "Invalid other_channel_id in registerToConsumersAutoAll, source module is already destroyed.");
@@ -496,15 +496,15 @@ void Core::registerToConsumersAutoAll(uint64_t module_id, aergo::module::InputCh
                 auto& mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? running_module->mapping_publish_ : running_module->mapping_response_;
                 auto& mapping_consumer = (consumer_type == ConsumerType::SUBSCRIBE) ? consumer_module_data->mapping_subscribe_ : consumer_module_data->mapping_request_;
 
-                if (other_channel_id.producer_channel_id_ >= mapping_consumer.size())
+                if (other_channel_id.local_channel_id_ >= mapping_consumer.size())
                 {
                     log(aergo::module::logging::LogType::ERROR, "Invalid other_channel_id in registerToConsumersAutoAll, channel id out of bounds.");
                     std::terminate();
                 }
 
-                mapping_consumer[other_channel_id.producer_channel_id_].push_back({
-                    .producer_module_id_ = module_id,
-                    .producer_channel_id_ = channel_id
+                mapping_consumer[other_channel_id.local_channel_id_].push_back({
+                    .module_id_ = module_id,
+                    .local_channel_id_ = channel_id
                 });
                 
                 mapping_producer[channel_id].push_back(other_channel_id);
@@ -801,31 +801,31 @@ void Core::collectDependentModulesHelper(structures::ModuleData* module_data, st
     {
         for (auto channel_identifier : connected_channels)
         {
-            if (channel_identifier.producer_module_id_ >= running_modules_.size())
+            if (channel_identifier.module_id_ >= running_modules_.size())
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ too large in collectDependentModulesHelper, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "module_id_ too large in collectDependentModulesHelper, terminating!");
                 std::terminate();
             }
-            if (running_modules_[channel_identifier.producer_module_id_].get() == nullptr)
+            if (running_modules_[channel_identifier.module_id_].get() == nullptr)
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ references destroyed module in collectDependentModulesHelper, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "module_id_ references destroyed module in collectDependentModulesHelper, terminating!");
                 std::terminate();
             }
 
-            const aergo::module::ModuleInfo* other_module_info = (*running_modules_[channel_identifier.producer_module_id_]->module_loader_data_)->readModuleInfo();
+            const aergo::module::ModuleInfo* other_module_info = (*running_modules_[channel_identifier.module_id_]->module_loader_data_)->readModuleInfo();
 
             uint32_t consumer_count = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumer_count_ : other_module_info->request_consumer_count_;
             const aergo::module::communication_channel::Consumer* consumers = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumers_ : other_module_info->request_consumers_;
 
-            if (channel_identifier.producer_channel_id_ >= consumer_count)
+            if (channel_identifier.local_channel_id_ >= consumer_count)
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_channel_id_ too large in hasDependenciesHelper, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "local_channel_id_ too large in hasDependenciesHelper, terminating!");
                 std::terminate();
             }
 
-            if (consumers[channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+            if (consumers[channel_identifier.local_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
             {
-                dependent_modules.push_back(channel_identifier.producer_module_id_);
+                dependent_modules.push_back(channel_identifier.module_id_);
             }
         }
     }
@@ -843,41 +843,41 @@ void Core::removeMappingProducers(uint64_t module_id, ConsumerType consumer_type
     {
         for (auto other_channel_identifier : mapping_producer[channel_id])
         {
-            if (other_channel_identifier.producer_module_id_ >= running_modules_.size())
+            if (other_channel_identifier.module_id_ >= running_modules_.size())
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ too large in removeMappingProducers, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "module_id_ too large in removeMappingProducers, terminating!");
                 std::terminate();
             }
-            if (running_modules_[other_channel_identifier.producer_module_id_].get() == nullptr)
+            if (running_modules_[other_channel_identifier.module_id_].get() == nullptr)
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ references destroyed module in removeMappingProducers, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "module_id_ references destroyed module in removeMappingProducers, terminating!");
                 std::terminate();
             }
 
-            structures::ModuleData* other_module_data = running_modules_[other_channel_identifier.producer_module_id_].get();
+            structures::ModuleData* other_module_data = running_modules_[other_channel_identifier.module_id_].get();
             const aergo::module::ModuleInfo* other_module_info = (*other_module_data->module_loader_data_)->readModuleInfo();
             aergo::module::ChannelIdentifier our_channel {
-                .producer_module_id_ = module_id,
-                .producer_channel_id_ = (uint32_t)channel_id
+                .module_id_ = module_id,
+                .local_channel_id_ = (uint32_t)channel_id
             };
 
             std::vector<std::vector<aergo::module::ChannelIdentifier>>& mapping_consumer = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_data->mapping_subscribe_ : other_module_data->mapping_request_;
             uint32_t consumer_count = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumer_count_ : other_module_info->request_consumer_count_;
             const aergo::module::communication_channel::Consumer* consumers = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->subscribe_consumers_ : other_module_info->request_consumers_;
 
-            if (other_channel_identifier.producer_channel_id_ >= mapping_consumer.size() || other_channel_identifier.producer_channel_id_ >= consumer_count)
+            if (other_channel_identifier.local_channel_id_ >= mapping_consumer.size() || other_channel_identifier.local_channel_id_ >= consumer_count)
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_channel_id_ too large in removeMappingProducers, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "local_channel_id_ too large in removeMappingProducers, terminating!");
                 std::terminate();
             }
 
-            if (consumers[other_channel_identifier.producer_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
+            if (consumers[other_channel_identifier.local_channel_id_].count_ != aergo::module::communication_channel::Consumer::Count::AUTO_ALL)
             {
                 log(aergo::module::logging::LogType::ERROR, "count_ not AUTO_ALL in removeMappingProducers, terminating!");
                 std::terminate();
             }
 
-            std::vector<aergo::module::ChannelIdentifier>& single_channel_map = mapping_consumer[other_channel_identifier.producer_channel_id_];
+            std::vector<aergo::module::ChannelIdentifier>& single_channel_map = mapping_consumer[other_channel_identifier.local_channel_id_];
             auto it = std::find(single_channel_map.begin(), single_channel_map.end(), our_channel);
             
             if (it == single_channel_map.end())
@@ -903,33 +903,33 @@ void Core::removeMappingSubscribers(uint64_t module_id, ConsumerType consumer_ty
     {
         for (auto other_channel_identifier : mapping_consumer[channel_id])
         {
-            if (other_channel_identifier.producer_module_id_ >= running_modules_.size())
+            if (other_channel_identifier.module_id_ >= running_modules_.size())
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ too large in removeMappingProducers, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "module_id_ too large in removeMappingProducers, terminating!");
                 std::terminate();
             }
-            if (running_modules_[other_channel_identifier.producer_module_id_].get() == nullptr)
+            if (running_modules_[other_channel_identifier.module_id_].get() == nullptr)
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_module_id_ references destroyed module in removeMappingProducers, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "module_id_ references destroyed module in removeMappingProducers, terminating!");
                 std::terminate();
             }
 
-            structures::ModuleData* other_module_data = running_modules_[other_channel_identifier.producer_module_id_].get();
+            structures::ModuleData* other_module_data = running_modules_[other_channel_identifier.module_id_].get();
             const aergo::module::ModuleInfo* other_module_info = (*other_module_data->module_loader_data_)->readModuleInfo();
             aergo::module::ChannelIdentifier our_channel {
-                .producer_module_id_ = module_id,
-                .producer_channel_id_ = (uint32_t)channel_id
+                .module_id_ = module_id,
+                .local_channel_id_ = (uint32_t)channel_id
             };
 
             std::vector<std::vector<aergo::module::ChannelIdentifier>>& other_mapping_producer = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_data->mapping_publish_ : other_module_data->mapping_response_;
 
-            if (other_channel_identifier.producer_channel_id_ >= other_mapping_producer.size())
+            if (other_channel_identifier.local_channel_id_ >= other_mapping_producer.size())
             {
-                log(aergo::module::logging::LogType::ERROR, "producer_channel_id_ too large in removeMappingProducers, terminating!");
+                log(aergo::module::logging::LogType::ERROR, "local_channel_id_ too large in removeMappingProducers, terminating!");
                 std::terminate();
             }
 
-            std::vector<aergo::module::ChannelIdentifier>& single_channel_map = other_mapping_producer[other_channel_identifier.producer_channel_id_];
+            std::vector<aergo::module::ChannelIdentifier>& single_channel_map = other_mapping_producer[other_channel_identifier.local_channel_id_];
             auto it = std::find(single_channel_map.begin(), single_channel_map.end(), our_channel);
             
             if (it == single_channel_map.end())
@@ -967,7 +967,7 @@ void Core::removeFromExistingMap(uint64_t module_id, uint32_t channel_count, std
 
         auto& single_channel = it->second;
         single_channel.erase(std::remove_if(single_channel.begin(), single_channel.end(), [module_id](const aergo::module::ChannelIdentifier channel_identifier) {
-            return channel_identifier.producer_module_id_ == module_id;
+            return channel_identifier.module_id_ == module_id;
         }));
     }
 }
@@ -1108,23 +1108,23 @@ bool Core::checkChannelMapValidityArrayCheck(
         {
             aergo::module::ChannelIdentifier channel_identifier = channel_map_consumers[consumer_id].channel_identifier_[channel_id];
             
-            if (channel_identifier.producer_module_id_ >= running_modules_.size() || running_modules_[channel_identifier.producer_module_id_].get() == nullptr)
+            if (channel_identifier.module_id_ >= running_modules_.size() || running_modules_[channel_identifier.module_id_].get() == nullptr)
             {
                 return false;
             }
 
-            structures::ModuleData* other_module_data = running_modules_[channel_identifier.producer_module_id_].get();
+            structures::ModuleData* other_module_data = running_modules_[channel_identifier.module_id_].get();
             const aergo::module::ModuleInfo* other_module_info = (*other_module_data->module_loader_data_)->readModuleInfo();
 
             uint32_t producers_count = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->publish_producer_count_ : other_module_info->response_producer_count_;
             const aergo::module::communication_channel::Producer* producers = (consumer_type == ConsumerType::SUBSCRIBE) ? other_module_info->publish_producers_ : other_module_info->response_producers_;
 
-            if (channel_identifier.producer_channel_id_ >= producers_count)
+            if (channel_identifier.local_channel_id_ >= producers_count)
             {
                 return false;
             }
 
-            const char* producer_type_identifier = producers[channel_identifier.producer_channel_id_].channel_type_identifier_;
+            const char* producer_type_identifier = producers[channel_identifier.local_channel_id_].channel_type_identifier_;
             if (std::strcmp(expected_type_identifier, producer_type_identifier) != 0)
             {
                 return false;
@@ -1141,37 +1141,37 @@ void Core::sendMessage(aergo::module::ChannelIdentifier source_channel, aergo::m
 {
     std::shared_lock<std::shared_mutex> lock(core_mutex_);
 
-    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr || running_modules_[source_channel.producer_module_id_]->destruction_in_progress_)
+    if (source_channel.module_id_ >= running_modules_.size() || running_modules_[source_channel.module_id_].get() == nullptr || running_modules_[source_channel.module_id_]->destruction_in_progress_)
     {
-        log(aergo::module::logging::LogType::WARNING, "Module identified by producer_module_id_ does not exist, discarding message, in sendMessage");
+        log(aergo::module::logging::LogType::WARNING, "Module identified by module_id_ does not exist, discarding message, in sendMessage");
         return;
     }
 
-    auto module_data = running_modules_[source_channel.producer_module_id_].get();
+    auto module_data = running_modules_[source_channel.module_id_].get();
 
-    if (source_channel.producer_channel_id_ >= module_data->mapping_publish_.size())
+    if (source_channel.local_channel_id_ >= module_data->mapping_publish_.size())
     {
-        log(aergo::module::logging::LogType::WARNING, "Channel identified by producer_channel_id_ does not exist, discarding message, in sendMessage");
+        log(aergo::module::logging::LogType::WARNING, "Channel identified by local_channel_id_ does not exist, discarding message, in sendMessage");
         return;
     }
 
-    for (auto other_channel_id : module_data->mapping_publish_[source_channel.producer_channel_id_])
+    for (auto other_channel_id : module_data->mapping_publish_[source_channel.local_channel_id_])
     {
-        if (other_channel_id.producer_module_id_ >= running_modules_.size() || running_modules_[other_channel_id.producer_module_id_].get() == nullptr || running_modules_[other_channel_id.producer_module_id_]->destruction_in_progress_)
+        if (other_channel_id.module_id_ >= running_modules_.size() || running_modules_[other_channel_id.module_id_].get() == nullptr || running_modules_[other_channel_id.module_id_]->destruction_in_progress_)
         {
-            log(aergo::module::logging::LogType::WARNING, "Other module identified by producer_module_id_ does not exist, in sendMessage");
+            log(aergo::module::logging::LogType::WARNING, "Other module identified by module_id_ does not exist, in sendMessage");
             continue;
         }
 
-        auto other_module_data = running_modules_[other_channel_id.producer_module_id_].get();
+        auto other_module_data = running_modules_[other_channel_id.module_id_].get();
 
-        if (other_channel_id.producer_channel_id_ >= other_module_data->mapping_subscribe_.size())
+        if (other_channel_id.local_channel_id_ >= other_module_data->mapping_subscribe_.size())
         {
-            log(aergo::module::logging::LogType::WARNING, "Other channel identified by producer_channel_id_ does not exist, in sendMessage");
+            log(aergo::module::logging::LogType::WARNING, "Other channel identified by local_channel_id_ does not exist, in sendMessage");
             continue;
         }
 
-        other_module_data->module_->processMessage(other_channel_id.producer_channel_id_, source_channel, message);
+        other_module_data->module_->processMessage(other_channel_id.local_channel_id_, source_channel, message);
     }
 }
 
@@ -1181,23 +1181,23 @@ void Core::sendResponse(aergo::module::ChannelIdentifier source_channel, aergo::
 {
     std::shared_lock<std::shared_mutex> lock(core_mutex_);
 
-    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr || running_modules_[source_channel.producer_module_id_]->destruction_in_progress_
-     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr || running_modules_[target_channel.producer_module_id_]->destruction_in_progress_)
+    if (source_channel.module_id_ >= running_modules_.size() || running_modules_[source_channel.module_id_].get() == nullptr || running_modules_[source_channel.module_id_]->destruction_in_progress_
+     || target_channel.module_id_ >= running_modules_.size() || running_modules_[target_channel.module_id_].get() == nullptr || running_modules_[target_channel.module_id_]->destruction_in_progress_)
     {
-        log(aergo::module::logging::LogType::WARNING, "Source or target module identified by producer_module_id_ does not exist, discarding message, in sendResponse");
+        log(aergo::module::logging::LogType::WARNING, "Source or target module identified by module_id_ does not exist, discarding message, in sendResponse");
         return;
     }
 
-    auto source_module_data = running_modules_[source_channel.producer_module_id_].get();
-    auto target_module_data = running_modules_[target_channel.producer_module_id_].get();
+    auto source_module_data = running_modules_[source_channel.module_id_].get();
+    auto target_module_data = running_modules_[target_channel.module_id_].get();
 
-    if (source_channel.producer_channel_id_ >= source_module_data->mapping_response_.size() || target_channel.producer_channel_id_ >= target_module_data->mapping_request_.size())
+    if (source_channel.local_channel_id_ >= source_module_data->mapping_response_.size() || target_channel.local_channel_id_ >= target_module_data->mapping_request_.size())
     {
-        log(aergo::module::logging::LogType::WARNING, "Source or target channel identified by producer_channel_id_ does not exist, discarding message, in sendResponse");
+        log(aergo::module::logging::LogType::WARNING, "Source or target channel identified by local_channel_id_ does not exist, discarding message, in sendResponse");
         return;
     }
     
-    target_module_data->module_->processResponse(target_channel.producer_channel_id_, source_channel, message);
+    target_module_data->module_->processResponse(target_channel.local_channel_id_, source_channel, message);
 }
 
 
@@ -1206,8 +1206,8 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
 {
     std::shared_lock<std::shared_mutex> lock(core_mutex_);
 
-    if (source_channel.producer_module_id_ >= running_modules_.size() || running_modules_[source_channel.producer_module_id_].get() == nullptr || running_modules_[source_channel.producer_module_id_]->destruction_in_progress_
-     || target_channel.producer_module_id_ >= running_modules_.size() || running_modules_[target_channel.producer_module_id_].get() == nullptr || running_modules_[target_channel.producer_module_id_]->destruction_in_progress_)
+    if (source_channel.module_id_ >= running_modules_.size() || running_modules_[source_channel.module_id_].get() == nullptr || running_modules_[source_channel.module_id_]->destruction_in_progress_
+     || target_channel.module_id_ >= running_modules_.size() || running_modules_[target_channel.module_id_].get() == nullptr || running_modules_[target_channel.module_id_]->destruction_in_progress_)
     {
         sendResponse(target_channel, source_channel, { // send failure response
             .data_ = nullptr,
@@ -1220,14 +1220,14 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
         });
 
 
-        log(aergo::module::logging::LogType::WARNING, "Source or target module identified by producer_module_id_ does not exist, discarding message, in sendRequest");
+        log(aergo::module::logging::LogType::WARNING, "Source or target module identified by module_id_ does not exist, discarding message, in sendRequest");
         return;
     }
 
-    auto source_module_data = running_modules_[source_channel.producer_module_id_].get();
-    auto target_module_data = running_modules_[target_channel.producer_module_id_].get();
+    auto source_module_data = running_modules_[source_channel.module_id_].get();
+    auto target_module_data = running_modules_[target_channel.module_id_].get();
 
-    if (source_channel.producer_channel_id_ >= source_module_data->mapping_request_.size() || target_channel.producer_channel_id_ >= target_module_data->mapping_response_.size())
+    if (source_channel.local_channel_id_ >= source_module_data->mapping_request_.size() || target_channel.local_channel_id_ >= target_module_data->mapping_response_.size())
     {
         sendResponse(target_channel, source_channel, { // send failure response
             .data_ = nullptr,
@@ -1239,11 +1239,11 @@ void Core::sendRequest(aergo::module::ChannelIdentifier source_channel, aergo::m
             .success_ = false
         });
 
-        log(aergo::module::logging::LogType::WARNING, "Source or target channel identified by producer_channel_id_ does not exist, discarding message, in sendRequest");
+        log(aergo::module::logging::LogType::WARNING, "Source or target channel identified by local_channel_id_ does not exist, discarding message, in sendRequest");
         return;
     }
     
-    target_module_data->module_->processRequest(target_channel.producer_channel_id_, source_channel, message);
+    target_module_data->module_->processRequest(target_channel.local_channel_id_, source_channel, message);
 }
 
 
@@ -1520,8 +1520,8 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
                 for (const auto& channel_identifier : running_modules->mapping_subscribe_[i])
                 {
                     json mapping_json;
-                    mapping_json["producer_module"] = module_id_to_name[channel_identifier.producer_module_id_];
-                    mapping_json["producer_channel_id"] = channel_identifier.producer_channel_id_;
+                    mapping_json["producer_module"] = module_id_to_name[channel_identifier.module_id_];
+                    mapping_json["producer_channel_id"] = channel_identifier.local_channel_id_;
                     channel_json["mappings"].push_back(mapping_json);
                 }
             }
@@ -1539,8 +1539,8 @@ aergo::module::message::SharedDataBlob Core::save() noexcept
                 for (const auto& channel_identifier : running_modules->mapping_request_[i])
                 {
                     json mapping_json;
-                    mapping_json["producer_module"] = module_id_to_name[channel_identifier.producer_module_id_];
-                    mapping_json["producer_channel_id"] = channel_identifier.producer_channel_id_;
+                    mapping_json["producer_module"] = module_id_to_name[channel_identifier.module_id_];
+                    mapping_json["producer_channel_id"] = channel_identifier.local_channel_id_;
                     channel_json["mappings"].push_back(mapping_json);
                 }
             }
@@ -1918,8 +1918,8 @@ bool Core::load(const uint8_t* data, uint64_t size) noexcept
                         size_t producer_module_id = it2->second;
 
                         mappings.push_back(aergo::module::ChannelIdentifier {
-                            .producer_module_id_ = producer_module_id,
-                            .producer_channel_id_ = producer_channel_id
+                            .module_id_ = producer_module_id,
+                            .local_channel_id_ = producer_channel_id
                         });
                     }
                 }

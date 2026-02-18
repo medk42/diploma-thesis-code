@@ -132,11 +132,11 @@ IModule::IngressDecision FrontendModule::onIngress(ProcessingType kind, uint32_t
         {
             if (!frontend_state_.has_camera_input_)
             {
-                frontend_state_.camera_module_id_ = src.producer_module_id_;
+                frontend_state_.camera_module_id_ = src.module_id_;
                 frontend_state_.has_camera_input_ = true;
             }
 
-            if (frontend_state_.camera_module_id_ == src.producer_module_id_)
+            if (frontend_state_.camera_module_id_ == src.module_id_)
             {
                 return IngressDecision::ACCEPT_REPLACE_QUEUE; // accept camera messages from the selected module, keep only the latest message
             }
@@ -244,7 +244,7 @@ void FrontendModule::processMessage(uint32_t subscribe_consumer_id, ChannelIdent
 {
     if (subscribe_consumer_id == camera_subscribe_channel_id_) // camera input messages
     {
-        if (source_channel.producer_module_id_ != frontend_state_.camera_module_id_)
+        if (source_channel.module_id_ != frontend_state_.camera_module_id_)
             return;
 
         cm::CameraMessage cam_msg;
@@ -382,7 +382,7 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
             }
 
             frontend_state_.pending_activation_responses_.push_back(std::move(webapp::ActivationResponse{
-                .running_module_index_ = source_channel.producer_module_id_,
+                .running_module_index_ = source_channel.module_id_,
                 .success_ = true,
                 .response_ = response,
                 .data_blob_ = std::move(data_blob)
@@ -391,7 +391,7 @@ void FrontendModule::processResponse(uint32_t request_consumer_id, ChannelIdenti
         else
         {
             frontend_state_.pending_activation_responses_.push_back(std::move(webapp::ActivationResponse{
-                .running_module_index_ = source_channel.producer_module_id_,
+                .running_module_index_ = source_channel.module_id_,
                 .success_ = false,
             }));
         }

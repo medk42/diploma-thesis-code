@@ -583,7 +583,7 @@ void FrontendApp::refreshRunningModules()
                 base_module_->log(logging::LogType::ERROR, "UsecaseTree::getAllUsecaseResponseChannels: failed to deserialize activation channels blob");
             }
             std::for_each(existing_channels.begin(), existing_channels.end(), [&activation_channels_map](ChannelIdentifier ch) {
-                activation_channels_map[ch.producer_module_id_] = ch.producer_channel_id_;
+                activation_channels_map[ch.module_id_] = ch.local_channel_id_;
             });
         }
         else
@@ -1522,8 +1522,8 @@ void FrontendApp::createLoadCustomValueDialog()
         base_module_->sendRequest(
             activation_request_channel_id_, 
             {
-                .producer_module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
-                .producer_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
+                .module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
+                .local_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
             }, 
             header
         );
@@ -1614,8 +1614,8 @@ void FrontendApp::createActivationDialog()
         base_module_->sendRequest(
             activation_request_channel_id_, 
             {
-                .producer_module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
-                .producer_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
+                .module_id_ = frontend_state_->current_custom_parameter_.running_module_id_,
+                .local_channel_id_ = frontend_state_->known_running_modules_activation_data_[frontend_state_->current_custom_parameter_.running_module_id_].activation_channel_id_
             }, 
             header
         );

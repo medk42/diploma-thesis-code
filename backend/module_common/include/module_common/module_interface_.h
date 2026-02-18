@@ -90,8 +90,8 @@ namespace aergo::module
 
     struct ChannelIdentifier
     {
-        uint64_t producer_module_id_;    // ID of the module
-        uint32_t producer_channel_id_;   // ID of the channel inside the module
+        uint64_t module_id_;    // ID of the module
+        uint32_t local_channel_id_;   // ID of the channel inside the module
 
         constexpr bool operator==(const ChannelIdentifier&) const = default;
     };

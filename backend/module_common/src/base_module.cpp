@@ -64,8 +64,8 @@ void BaseModule::sendMessage(uint32_t publish_producer_id, message::MessageHeade
     
     core_->sendMessage(
         {
-            .producer_module_id_ = module_id_, 
-            .producer_channel_id_ = publish_producer_id
+            .module_id_ = module_id_, 
+            .local_channel_id_ = publish_producer_id
         }, 
         message
     );
@@ -80,8 +80,8 @@ void BaseModule::sendResponse(uint32_t response_producer_id, ChannelIdentifier t
 
     core_->sendResponse(
         {
-            .producer_module_id_ = module_id_, 
-            .producer_channel_id_ = response_producer_id
+            .module_id_ = module_id_, 
+            .local_channel_id_ = response_producer_id
         }, 
         target_channel,
         message
@@ -98,8 +98,8 @@ uint64_t BaseModule::sendRequest(uint32_t request_consumer_id, ChannelIdentifier
 
     core_->sendRequest(
         {
-            .producer_module_id_ = module_id_, 
-            .producer_channel_id_ = request_consumer_id
+            .module_id_ = module_id_, 
+            .local_channel_id_ = request_consumer_id
         }, 
         target_channel, 
         message

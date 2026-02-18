@@ -448,8 +448,8 @@ void DllModuleWrapper::pushProcessingData(aergo::module::IModule::ProcessingType
 void DllModuleWrapper::sendFailedResponse(uint32_t local_channel_id, ChannelIdentifier source_channel, uint64_t message_id)
 {
     core_->sendResponse({
-            .producer_module_id_ = module_id_, 
-            .producer_channel_id_ = local_channel_id
+            .module_id_ = module_id_, 
+            .local_channel_id_ = local_channel_id
         },
         source_channel, {
             .data_ = nullptr,
@@ -499,8 +499,8 @@ void DllModuleWrapper::regularWorkerThreadFunc()
             {
                 auto resp = module_->processRequest(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 core_->sendResponse({
-                        .producer_module_id_ = module_id_, 
-                        .producer_channel_id_ = data_ptr->local_channel_id_
+                        .module_id_ = module_id_, 
+                        .local_channel_id_ = data_ptr->local_channel_id_
                     },
                     data_ptr->source_channel_, {
                         .data_ = resp.data_.data(),
@@ -569,8 +569,8 @@ void DllModuleWrapper::prioritizedWorkerThreadFunc()
             case aergo::module::IModule::ProcessingType::REQUEST:
                 resp = module_->processRequest(data_ptr->local_channel_id_, data_ptr->source_channel_, data_ptr->message_);
                 core_->sendResponse({
-                        .producer_module_id_ = module_id_, 
-                        .producer_channel_id_ = data_ptr->local_channel_id_
+                        .module_id_ = module_id_, 
+                        .local_channel_id_ = data_ptr->local_channel_id_
                     },
                     data_ptr->source_channel_, {
                         .data_ = resp.data_.data(),
