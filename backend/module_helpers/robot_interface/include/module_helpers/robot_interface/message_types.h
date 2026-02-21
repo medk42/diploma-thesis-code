@@ -28,7 +28,7 @@
 //        -> Success [+ Data]                         // Action handled the update request successfully, data (if any, feature specific) contains additional information
 //        -> Failure [+ Data]                         // Action failed to handle the update request, data (if any, feature specific) contains additional information
 //
-//    STATUS message: feature, [+ Data]               // Message sent by any feature on robot interface asynchronously to report robot status, errors, etc., data (if any, feature specific) contains additional information
+//    STATUS message: feature, [+ Data]               // Message sent by any feature on robot interface asynchronously to report robot status, errors, etc., data (if any, feature specific) contains additional information; should be sent periodically by the robot interface at a reasonable rate (e.g., 10Hz) for features that have ongoing status to report
 //    FINISHED message: action_id, success, [+ Data]  // Message sent by after a long-running action has finished (successfully or with failure), data (if any, feature specific) contains additional information
 //                                                    // action_id identifies the action instance that has finished, success indicates whether the action completed successfully or with failure
 //                                                    // Only sent for actions that were started with a START request and did not complete immediately (i.e., after a SuccessInProgress response)
