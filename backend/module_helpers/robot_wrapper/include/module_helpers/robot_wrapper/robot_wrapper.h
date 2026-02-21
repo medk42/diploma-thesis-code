@@ -144,7 +144,7 @@ namespace aergo::module::helpers::robot_interface::robot_control
         /// If robot reports failure to cancel, returns success == false with error message.
         /// If the action is unknown or already finished, returns success == true (no-op).
         /// @param action_id ID of the action to cancel.
-        /// @return RobotRequestResult indicating success or failure with error message.
+        /// @return MoveRequestResult indicating success or failure with error message.
         MoveRequestResult cancelAction(uint64_t action_id);
 
         /// @brief Fetch the robot's specifications (velocity/acceleration limits, joint limits, joint count).
@@ -155,7 +155,7 @@ namespace aergo::module::helpers::robot_interface::robot_control
         /// @brief Check if an asynchronous action with the given ID is still active (in progress).
         /// Returns true if the action was asynchronously started by this wrapper and is still ongoing (the robot 
         /// has not reported it as finished via the finished channel). Returns false for unknown action IDs or 
-        /// actions that 
+        /// actions that already finished.
         /// @param action_id ID of the action to check.
         /// @return true if the action is active, false otherwise (unknown or finished).
         bool isActionActive(uint64_t action_id) const noexcept;
