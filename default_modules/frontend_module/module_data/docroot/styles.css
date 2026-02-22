@@ -815,6 +815,7 @@ body {
 
 .program-list-commands {
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 
