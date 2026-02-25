@@ -1,7 +1,12 @@
 DOCROOT=docroot
 PORT_HTTP=8080
-PORT_HTTPS=8443
-SSL_CERTIFICATE_PATH=keys/192.168.1.170.pem
-SSL_PRIVATE_KEY_PATH=keys/192.168.1.170-key.pem
-SSL_TMP_DH_PATH=keys/dhparam.pem
 WT_CONFIG=wt_config.xml
+ENABLE_HTTPS=0
+# PORT_HTTPS=8443
+# SSL_CERTIFICATE_PATH=keys/192.168.1.170.pem
+# SSL_PRIVATE_KEY_PATH=keys/192.168.1.170-key.pem
+# SSL_TMP_DH_PATH=keys/dhparam.pem
+#
+# Each line must either be KEY=VALUE without whitespace or start with "#" to indicate comments. See frontend_module.cpp for parsing logic.
+# Particularly, inline comments are NOT supported ("PORT_HTTP=8080  # this is the http port" will be parsed as key="PORT_HTTP", value="8080  # this is the http port")
+# To enable HTTPS, set ENABLE_HTTPS=1 and provide the runtime relative SSL paths.

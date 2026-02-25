@@ -204,17 +204,29 @@ bool FrontendModule::threadStart(uint32_t timeout_ms) noexcept
 
 std::vector<std::string> FrontendModule::makeArgs()
 {
-    return {
-        APP_NAME, // argv[0]
-        "--docroot", server_parameters_.docroot,
-        "--http-address", "0.0.0.0",
-        "--http-port", std::to_string(server_parameters_.port_http),
-        "--https-address", "0.0.0.0",
-        "--https-port", std::to_string(server_parameters_.port_https),
-        "--ssl-certificate", server_parameters_.ssl_certificate_path,
-        "--ssl-private-key", server_parameters_.ssl_private_key_path,
-        "--ssl-tmp-dh", server_parameters_.ssl_tmp_dh_path,
-    };
+    if (server_parameters_.enable_https)
+    {
+        return {
+            APP_NAME, // argv[0]
+            "--docroot", server_parameters_.docroot,
+            "--http-address", "0.0.0.0",
+            "--http-port", std::to_string(server_parameters_.port_http),
+            "--https-address", "0.0.0.0",
+            "--https-port", std::to_string(server_parameters_.port_https),
+            "--ssl-certificate", server_parameters_.ssl_certificate_path,
+            "--ssl-private-key", server_parameters_.ssl_private_key_path,
+            "--ssl-tmp-dh", server_parameters_.ssl_tmp_dh_path,
+        };
+    }
+    else
+    {
+        return {
+            APP_NAME, // argv[0]
+            "--docroot", server_parameters_.docroot,
+            "--http-address", "0.0.0.0",
+            "--http-port", std::to_string(server_parameters_.port_http),
+        };
+    }
 }
 
 
@@ -493,10 +505,13 @@ bool FrontendModule::parseConfigFile() {
         std::string line;
         std::map<std::string, std::string> kv;
         while (std::getline(in, line)) {
+            auto comment_pos = line.find('#');
+            if (comment_pos == 0) continue; // skip comment lines
+
             auto pos = line.find('=');
             if (pos == std::string::npos) 
             {
-                log(aergo::module::logging::LogType::WARNING, "Ignoring malformed line in config file: " + line);
+                log(aergo::module::logging::LogType::WARNING, "Ignoring malformed line in config file: \"" + line + "\"");
                 continue;
             }
             std::string name = trim(line.substr(0, pos));
@@ -508,17 +523,35 @@ bool FrontendModule::parseConfigFile() {
         const std::vector<std::string> keys = {
             "DOCROOT",
             "PORT_HTTP",
+            "WT_CONFIG",
+            "ENABLE_HTTPS"
+        };
+
+        const std::vector<std::string> keys_https = {
             "PORT_HTTPS",
             "SSL_CERTIFICATE_PATH",
             "SSL_PRIVATE_KEY_PATH",
-            "SSL_TMP_DH_PATH",
-            "WT_CONFIG"
+            "SSL_TMP_DH_PATH"
         };
+
         for (const auto &k : keys) {
             if (kv.find(k) == kv.end()) 
             {
                 log(aergo::module::logging::LogType::ERROR, "Missing required config key: " + k);
                 return false;
+            }
+        }
+
+        server_parameters_.enable_https = (kv["ENABLE_HTTPS"] == "1");
+
+        if (server_parameters_.enable_https)
+        {
+            for (const auto &k : keys_https) {
+                if (kv.find(k) == kv.end()) 
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Missing required config key for HTTPS: " + k);
+                    return false;
+                }
             }
         }
 
@@ -530,17 +563,21 @@ bool FrontendModule::parseConfigFile() {
                 return false;
             }
             server_parameters_.port_http = static_cast<uint16_t>(p);
-            p = std::stoi(kv["PORT_HTTPS"]);
-            if (p < 1 || p > 65535) 
+
+            if (server_parameters_.enable_https)
             {
-                log(aergo::module::logging::LogType::ERROR, "Invalid PORT_HTTPS value: " + kv["PORT_HTTPS"]);
-                return false;
-            }
-            server_parameters_.port_https = static_cast<uint16_t>(p);
-            if (server_parameters_.port_http == server_parameters_.port_https)
-            {
-                log(aergo::module::logging::LogType::ERROR, "PORT_HTTP and PORT_HTTPS must be different");
-                return false;
+                p = std::stoi(kv["PORT_HTTPS"]);
+                if (p < 1 || p > 65535) 
+                {
+                    log(aergo::module::logging::LogType::ERROR, "Invalid PORT_HTTPS value: " + kv["PORT_HTTPS"]);
+                    return false;
+                }
+                server_parameters_.port_https = static_cast<uint16_t>(p);
+                if (server_parameters_.port_http == server_parameters_.port_https)
+                {
+                    log(aergo::module::logging::LogType::ERROR, "PORT_HTTP and PORT_HTTPS must be different");
+                    return false;
+                }
             }
         } catch (...)
         { 
@@ -555,10 +592,14 @@ bool FrontendModule::parseConfigFile() {
         };
 
         server_parameters_.docroot = mkpath(kv["DOCROOT"]);
-        server_parameters_.ssl_certificate_path = mkpath(kv["SSL_CERTIFICATE_PATH"]);
-        server_parameters_.ssl_private_key_path = mkpath(kv["SSL_PRIVATE_KEY_PATH"]);
-        server_parameters_.ssl_tmp_dh_path = mkpath(kv["SSL_TMP_DH_PATH"]);
         server_parameters_.wt_config_path = mkpath(kv["WT_CONFIG"]);
+
+        if (server_parameters_.enable_https)
+        {
+            server_parameters_.ssl_certificate_path = mkpath(kv["SSL_CERTIFICATE_PATH"]);
+            server_parameters_.ssl_private_key_path = mkpath(kv["SSL_PRIVATE_KEY_PATH"]);
+            server_parameters_.ssl_tmp_dh_path = mkpath(kv["SSL_TMP_DH_PATH"]);
+        }
 
         // Validate that referenced files exist
         if (!fs::exists(server_parameters_.docroot))
@@ -566,25 +607,29 @@ bool FrontendModule::parseConfigFile() {
             log(aergo::module::logging::LogType::ERROR, "Resource path not found: " + server_parameters_.docroot);
             return false;
         }
-        if (!fs::exists(server_parameters_.ssl_certificate_path))
-        {
-            log(aergo::module::logging::LogType::ERROR, "SSL certificate path not found: " + server_parameters_.ssl_certificate_path);
-            return false;
-        }
-        if (!fs::exists(server_parameters_.ssl_private_key_path))
-        {
-            log(aergo::module::logging::LogType::ERROR, "SSL private key path not found: " + server_parameters_.ssl_private_key_path);
-            return false;
-        }
-        if (!fs::exists(server_parameters_.ssl_tmp_dh_path))
-        {
-            log(aergo::module::logging::LogType::ERROR, "SSL tmp DH path not found: " + server_parameters_.ssl_tmp_dh_path);
-            return false;
-        }
         if (!fs::exists(server_parameters_.wt_config_path))
         {
             log(aergo::module::logging::LogType::ERROR, "WT config path not found: " + server_parameters_.wt_config_path);
             return false;
+        }
+
+        if (server_parameters_.enable_https)
+        {
+            if (!fs::exists(server_parameters_.ssl_certificate_path))
+            {
+                log(aergo::module::logging::LogType::ERROR, "SSL certificate path not found: " + server_parameters_.ssl_certificate_path);
+                return false;
+            }
+            if (!fs::exists(server_parameters_.ssl_private_key_path))
+            {
+                log(aergo::module::logging::LogType::ERROR, "SSL private key path not found: " + server_parameters_.ssl_private_key_path);
+                return false;
+            }
+            if (!fs::exists(server_parameters_.ssl_tmp_dh_path))
+            {
+                log(aergo::module::logging::LogType::ERROR, "SSL tmp DH path not found: " + server_parameters_.ssl_tmp_dh_path);
+                return false;
+            }
         }
 
         return true;

@@ -72,11 +72,13 @@ namespace aergo::default_modules::frontend_module
         struct ServerParameters {
             std::string docroot;
             uint16_t port_http{0};
+            std::string wt_config_path;
+            bool enable_https{false};
+
             uint16_t port_https{0};
             std::string ssl_certificate_path;
             std::string ssl_private_key_path;
             std::string ssl_tmp_dh_path;
-            std::string wt_config_path;
         };
 
         bool valid_;
