@@ -377,14 +377,13 @@ def main() -> int:
         if f not in dm_files:
             err(f"default_modules missing expected file: {f}")
 
-    dm_non_demo_dirs = {d for d in dm_dirs if not d.startswith("demo_")}
-    missing_dm = EXPECTED_DEFAULT_MODULES_NON_DEMO - dm_non_demo_dirs
-    extra_dm = dm_non_demo_dirs - EXPECTED_DEFAULT_MODULES_NON_DEMO
+    missing_dm = EXPECTED_DEFAULT_MODULES_NON_DEMO - dm_dirs
+    extra_dm = dm_dirs - EXPECTED_DEFAULT_MODULES_NON_DEMO
 
     for d in sorted(missing_dm):
         err(f"default_modules missing expected module folder: {d}")
     for d in sorted(extra_dm):
-        err(f"default_modules has unexpected extra non-demo module folder: {d}")
+        err(f"default_modules has unexpected extra module folder: {d}")
 
     # manifests: remember entire structure (exact)
     man_root = ROOT / "manifests"
