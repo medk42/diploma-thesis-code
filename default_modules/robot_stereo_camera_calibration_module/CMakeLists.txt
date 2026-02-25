@@ -57,16 +57,25 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
 
-add_executable(${MODULE_NAME}_tests
-    ${PROJECT_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests/main.cpp
-)
 
-target_include_directories(${MODULE_NAME}_tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
-target_link_libraries(${MODULE_NAME}_tests PRIVATE ${REQUIRED_HELPER_LIBS_TESTS})
+if(IS_DIRECTORY ${TEST_DIR})
+    add_executable(${MODULE_NAME}_tests
+        ${PROJECT_SOURCES}
+        ${TEST_DIR}/main.cpp
+    )
+
+    target_include_directories(${MODULE_NAME}_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
+    target_link_libraries(${MODULE_NAME}_tests PRIVATE
+        ${REQUIRED_HELPER_LIBS_TESTS}
+    )
+else()
+    message(STATUS "${MODULE_NAME}_tests compilation: \"${TEST_DIR}\" directory does not exist, skipping.")
+endif()
 
 
 install(TARGETS "${MODULE_NAME}" DESTINATION ${CMAKE_SOURCE_DIR}/binaries/modules)
