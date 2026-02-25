@@ -1,3 +1,5 @@
+// Based on Jcparkyn/dpoint (MIT); modified by Jakub Medek.
+
 #include <Adafruit_SPIFlash.h>
 #include <LSM6DS3.h>
 #include <Wire.h>
