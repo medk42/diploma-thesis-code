@@ -5,11 +5,11 @@
 
 
 // READ_ACTIVATION_PARAMETERS -> SUCCESS, FAIL (failed to allocate memory)
+// READ_VALUES -> SUCCESS, FAIL (failed to allocate memory)
 // ACTIVATE -> SUCCESS, FAIL, RUNNING
 // DEACTIVATE -> SUCCESS, FAIL, RUNNING
 // GET_STATUS -> SUCCESS, RUNNING (running if activating/deactivating or waiting for CUSTOM message)
 // SET_VALUE -> SUCCESS, FAIL (out of bounds), RUNNING (custom value)
-// READ_VALUE -> SUCCESS, FAIL (out of bounds)
 // LIST_REMOVE -> SUCCESS, FAIL (out of bounds)
 // CANCEL_TASK -> SUCCESS (read cancelled), FAIL (failed to cancel or task finished already; or cancelling activation task, check with GET_STATUS)
 
