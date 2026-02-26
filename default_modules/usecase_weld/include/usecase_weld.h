@@ -75,8 +75,17 @@ namespace aergo::default_modules::usecase_weld
         ) override;
 
     private:
-        std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id);
-        std::expected<void, uw::helper::ErrorInfo> moveLinear(const rc::Pose& pose, double speed, double acceleration);
+        struct AsyncResult
+        {
+            // true if the command was stopped by a stop request, false if it finished normally
+            bool stopped;
+
+            // ErrorInfo if an error occurred during execution or while sending the command, std::nullopt otherwise
+            std::optional<uw::helper::ErrorInfo> error;
+        };
+
+        AsyncResult asyncWaitForFinish(uint64_t action_id);
+        AsyncResult moveLinear(const rc::Pose& pose, double speed, double acceleration);
         bool sendSceneDetectionRequest(uint64_t& out_request_id);
 
         
