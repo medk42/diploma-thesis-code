@@ -7,6 +7,7 @@
 #include <memory>
 #include <simpleble/SimpleBLE.h>
 #include <opencv2/opencv.hpp>
+#include <vector>
 
 namespace aergo::default_modules::pen_tracking_multicam_module
 {
@@ -45,6 +46,7 @@ namespace aergo::default_modules::pen_tracking_multicam_module
         std::optional<SimpleBLE::Peripheral> getResult();
         void cancel();
         bool running();
+        void blacklistDevice(const SimpleBLE::BluetoothAddress& address);
 
     private:
         enum class State { IDLE, SCANNING, FINISHING_SCAN, FINISHED };
@@ -55,6 +57,8 @@ namespace aergo::default_modules::pen_tracking_multicam_module
         
         SimpleBLE::Peripheral peripheral_;
         State state_;
+
+        std::vector<SimpleBLE::BluetoothAddress> device_blacklist_;
 
         void onScanFound(SimpleBLE::Peripheral peripheral);
         void onScanStop();

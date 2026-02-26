@@ -106,14 +106,22 @@ void DeviceScanner::cancel()
 
 void DeviceScanner::onScanFound(SimpleBLE::Peripheral peripheral)
 {
+
     std::vector<SimpleBLE::Service> services = peripheral.services();
     auto it = std::find_if(services.begin(), services.end(), [this](SimpleBLE::Service& service){
         return service.uuid() == service_uuid_;
     });
 
-    if (it != services.end())
+    std::cout << "Scan found device: " << peripheral.identifier() << " (" << peripheral.address() << ")" << " has service: " << (it != services.end() ? "true" : "FALSE") << std::endl;
+
+    if (peripheral.identifier() == "3D Pen")
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
+        if (std::find(device_blacklist_.begin(), device_blacklist_.end(), peripheral.address()) != device_blacklist_.end())
+        {
+            return;
+        }
+
         if (state_ == State::SCANNING)
         {
             peripheral_ = peripheral;
@@ -129,6 +137,14 @@ void DeviceScanner::onScanStop()
 {
     std::lock_guard<std::mutex> lock(data_mutex_);
     state_ = State::FINISHED;
+}
+
+
+
+void DeviceScanner::blacklistDevice(const SimpleBLE::BluetoothAddress& address)
+{
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    device_blacklist_.push_back(address);
 }
 
 
@@ -259,7 +275,27 @@ void BleReader::backgroundThread()
         {
             try
             {
+                std::cout << "Found \"3D Pen\" device (" << peripheral_->address() << "), connecting..." << std::endl;
                 peripheral_->connect();
+
+                std::vector<SimpleBLE::Service> services = peripheral_->services();
+                bool is_correct_device = std::any_of(services.begin(), services.end(), [this](SimpleBLE::Service& service){
+                    return service.uuid() == service_uuid_;
+                });
+                std::cout << "\tDevice has services: " << "[";
+                for (auto& service : services)
+                {
+                    std::cout << service.uuid() << ", ";
+                }                std::cout << "], valid: " << (is_correct_device ? "true" : "FALSE") << std::endl;
+
+                if (!is_correct_device) {
+                    device_scanner_->blacklistDevice(peripheral_->address());
+                    std::cout << "\tDevice not valid (" << peripheral_->address() << "), blacklisting and restarting scan" << std::endl;
+                    peripheral_->disconnect();
+                    peripheral_ = std::nullopt;
+                    continue; // The next loop iteration will naturally restart the scanner
+                }
+                std::cout << "\tSuccessfully connected to device (" << peripheral_->address() << ")" << std::endl;
             }
             catch(const std::exception& e)
             {
