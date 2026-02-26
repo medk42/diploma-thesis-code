@@ -275,44 +275,67 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveLinear::runProgram(const n
     const double acceleration_m_s2 = command_json["acceleration_mm_s2"].get<double>() / 1000.0;
 
 
-    rc::MoveRequestResult res = robot_wrapper_.moveLinear(target_pose, speed_m_s, acceleration_m_s2, false);
-    if (!res.success_)
+    while (true)
     {
-        return std::unexpected(uw::helper::ErrorInfo::WithDetails(1, "UsecaseMoveLinear: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)));
-    }
+        rc::MoveRequestResult res = robot_wrapper_.moveLinear(target_pose, speed_m_s, acceleration_m_s2, false);
+        if (!res.success_)
+        {
+            return std::unexpected(uw::helper::ErrorInfo::WithDetails(1, "UsecaseMoveLinear: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)));
+        }
 
-    auto async_res = asyncWaitForFinish(res.action_id_);
-    if (!async_res) return async_res;
+        auto async_res = asyncWaitForFinish(res.action_id_);
+        if (async_res.error) return std::unexpected(async_res.error.value());
+        if (async_res.control_request == UsecaseMoveLinear::AsyncResult::ControlRequest::STOP)
+        {
+            handleControlRequests(false, true); // if stopped, handle the stop request (ends runProgram via StopException)
+        }
+        else if (async_res.control_request == UsecaseMoveLinear::AsyncResult::ControlRequest::PAUSE)
+        {
+            handleControlRequests(true, false); // if paused, handle the pause request (pauses here until resume, then re-sends the command)
+        }
+        else
+        {
+            break; // if no control request, command finished on its own, exit the loop and end the program
+        }
+    }
 
     return std::expected<void, uw::helper::ErrorInfo>{};
 }
 
 
-std::expected<void, uw::helper::ErrorInfo> UsecaseMoveLinear::asyncWaitForFinish(uint64_t action_id)
+ UsecaseMoveLinear::AsyncResult UsecaseMoveLinear::asyncWaitForFinish(uint64_t action_id)
 {
-    bool cancel_requested = false;
+    AsyncResult::ControlRequest request = AsyncResult::ControlRequest::NONE;
     while (robot_wrapper_.isActionActive(action_id))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        if (cancel_requested)
+        if (request != AsyncResult::ControlRequest::NONE)
         {
             continue; // already requested cancel, just wait for action to end
         }
 
         auto [pause_requested, stop_requested] = checkControlRequests();
-        if (stop_requested)
+        if (stop_requested || pause_requested)
         {
-            log(logging::LogType::INFO, "UsecaseMoveLinear: Stop requested, cancelling robot action " + std::to_string(action_id) + ".");
+            request = stop_requested ? AsyncResult::ControlRequest::STOP : AsyncResult::ControlRequest::PAUSE;
+
+            log(logging::LogType::INFO, "UsecaseMoveLinear: " + std::string(request == AsyncResult::ControlRequest::STOP ? "Stop" : "Pause") + " requested, cancelling robot action " + std::to_string(action_id) + ".");
 
             rc::MoveRequestResult cancel_res = robot_wrapper_.cancelAction(action_id);
             if (!cancel_res.success_)
             {
-                return std::unexpected(uw::helper::ErrorInfo::WithDetails(5, "UsecaseMoveLinear: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_)));
+                return AsyncResult
+                {
+                    .control_request = request,
+                    .error = uw::helper::ErrorInfo::WithDetails(5, "UsecaseMoveLinear: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_))
+                };
             }
-            cancel_requested = true;
         }
     }
 
-    return std::expected<void, uw::helper::ErrorInfo>{};
+    return AsyncResult{ 
+        .control_request = request, 
+        .error = std::nullopt 
+    };
 }

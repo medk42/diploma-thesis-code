@@ -65,7 +65,18 @@ namespace aergo::default_modules::usecase_move_linear
         ) override;
 
     private:
-        std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id);
+        struct AsyncResult
+        {
+            enum class ControlRequest { NONE, PAUSE, STOP };
+
+            // none if the program finished on its own, pause if a pause was requested, stop if a stop was requested
+            ControlRequest control_request;
+
+            // ErrorInfo if an error occurred during execution or while sending the command, std::nullopt otherwise
+            std::optional<uw::helper::ErrorInfo> error;
+        };
+
+        AsyncResult asyncWaitForFinish(uint64_t action_id);
 
         rc::RobotWrapper robot_wrapper_;
         bool valid_{ false };

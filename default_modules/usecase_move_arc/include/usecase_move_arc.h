@@ -65,7 +65,16 @@ namespace aergo::default_modules::usecase_move_arc
         ) override;
 
     private:
-        std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id);
+        struct AsyncResult
+        {
+            // true if the command was stopped by a stop request, false if it finished normally
+            bool stopped;
+
+            // ErrorInfo if an error occurred during execution or while sending the command, std::nullopt otherwise
+            std::optional<uw::helper::ErrorInfo> error;
+        };
+
+        AsyncResult asyncWaitForFinish(uint64_t action_id);
         bool readPose(const std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values, size_t index, nlohmann::json& out_pose_json);
         std::expected<void, uw::helper::ErrorInfo> validatePose(const nlohmann::json& command_json, const std::string& pose_key, int error_code_base);
         rc::Pose extractPoseFromJson(const nlohmann::json& pose_json);

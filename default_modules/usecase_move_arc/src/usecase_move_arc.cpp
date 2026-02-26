@@ -474,7 +474,8 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveArc::runProgram(const nloh
     }
 
     auto async_res = asyncWaitForFinish(res.action_id_);
-    if (!async_res) return async_res;
+    if (async_res.error) return std::unexpected(async_res.error.value());
+    if (async_res.stopped) handleControlRequests(false, true); // if stopped, handle the stop request (ends runProgram via StopException)
 
     res = robot_wrapper_.moveArc(arc_through, arc_end, speed_m_s, acceleration_m_s2, orientation_type, as_circle, circle_percentage, false);
     if (!res.success_)
@@ -483,7 +484,8 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveArc::runProgram(const nloh
     }
 
     async_res = asyncWaitForFinish(res.action_id_);
-    if (!async_res) return async_res;
+    if (async_res.error) return std::unexpected(async_res.error.value());
+    if (async_res.stopped) handleControlRequests(false, true);
 
     return std::expected<void, uw::helper::ErrorInfo>{};
 }
@@ -724,7 +726,7 @@ void UsecaseMoveArc::calculateArcTrajectory(
 }
 
 
-std::expected<void, uw::helper::ErrorInfo> UsecaseMoveArc::asyncWaitForFinish(uint64_t action_id)
+UsecaseMoveArc::AsyncResult UsecaseMoveArc::asyncWaitForFinish(uint64_t action_id)
 {
     bool cancel_requested = false;
     while (robot_wrapper_.isActionActive(action_id))
@@ -744,11 +746,18 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveArc::asyncWaitForFinish(ui
             rc::MoveRequestResult cancel_res = robot_wrapper_.cancelAction(action_id);
             if (!cancel_res.success_)
             {
-                return std::unexpected(uw::helper::ErrorInfo::WithDetails(5, "UsecaseMoveArc: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_)));
+                return AsyncResult
+                {
+                    .stopped = true,
+                    .error = uw::helper::ErrorInfo::WithDetails(5, "UsecaseMoveArc: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_))
+                };
             }
             cancel_requested = true;
         }
     }
 
-    return std::expected<void, uw::helper::ErrorInfo>{};
+    return AsyncResult{ 
+        .stopped = cancel_requested, 
+        .error = std::nullopt 
+    };
 }

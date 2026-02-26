@@ -124,14 +124,19 @@ void RobotWrapper::processMessage(uint32_t subscribe_consumer_id, message::Messa
         message::SharedDataBlob blob = message.blobs_[0];
         rc::BufferReader reader(blob.data(), blob.size());
 
-        StatusMessage status;
-        if (!rc::status_messages::deserialization::deserializeStatusMessage(reader, status))
+        std::lock_guard<std::mutex> lock(last_status_mutex_);
+        if (!rc::status_messages::deserialization::deserializeStatusMessage(reader, status_message_buffer_))
         {
             base_module_.log(logging::LogType::WARNING, "RobotWrapper: Failed to deserialize robot status message.");
             return;
         }
+        else
+        {
+            last_status_message_ = status_message_buffer_; // update last valid status message on successful deserialization
+            last_status_valid_ = true;
+        }
 
-        if (status.status == RobotStatus::MOVING)
+        if (status_message_buffer_.status == RobotStatus::MOVING)
         {
             last_move_status_ms_ = millis();
         }
@@ -162,7 +167,7 @@ void RobotWrapper::processMessage(uint32_t subscribe_consumer_id, message::Messa
 
         if (rc_status_callback_)
         {
-            rc_status_callback_(status);
+            rc_status_callback_(status_message_buffer_);
         }
     }
     else if (subscribe_consumer_id == robot_finished_channel_)
@@ -580,4 +585,16 @@ bool RobotWrapper::isActionActive(uint64_t action_id) const noexcept
 {
     std::lock_guard<std::mutex> lock(mutex_);
     return async_action_ids_.find(action_id) != async_action_ids_.end();
+}
+
+
+bool RobotWrapper::getLastStatus(StatusMessage& status) const noexcept
+{
+    std::lock_guard<std::mutex> lock(last_status_mutex_);
+    if (!last_status_valid_)
+    {
+        return false;
+    }
+    status = last_status_message_;
+    return true;
 }

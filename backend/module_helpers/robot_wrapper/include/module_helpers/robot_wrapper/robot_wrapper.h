@@ -160,6 +160,12 @@ namespace aergo::module::helpers::robot_interface::robot_control
         /// @return true if the action is active, false otherwise (unknown or finished).
         bool isActionActive(uint64_t action_id) const noexcept;
 
+        /// @brief Get the latest received robot status message.
+        /// Returns true and fills the status parameter if a valid status message was received at least once; returns false if no valid status message has been received yet.
+        /// The status message is updated whenever a new valid status message is received on the robot status channel, and can be accessed at any time with this method. Note that the status message may be slightly outdated depending on the frequency of status updates from the robot.
+        /// @param status Output parameter to fill with the latest status message if available.
+        bool getLastStatus(StatusMessage& status) const noexcept;
+
     private:
         MoveRequestResult moveCommon(std::span<const std::byte> request_data, bool blocking, std::unique_lock<std::mutex>& lock);
 
@@ -194,5 +200,10 @@ namespace aergo::module::helpers::robot_interface::robot_control
 
         std::atomic<int64_t> last_move_status_ms_{ 0 };
         std::atomic<int64_t> last_send_move_request_ms_{ 0 };
+
+        mutable std::mutex last_status_mutex_;
+        bool last_status_valid_{ false };
+        StatusMessage last_status_message_; // buffer for the last received status message, updated in processMessage and read in getLastStatus; unlike status_message_buffer_, this one should always be valid (status_message_buffer_ may be in an invalid state after failed deserialization, but last_status_message_ should only be updated on successful deserialization).
+        StatusMessage status_message_buffer_; // buffer for deserializing status messages to prevent repeated allocations
     };
 }

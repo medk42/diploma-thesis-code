@@ -525,20 +525,53 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::runProgram(const nlohman
     double acceleration_m_s2 = command_json["acceleration_m_s2"].get<double>();
 
 
-    auto move_res = moveLinear(approach_pose, movement_speed_m_s, acceleration_m_s2);
+    auto move_res = moveLinear(approach_pose, movement_speed_m_s, acceleration_m_s2, true);
     if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true); // if stopped during approach, handle stop request (ends the runProgram early via StopException)
+    if (move_res.control_request == UsecaseWeld::AsyncResult::ControlRequest::STOP) handleControlRequests(false, true); // if stopped during approach, handle stop request (ends the runProgram early via StopException)
 
-    move_res = moveLinear(weld_start_pose, movement_speed_m_s, acceleration_m_s2);
+    move_res = moveLinear(weld_start_pose, movement_speed_m_s, acceleration_m_s2, true);
     if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true); // if stopped during approach, handle stop request
-
+    if (move_res.control_request == UsecaseWeld::AsyncResult::ControlRequest::STOP) handleControlRequests(false, true); // if stopped during approach, handle stop request
     log(logging::LogType::INFO, "UsecaseWeld: Starting weld...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     log(logging::LogType::INFO, "UsecaseWeld: Welding...");
 
-    move_res = moveLinear(weld_end_pose, welding_speed_m_s, acceleration_m_s2);
-    if (move_res.error || move_res.stopped) 
+    // we allow pause/resume even while welding, but we must stop/start the weld action (simulated here by sleeping)
+    move_res = moveLinear(weld_end_pose, welding_speed_m_s, acceleration_m_s2, true,
+        [this, movement_speed_m_s, acceleration_m_s2](const rc::Pose& pose) { 
+            log(logging::LogType::INFO, "UsecaseWeld: Stopping weld due to pause..."); 
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            log(logging::LogType::INFO, "UsecaseWeld: Weld stopped, moving to depart pose...");
+
+            cv::Vec4d pose_q = {pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z};
+            cv::Vec3d pose_p = {pose.position.x, pose.position.y, pose.position.z};
+
+            pu::SE3 pose_se3 = pu::SE3::fromQuatTvec(pose_q, pose_p, false);
+            cv::Vec3d depart_offset = pose_se3 * cv::Vec3d(0, 0, -0.1); // move 10cm down from current pose for depart pose during pause
+            robot_wrapper_.moveLinear(rc::Pose{
+                .position = {
+                    .x = depart_offset[0],
+                    .y = depart_offset[1],
+                    .z = depart_offset[2]
+                },
+                .orientation = pose.orientation
+            }, movement_speed_m_s, acceleration_m_s2, true);
+
+            log(logging::LogType::INFO, "UsecaseWeld: Moved to depart pose, waiting for resume...");
+        },
+        [this, movement_speed_m_s, acceleration_m_s2](const rc::Pose& pose) { 
+            log(logging::LogType::INFO, "UsecaseWeld: Resuming weld, moving back to weld pose...");
+
+            log(logging::LogType::INFO, "UsecaseWeld: Target pose after resume: [" + std::to_string(pose.position.x) + ", " + std::to_string(pose.position.y) + ", " + std::to_string(pose.position.z) + "]");
+
+            robot_wrapper_.moveLinear(pose, movement_speed_m_s, acceleration_m_s2, true);
+
+            log(logging::LogType::INFO, "UsecaseWeld: Resuming weld..."); 
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            log(logging::LogType::INFO, "UsecaseWeld: Weld resumed.");
+        }
+    );
+    if (move_res.error || move_res.control_request == UsecaseWeld::AsyncResult::ControlRequest::STOP) 
     {
         log(logging::LogType::INFO, "UsecaseWeld: Stopping weld due to error/stop request...");
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -552,9 +585,9 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::runProgram(const nlohman
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     log(logging::LogType::INFO, "UsecaseWeld: Moving to depart pose...");
 
-    move_res = moveLinear(depart_pose, movement_speed_m_s, acceleration_m_s2);
+    move_res = moveLinear(depart_pose, movement_speed_m_s, acceleration_m_s2, true);
     if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true); // if stopped during depart, handle stop request
+    if (move_res.control_request == UsecaseWeld::AsyncResult::ControlRequest::STOP) handleControlRequests(false, true); // if stopped during depart, handle stop request
 
     log(logging::LogType::INFO, "UsecaseWeld: Weld completed.");
 
@@ -562,55 +595,95 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::runProgram(const nlohman
 }
 
 
-UsecaseWeld::AsyncResult UsecaseWeld::moveLinear(const rc::Pose& pose, double speed, double acceleration)
+UsecaseWeld::AsyncResult UsecaseWeld::moveLinear(const rc::Pose& pose, double speed, double acceleration, bool allow_pause, std::function<void(const rc::Pose&)> before_pause_callback, std::function<void(const rc::Pose&)> after_resume_callback)
 {
-    rc::MoveRequestResult res = robot_wrapper_.moveLinear(pose, speed, acceleration, false);
-    if (!res.success_)
+    while (true)
     {
-        return AsyncResult{ 
-            .stopped = false, 
-            .error = uw::helper::ErrorInfo::WithDetails(
-                1, 
-                "UsecaseWeld: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)
-            ) 
-        };
+        rc::MoveRequestResult res = robot_wrapper_.moveLinear(pose, speed, acceleration, false);
+        if (!res.success_)
+        {
+            return AsyncResult{ 
+                .control_request = AsyncResult::ControlRequest::NONE, 
+                .error = uw::helper::ErrorInfo::WithDetails(
+                    1, 
+                    "UsecaseWeld: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)
+                ) 
+            };
+        }
+        auto async_result = asyncWaitForFinish(res.action_id_, allow_pause);
+
+        if (async_result.error)
+        {
+            return async_result; // propagate error from asyncWaitForFinish
+        }
+        else if (async_result.control_request == AsyncResult::ControlRequest::STOP || async_result.control_request == AsyncResult::ControlRequest::NONE)
+        {
+            return async_result; // either finished successfully with no control request, or was stopped, in both cases just return
+        }
+        else if (async_result.control_request == AsyncResult::ControlRequest::PAUSE)
+        {
+            rc::StatusMessage current_status;
+            if (!robot_wrapper_.getLastStatus(current_status))
+            {
+                return AsyncResult{ 
+                    .control_request = AsyncResult::ControlRequest::PAUSE, 
+                    .error = uw::helper::ErrorInfo::WithDetails(2, "UsecaseWeld: Failed to get robot status after pause request.") 
+                };
+            }
+
+            log(logging::LogType::INFO, "UsecaseWeld: Move linear action paused at pose: [" + std::to_string(current_status.end_effector_pose.position.x) + ", " + std::to_string(current_status.end_effector_pose.position.y) + ", " + std::to_string(current_status.end_effector_pose.position.z) + "], target pose: [" + std::to_string(pose.position.x) + ", " + std::to_string(pose.position.y) + ", " + std::to_string(pose.position.z) + "].");
+
+            if (before_pause_callback) before_pause_callback(current_status.end_effector_pose);
+            log(logging::LogType::INFO, "UsecaseWeld: Action paused. Waiting for resume...");
+            handleControlRequests(true, true); // handle pause (waits until resume) and stop (throw StopException if stop is requested during pause)
+            log(logging::LogType::INFO, "UsecaseWeld: Resuming action...");
+            if (after_resume_callback) after_resume_callback(current_status.end_effector_pose);
+        }
+        else
+        {
+            // Unexpected control request, return error
+            return AsyncResult{ 
+                .control_request = AsyncResult::ControlRequest::NONE, 
+                .error = uw::helper::ErrorInfo::WithDetails(3, "UsecaseWeld: Received unexpected control request from asyncWaitForFinish.") 
+            };
+        }
     }
-    return asyncWaitForFinish(res.action_id_);
 }
 
 
-UsecaseWeld::AsyncResult UsecaseWeld::asyncWaitForFinish(uint64_t action_id)
+UsecaseWeld::AsyncResult UsecaseWeld::asyncWaitForFinish(uint64_t action_id, bool allow_pause)
 {
-    bool cancel_requested = false;
+    AsyncResult::ControlRequest request = AsyncResult::ControlRequest::NONE;
     while (robot_wrapper_.isActionActive(action_id))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        if (cancel_requested)
+        if (request != AsyncResult::ControlRequest::NONE)
         {
             continue; // already requested cancel, just wait for action to end
         }
 
         auto [pause_requested, stop_requested] = checkControlRequests();
-        if (stop_requested)
+        if (stop_requested || (pause_requested && allow_pause))
         {
-            log(logging::LogType::INFO, "UsecaseWeld: Stop requested, cancelling robot action " + std::to_string(action_id) + ".");
+            request = stop_requested ? AsyncResult::ControlRequest::STOP : AsyncResult::ControlRequest::PAUSE;
+
+            log(logging::LogType::INFO, "UsecaseWeld: " + std::string(request == AsyncResult::ControlRequest::STOP ? "Stop" : "Pause") + " requested, cancelling robot action " + std::to_string(action_id) + ".");
 
             rc::MoveRequestResult cancel_res = robot_wrapper_.cancelAction(action_id);
             if (!cancel_res.success_)
             {
                 return AsyncResult{ 
-                    .stopped = true, 
+                    .control_request = request, 
                     .error = uw::helper::ErrorInfo::WithDetails(4, "UsecaseWeld: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_)) 
                 };
             }
-            cancel_requested = true;
         }
     }
 
     return AsyncResult{ 
-        .stopped = cancel_requested, 
-        .error = std::nullopt
+        .control_request = request, 
+        .error = std::nullopt 
     };
 }
 

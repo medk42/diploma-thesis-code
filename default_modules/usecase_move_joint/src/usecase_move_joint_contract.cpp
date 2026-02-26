@@ -45,7 +45,7 @@ static constexpr ModuleInfo module_info = {
 };
 
 bool multi_program_support = false;
-bool pause_support = true;
+bool pause_support = false;
 bool stop_support = true;
 
 std::string usecase_name = "MOVE_J";

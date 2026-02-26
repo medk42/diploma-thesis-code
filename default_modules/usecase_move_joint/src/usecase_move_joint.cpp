@@ -292,13 +292,14 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveJoint::runProgram(const nl
     }
 
     auto async_res = asyncWaitForFinish(res.action_id_);
-    if (!async_res) return async_res;
-
+    if (async_res.error) return std::unexpected(async_res.error.value());
+    if (async_res.stopped) handleControlRequests(false, true); // if stopped, handle the stop request (ends runProgram via StopException)
+    
     return std::expected<void, uw::helper::ErrorInfo>{};
 }
 
 
-std::expected<void, uw::helper::ErrorInfo> UsecaseMoveJoint::asyncWaitForFinish(uint64_t action_id)
+UsecaseMoveJoint::AsyncResult UsecaseMoveJoint::asyncWaitForFinish(uint64_t action_id)
 {
     bool cancel_requested = false;
     while (robot_wrapper_.isActionActive(action_id))
@@ -318,11 +319,18 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveJoint::asyncWaitForFinish(
             rc::MoveRequestResult cancel_res = robot_wrapper_.cancelAction(action_id);
             if (!cancel_res.success_)
             {
-                return std::unexpected(uw::helper::ErrorInfo::WithDetails(5, "UsecaseMoveJoint: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_)));
+                return AsyncResult
+                {
+                    .stopped = true,
+                    .error = uw::helper::ErrorInfo::WithDetails(5, "UsecaseMoveJoint: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_))
+                };
             }
             cancel_requested = true;
         }
     }
 
-    return std::expected<void, uw::helper::ErrorInfo>{};
+    return AsyncResult{ 
+        .stopped = cancel_requested, 
+        .error = std::nullopt 
+    };
 }

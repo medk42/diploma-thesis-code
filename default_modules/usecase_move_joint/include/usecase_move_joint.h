@@ -65,7 +65,16 @@ namespace aergo::default_modules::usecase_move_joint
         ) override;
 
     private:
-        std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id);
+        struct AsyncResult
+        {
+            // true if the command was stopped by a stop request, false if it finished normally
+            bool stopped;
+
+            // ErrorInfo if an error occurred during execution or while sending the command, std::nullopt otherwise
+            std::optional<uw::helper::ErrorInfo> error;
+        };
+
+        AsyncResult asyncWaitForFinish(uint64_t action_id);
 
         rc::RobotWrapper robot_wrapper_;
         bool valid_{ false };
