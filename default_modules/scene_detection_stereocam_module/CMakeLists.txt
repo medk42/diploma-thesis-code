@@ -50,3 +50,4 @@ set_target_properties("${MODULE_NAME}" PROPERTIES
 
 install(TARGETS "${MODULE_NAME}" DESTINATION ${CMAKE_SOURCE_DIR}/binaries/modules)
 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/module_data/ DESTINATION ${CMAKE_SOURCE_DIR}/binaries/data/${MODULE_NAME})
