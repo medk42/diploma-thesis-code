@@ -83,7 +83,7 @@ static aergo::module::helpers::parameter_description::ParameterList parameters(s
     {
         .type_ = aergo::module::helpers::parameter_description::ParameterType::LONG,
         .param_name_ = "Camera Index",
-        .param_desc_ = "Index of the camera to use. The parameters above (resolution, framerate) will filter the available cameras, use this index to select the desired camera from the filtered list. Index 0 corresponds to the first camera in the filtered list. This parameter will always stay 0 if there is only one camera matching the criteria.",
+        .param_desc_ = "Index of the camera to use. The parameters above (resolution, framerate) will filter the available cameras, use this index to select the desired camera from the filtered list. Index 0 corresponds to the first camera in the filtered list.",
         .limit_min_ = true,
         .limit_max_ = true,
         .min_value_long_ = 0,
