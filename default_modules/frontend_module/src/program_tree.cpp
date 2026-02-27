@@ -1668,18 +1668,15 @@ void ProgramTree::handleAutoLoading()
 
         if (param.as_list_)
         {
-            // for list parameters, check if we can add a new value or if there's an unloaded one
+            // for list parameters, check if there's an unloaded one
             size_t current_list_size = param_value_list.size();
-            size_t max_size = param.list_size_max_ == 0 ? SIZE_MAX : param.list_size_max_;
 
             // check if there's an unloaded value in the list
-            bool found_unloaded = false;
             for (size_t list_idx = list_start; list_idx < current_list_size; ++list_idx)
             {
                 if (!param_value_list[list_idx].has_value())
                 {
                     // found unloaded value, load it
-                    found_unloaded = true;
                     program_state_unsafe_.auto_loading_in_progress_ = true;
                     program_state_unsafe_.auto_load_current_param_index_ = param_idx;
                     program_state_unsafe_.auto_load_current_list_index_ = list_idx;
@@ -1710,65 +1707,6 @@ void ProgramTree::handleAutoLoading()
                         base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to initiate readCustomValue.");
                         return;
                     }
-                }
-            }
-
-            // if no unloaded value found and we can add more, add a new one
-            if (!found_unloaded && current_list_size < max_size)
-            {
-                // add a new empty value to the list
-                if (!const_cast<ut::structs::ExistingCommand&>(existing_usecase).addValue(
-                    ut::structs::ExistingCommand::ParamType::AUTO,
-                    param_idx,
-                    std::nullopt))
-                {
-                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to add new list value.");
-                    program_state_unsafe_.auto_loading_in_progress_ = false;
-                    return;
-                }
-
-                // reload UI to show the new list value
-                reloadCommandValues(usecase_index);
-
-                // get updated parameter values to find the new list index
-                const auto& updated_param_values = existing_usecase.getParameterValues(ut::structs::ExistingCommand::ParamType::AUTO);
-                if (param_idx >= updated_param_values.size())
-                {
-                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Parameter index out of range after adding list value.");
-                    program_state_unsafe_.auto_loading_in_progress_ = false;
-                    return;
-                }
-                const auto& updated_param_value_list = updated_param_values[param_idx];
-                size_t new_list_idx = updated_param_value_list.size() - 1; // the index of the newly added value
-                program_state_unsafe_.auto_loading_in_progress_ = true;
-                program_state_unsafe_.auto_load_current_param_index_ = param_idx;
-                program_state_unsafe_.auto_load_current_list_index_ = new_list_idx;
-                program_state_unsafe_.auto_load_usecase_index_ = usecase_index;
-                program_state_unsafe_.cancel_reading_custom_value_ = false;
-
-                auto program_state_unsafe_ptr = &program_state_unsafe_;
-                if (program_state_unsafe_.usecase_tree_->readCustomValue(
-                    usecase_index,
-                    param_idx,
-                    new_list_idx,
-                    program_state_unsafe_.cancel_reading_custom_value_,
-                    [program_state_unsafe_ptr](bool read_success, size_t existing_usecase_index) {
-                        program_state_unsafe_ptr->read_finished_ = true;
-                        program_state_unsafe_ptr->read_successful_ = read_success;
-                        program_state_unsafe_ptr->read_usecase_index = existing_usecase_index;
-                    }
-                ))
-                {
-                    program_state_unsafe_.reading_custom_value_ = true;
-                    program_state_unsafe_.read_finished_ = false;
-                    showReadCustomValueDialog();
-                    return;
-                }
-                else
-                {
-                    program_state_unsafe_.auto_loading_in_progress_ = false;
-                    base_module_->log(aergo::module::logging::LogType::ERROR, "ProgramTree::handleAutoLoading: Failed to initiate readCustomValue for new list value.");
-                    return;
                 }
             }
         }
