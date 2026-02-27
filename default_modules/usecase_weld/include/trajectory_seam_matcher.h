@@ -90,7 +90,7 @@ struct TrajectorySeamMatcher
     {
         // Stage 1 (selection)
         double select_max_median_dist = 0.010;     // 10mm median distance to seam segment
-        double select_angle_eps_deg   = 25.0;     // pen dir vs seam tangent
+        double select_angle_eps_deg   = 25.0;     // pen direction vs seam torch_dir_world
         double w_dist = 1.0;
         double w_ang  = 0.5;
 
@@ -125,10 +125,19 @@ struct TrajectorySeamMatcher
         for (int i = 0; i < N; ++i)
         {
             const pm::Pose& pp = pen_trajectory[i];
+
+            // Pen tip position (world)
             P[i] = cv::Vec3d(pp.x, pp.y, pp.z);
 
-            const pu::SE3 T = poseToSE3(pp);
-            cv::Vec3d d = T * cv::Vec3d(0,0,-1); // torch positive Z is facing towards the seam, we need the away direction instead
+            // Build an SE3 that contains only the pen orientation.
+            // IMPORTANT: translation must be zero, because we are transforming a *direction* (not a point):
+            //            direction_world = R * direction_local
+            const cv::Vec4d q(pp.qw, pp.qx, pp.qy, pp.qz);
+            const pu::SE3 T_rot = pu::SE3::fromQuatTvec(q, cv::Vec3d(0,0,0), /*reorthonormalize=*/true);
+
+            // Torch/pen local +Z points toward the seam; we want the opposite ("away") direction => local -Z.
+            cv::Vec3d d = T_rot * cv::Vec3d(0,0,-1);
+
             if (!normalize3(d)) d = cv::Vec3d(0,0,1);
             penDir[i] = d;
 
@@ -192,7 +201,7 @@ struct TrajectorySeamMatcher
             if (medA < cos_thr) continue; // median |dot| too small => angle too big
 
             // Soft score
-            const double score = params.w_dist * (medD * medD) + params.w_ang * medA;
+            const double score = params.w_dist * (medD * medD) - params.w_ang * medA;
             if (score < bestScore)
             {
                 bestScore = score;
