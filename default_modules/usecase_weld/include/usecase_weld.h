@@ -38,7 +38,7 @@ namespace aergo::default_modules::usecase_weld
 
         ~UsecaseWeld() noexcept = default;
 
-        virtual bool valid() noexcept override { return robot_wrapper_.valid(); }
+        virtual bool valid() noexcept override { return valid_; }
 
         virtual bool sendRequestFromUsecase(const std::vector<p_desc::ParameterDescription>& auto_parameters, const uint32_t param_id, uint64_t& out_request_id) override;
 

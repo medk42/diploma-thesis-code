@@ -29,7 +29,7 @@ namespace aergo::default_modules::usecase_move_joint
 
         ~UsecaseMoveJoint() noexcept override = default;
 
-        virtual bool valid() noexcept override { return robot_wrapper_.valid(); }
+        virtual bool valid() noexcept override { return valid_; }
 
         virtual aergo::module::IModule::IngressDecision onIngress(aergo::module::IModule::ProcessingType kind, uint32_t local_channel_id, aergo::module::ChannelIdentifier src, const aergo::module::message::MessageHeader& msg, aergo::module::IModule::QueueStatus queue_status) noexcept override;
         virtual void processResponse(uint32_t request_consumer_id, aergo::module::ChannelIdentifier source_channel, aergo::module::message::MessageHeader message) noexcept override;

@@ -29,6 +29,12 @@ UsecaseMoveJoint::UsecaseMoveJoint(
 ) : BaseUsecase(data_path, core, channel_map_info, logger, module_id, module_info, supports_multi_program, supports_pause, supports_stop),
     robot_wrapper_(*this)
 {
+    if (!robot_wrapper_.valid())
+    {
+        log(logging::LogType::ERROR, "UsecaseMoveJoint: Failed to initialize robot wrapper.");
+        return;
+    }
+
     if (!getSubscribeChannelByName(ri::robot_interface_status_consumer.channel_type_identifier_, robot_interface_status_channel_id_))
     {
         log(logging::LogType::ERROR, "UsecaseMoveJoint: Failed to get robot interface status subscribe channel.");
