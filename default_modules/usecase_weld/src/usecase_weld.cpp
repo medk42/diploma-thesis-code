@@ -538,11 +538,12 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::runProgram(const nlohman
 
     auto move_res = moveLinear(approach_pose, movement_speed_m_s, acceleration_m_s2, true);
     if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.control_request == UsecaseWeld::AsyncResult::ControlRequest::STOP) handleControlRequests(false, true); // if stopped during approach, handle stop request (ends the runProgram early via StopException)
+    handleControlRequests(false, true); // handle stop request if stopped during move to approach (ends the runProgram early via StopException)
 
     move_res = moveLinear(weld_start_pose, movement_speed_m_s, acceleration_m_s2, true);
     if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.control_request == UsecaseWeld::AsyncResult::ControlRequest::STOP) handleControlRequests(false, true); // if stopped during approach, handle stop request
+    handleControlRequests(false, true); // handle stop request if stopped during move to weld start
+
     log(logging::LogType::INFO, "UsecaseWeld: Starting weld...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     log(logging::LogType::INFO, "UsecaseWeld: Welding...");
@@ -558,7 +559,7 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::runProgram(const nlohman
             cv::Vec3d pose_p = {pose.position.x, pose.position.y, pose.position.z};
 
             pu::SE3 pose_se3 = pu::SE3::fromQuatTvec(pose_q, pose_p, false);
-            cv::Vec3d depart_offset = pose_se3 * cv::Vec3d(0, 0, -0.1); // move 10cm down from current pose for depart pose during pause
+            cv::Vec3d depart_offset = pose_se3 * cv::Vec3d(0, 0, -0.1); // move 10cm away from current pose for depart pose during pause
             robot_wrapper_.moveLinear(rc::Pose{
                 .position = {
                     .x = depart_offset[0],
@@ -598,7 +599,7 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::runProgram(const nlohman
 
     move_res = moveLinear(depart_pose, movement_speed_m_s, acceleration_m_s2, true);
     if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.control_request == UsecaseWeld::AsyncResult::ControlRequest::STOP) handleControlRequests(false, true); // if stopped during depart, handle stop request
+    handleControlRequests(false, true); // handle stop request if stopped during move to depart
 
     log(logging::LogType::INFO, "UsecaseWeld: Weld completed.");
 
