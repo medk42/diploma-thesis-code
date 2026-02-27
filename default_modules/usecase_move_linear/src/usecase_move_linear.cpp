@@ -264,6 +264,11 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseMoveLinear::validateParameters
 
 std::expected<void, uw::helper::ErrorInfo> UsecaseMoveLinear::runProgram(const nlohmann::json& command_json, bool simulated)
 {
+    if (simulated)
+    {
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(0, "UsecaseMoveLinear: Simulation mode is not supported."));
+    }
+
     const rc::Pose target_pose = {
         .position = {
             .x = command_json["target_pose"]["x"].get<double>(),

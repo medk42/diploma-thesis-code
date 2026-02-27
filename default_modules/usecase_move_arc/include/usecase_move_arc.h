@@ -65,16 +65,8 @@ namespace aergo::default_modules::usecase_move_arc
         ) override;
 
     private:
-        struct AsyncResult
-        {
-            // true if the command was stopped by a stop request, false if it finished normally
-            bool stopped;
-
-            // ErrorInfo if an error occurred during execution or while sending the command, std::nullopt otherwise
-            std::optional<uw::helper::ErrorInfo> error;
-        };
-
-        AsyncResult asyncWaitForFinish(uint64_t action_id);
+        /// @brief If stop_on_stop_request is true, the function will monitor for stop requests, if a stop request is received the function will cancel the robot action first and then abort the program after the robot reports completion (by calling handleControlRequests with allow_stop = true). If false, the function will not monitor for stop requests and will return as soon as the robot reports action completion.
+        std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id, bool stop_on_stop_request);
         bool readPose(const std::vector<std::vector<uw::helper::ParameterTypeValue>>& auto_parameter_values, size_t index, nlohmann::json& out_pose_json);
         std::expected<void, uw::helper::ErrorInfo> validatePose(const nlohmann::json& command_json, const std::string& pose_key, int error_code_base);
         rc::Pose extractPoseFromJson(const nlohmann::json& pose_json);

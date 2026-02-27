@@ -521,6 +521,11 @@ std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::validateParameters(const
 
 std::expected<void, uw::helper::ErrorInfo> UsecaseWeld::runProgram(const nlohmann::json& command_json, bool simulated)
 {
+    if (simulated)
+    {
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(0, "UsecaseWeld: Simulation mode is not supported."));
+    }
+
     rc::Pose approach_pose = jsonToPose(command_json["approach_pose"]);
     rc::Pose weld_start_pose = jsonToPose(command_json["weld_start_pose"]);
     rc::Pose weld_end_pose = jsonToPose(command_json["weld_end_pose"]);

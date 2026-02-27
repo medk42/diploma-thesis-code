@@ -75,17 +75,11 @@ namespace aergo::default_modules::usecase_pick_and_place
         ) override;
 
     private:
-        struct AsyncResult
-        {
-            // true if the command was stopped by a stop request, false if it finished normally
-            bool stopped;
+        /// @brief If stop_on_stop_request is true, the function will monitor for stop requests, if a stop request is received the function will cancel the robot action first and then abort the program after the robot reports completion (by calling handleControlRequests with allow_stop = true). If false, the function will not monitor for stop requests and will return as soon as the robot reports action completion.
+        std::expected<void, uw::helper::ErrorInfo> asyncWaitForFinish(uint64_t action_id, bool stop_on_stop_request);
 
-            // ErrorInfo if an error occurred during execution or while sending the command, std::nullopt otherwise
-            std::optional<uw::helper::ErrorInfo> error;
-        };
-
-        AsyncResult asyncWaitForFinish(uint64_t action_id);
-        AsyncResult moveLinear(const rc::Pose& pose, double speed, double acceleration);
+        /// @brief Moves the robot linearly to the specified pose with the given speed and acceleration. If stop_on_stop_request is true, the function will monitor for stop requests during the movement and will cancel the robot action if a stop request is received, and only then stop the execution by calling handleControlRequests with allow_stop = true. If false, the function will not monitor for stop requests and will return as soon as the robot reports movement completion. 
+        std::expected<void, uw::helper::ErrorInfo> moveLinear(const rc::Pose& pose, double speed, double acceleration, bool stop_on_stop_request);
         bool sendSceneDetectionRequest(uint64_t& out_request_id);
 
         

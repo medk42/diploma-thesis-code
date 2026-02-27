@@ -622,6 +622,11 @@ namespace
 
 std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::runProgram(const nlohmann::json& command_json, bool simulated)
 {
+    if (simulated)
+    {
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(0, "UsecasePickAndPlace: Simulation mode is not supported."));
+    }
+
     // ----- Begin JSON deserialization for pick-and-place runProgram -----
     rc::Pose place_pose{};
     double movement_speed_m_s = 0.0;
@@ -723,101 +728,98 @@ std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::runProgram(const
 
 
     // Move above pick pose
-    auto move_res = moveLinear(above_pick_pose, movement_speed_m_s, movement_acceleration_m_s2);
-    if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true); // if stopped during move, handle stop request
+    auto move_res = moveLinear(above_pick_pose, movement_speed_m_s, movement_acceleration_m_s2, true);
+    if (!move_res.has_value()) return move_res; // propagate move error
 
     // Move to pick pose
-    move_res = moveLinear(pick_pose, movement_speed_m_s, movement_acceleration_m_s2);
-    if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true);
+    move_res = moveLinear(pick_pose, movement_speed_m_s, movement_acceleration_m_s2, true);
+    if (!move_res.has_value()) return move_res; // propagate move error
 
     log(logging::LogType::INFO, "UsecasePickAndPlace: Closing gripper...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     log(logging::LogType::INFO, "UsecasePickAndPlace: Gripper closed.");
 
+    handleControlRequests(false, true); // if stopped during gripper close, handle stop request
+
     // Move above pick pose
-    move_res = moveLinear(above_pick_pose, movement_speed_m_s, movement_acceleration_m_s2);
-    if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true);
+    move_res = moveLinear(above_pick_pose, movement_speed_m_s, movement_acceleration_m_s2, true);
+    if (!move_res.has_value()) return move_res; // propagate move error
 
     // Move above place pose
-    move_res = moveLinear(above_place_pose, movement_speed_m_s, movement_acceleration_m_s2);
-    if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true);
+    move_res = moveLinear(above_place_pose, movement_speed_m_s, movement_acceleration_m_s2, true);
+    if (!move_res.has_value()) return move_res; // propagate move error
 
     // Move to place pose
-    move_res = moveLinear(place_pose, movement_speed_m_s, movement_acceleration_m_s2);
-    if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true);
+    move_res = moveLinear(place_pose, movement_speed_m_s, movement_acceleration_m_s2, true);
+    if (!move_res.has_value()) return move_res; // propagate move error
 
     log(logging::LogType::INFO, "UsecasePickAndPlace: Opening gripper...");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     log(logging::LogType::INFO, "UsecasePickAndPlace: Gripper opened.");
 
+    handleControlRequests(false, true); // if stopped during gripper open, handle stop request
+
     // Move above place pose
-    move_res = moveLinear(above_place_pose, movement_speed_m_s, movement_acceleration_m_s2);
-    if (move_res.error) return std::unexpected(*move_res.error);
-    if (move_res.stopped) handleControlRequests(false, true);
+    move_res = moveLinear(above_place_pose, movement_speed_m_s, movement_acceleration_m_s2, true);
+    if (!move_res.has_value()) return move_res; // propagate move error
 
 
     return std::expected<void, uw::helper::ErrorInfo>{};
 }
 
 
-UsecasePickAndPlace::AsyncResult UsecasePickAndPlace::moveLinear(const rc::Pose& pose, double speed, double acceleration)
+std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::moveLinear(const rc::Pose& pose, double speed, double acceleration, bool stop_on_stop_request)
 {
     rc::MoveRequestResult res = robot_wrapper_.moveLinear(pose, speed, acceleration, false);
     if (!res.success_)
     {
-        return AsyncResult {
-            .stopped = false,
-            .error = uw::helper::ErrorInfo::WithDetails(
-                1, 
-                "UsecasePickAndPlace: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)
-            )
-        };
+        return std::unexpected(uw::helper::ErrorInfo::WithDetails(
+            1, 
+            "UsecasePickAndPlace: Failed to send move linear command to robot: " + (res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : res.err_message_)
+        ));
     }
-    return asyncWaitForFinish(res.action_id_);
+    return asyncWaitForFinish(res.action_id_, stop_on_stop_request);
 }
 
 
-UsecasePickAndPlace::AsyncResult UsecasePickAndPlace::asyncWaitForFinish(uint64_t action_id)
+std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::asyncWaitForFinish(uint64_t action_id, bool stop_on_stop_request)
 {
     bool cancel_requested = false;
     while (robot_wrapper_.isActionActive(action_id))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        if (cancel_requested)
+        if (stop_on_stop_request)
         {
-            continue; // already requested cancel, just wait for action to end
-        }
-
-        auto [pause_requested, stop_requested] = checkControlRequests();
-        if (stop_requested)
-        {
-            log(logging::LogType::INFO, "UsecasePickAndPlace: Stop requested, cancelling robot action " + std::to_string(action_id) + ".");
-
-            rc::MoveRequestResult cancel_res = robot_wrapper_.cancelAction(action_id);
-            if (!cancel_res.success_)
+            if (cancel_requested)
             {
-                return AsyncResult {
-                    .stopped = true,
-                    .error = uw::helper::ErrorInfo::WithDetails(
+                continue; // already requested cancel, just wait for action to end
+            }
+
+            auto [pause_requested, stop_requested] = checkControlRequests();
+            if (stop_requested)
+            {
+                log(logging::LogType::INFO, "UsecasePickAndPlace: Stop requested, cancelling robot action " + std::to_string(action_id) + ".");
+
+                rc::MoveRequestResult cancel_res = robot_wrapper_.cancelAction(action_id);
+                if (!cancel_res.success_)
+                {
+                    return std::unexpected(uw::helper::ErrorInfo::WithDetails(
                         5, 
                         "UsecasePickAndPlace: Failed to send cancel command to robot for action " + std::to_string(action_id) + ": " + (cancel_res.err_message_.empty() ? std::string("UNKNOWN_ERROR") : cancel_res.err_message_)
-                    )
-                };
+                    ));
+                }
+                cancel_requested = true;
             }
-            cancel_requested = true;
         }
     }
 
-    return AsyncResult {
-        .stopped = cancel_requested,
-        .error = std::nullopt
-    };
+    if (cancel_requested)
+    {
+        handleControlRequests(false, true); // after action finishes, check if stop is requested to end the runProgram early via StopException
+    }
+
+    return std::expected<void, uw::helper::ErrorInfo>{};
 }
 
 std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::deserializeSceneResponse(
