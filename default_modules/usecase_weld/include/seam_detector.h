@@ -11,6 +11,14 @@
 #include <cmath>
 #include <limits>
 
+// #define DEBUG_LOGGING_SEAM_DETECTOR
+
+#ifdef DEBUG_LOGGING_SEAM_DETECTOR
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+#endif
+
 #include "module_helpers/pose_utils/pose_utils.h"
 #include "module_helpers/scene_detection_helper/message_types.h"
 
@@ -268,6 +276,27 @@ public:
                 detectEdgeFace(boxes[j], boxes[i], j, i, used_edge, seams); // edges(j)->faces(i)
             }
         }
+
+        #ifdef DEBUG_LOGGING_SEAM_DETECTOR
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(0) << "Detected seams (units in mm):" << std::endl;
+        for (auto& seam : seams)
+        {
+            ss << "\tSeam: " << ((seam.type == Seam::Type::EdgeEdge) ? "EdgeEdge" : "EdgeFace") << std::setprecision(0)
+                      << "[" << std::setw(3) <<  seam.p0_world[0] * 1000
+                      << "," << std::setw(3) <<  seam.p0_world[1] * 1000
+                      << "," << std::setw(3) <<  seam.p0_world[2] * 1000 << "] -> "
+                      << "[" << std::setw(3) <<  seam.p1_world[0] * 1000 
+                      << "," << std::setw(3) <<  seam.p1_world[1] * 1000 
+                      << "," << std::setw(3) <<  seam.p1_world[2] * 1000 << "]; " << std::setprecision(3)
+                      << "torch_dir=[" << std::setw(5) <<  seam.torch_dir_world[0]
+                      << "," << std::setw(5) <<  seam.torch_dir_world[1]
+                      << "," << std::setw(5) <<  seam.torch_dir_world[2] << "]; "
+                      << std::endl;
+        }
+        std::cout << ss.str();
+        #endif
+
         return seams;
     }
 

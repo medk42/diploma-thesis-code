@@ -5,6 +5,14 @@
 #include <limits>
 #include <cmath>
 
+// #define DEBUG_LOGGING_TRAJECTORY_SEAM_MATCHER
+
+#ifdef DEBUG_LOGGING_TRAJECTORY_SEAM_MATCHER
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+#endif
+
 // include your SE3
 #include "module_helpers/pose_utils/pose_utils.h"   // <- adjust include to where your SE3 lives
 #include "module_helpers/pen_messages/message_types.h"
@@ -35,14 +43,6 @@ inline double median(std::vector<double> v)
 inline double distPointSegment3D(const cv::Vec3d& p, const cv::Vec3d& a, const cv::Vec3d& b)
 {
     return norm3(p - closestPointOnSegment3D(a,b,p));
-}
-
-// Pose (quat) -> SE3 (your SE3 wants (qw,qx,qy,qz))
-inline pu::SE3 poseToSE3(const pm::Pose& p)
-{
-    const cv::Vec4d q(p.qw, p.qx, p.qy, p.qz);
-    const cv::Vec3d t(p.x, p.y, p.z);
-    return pu::SE3::fromQuatTvec(q, t, /*reorthonormalize=*/true);
 }
 
 // Build a stable frame where:
@@ -170,6 +170,15 @@ struct TrajectorySeamMatcher
         const double ang_eps_rad = params.select_angle_eps_deg * (CV_PI / 180.0);
         const double cos_thr = std::cos(ang_eps_rad);
 
+        #ifdef DEBUG_LOGGING_TRAJECTORY_SEAM_MATCHER
+        std::stringstream ss;
+        ss << std::fixed << "Match results:\n";
+        ss << "\tTotal length: " << std::setprecision(1) << totalLen * 1000 << "mm\n";
+        ss << "\tUsed points: " << windowIdx.size() << "/" << N << "\n";
+        ss << "\tAngle eps: " << std::setprecision(1) << std::setw(3) << params.select_angle_eps_deg << "deg (cos=" << std::setprecision(3) << std::setw(5) << cos_thr << ")\n";
+        ss << "\tSeams:\n";
+        #endif
+
         int best = -1;
         double bestScore = std::numeric_limits<double>::infinity();
 
@@ -196,6 +205,10 @@ struct TrajectorySeamMatcher
             const double medD = median(dists);
             const double medA = median(angErrs);
 
+            #ifdef DEBUG_LOGGING_TRAJECTORY_SEAM_MATCHER
+            ss << "\t\t" << std::setw(2) << si << ": dist=" << std::setprecision(2) << std::setw(5) << medD * 1000 << "mm (max " << std::setprecision(0) << std::setw(3) << params.select_max_median_dist * 1000 << "mm, " << (medD > params.select_max_median_dist ? "FAIL" : "pass") << "), ang: " << std::setprecision(3) << std::setw(5) << medA << " (" << std::setprecision(1) << std::setw(5) << std::acos(medA) * 180 / CV_PI << "deg, [" << std::setprecision(3) << std::setw(5) << tS[0] << "," << std::setw(5) << tS[1] << "," << std::setw(5) << tS[2] << "] to [" << std::setw(5) << penDir[windowIdx.front()][0] << "," << std::setw(5) << penDir[windowIdx.front()][1] << "," << std::setw(5) << penDir[windowIdx.front()][2] << "]; min " << std::setprecision(3) << std::setw(5) << cos_thr << ", " << (medA < cos_thr ? "FAIL" : "pass") << "), score: " << std::setprecision(3) << std::setw(5) << (params.w_dist * (medD * medD) - params.w_ang * medA) << ((medD <= params.select_max_median_dist && medA >= cos_thr && params.w_dist * (medD * medD) - params.w_ang * medA < bestScore) ? " <-- best so far" : "") << "\n";
+            #endif
+
             // Hard gates (fail fast)
             if (medD > params.select_max_median_dist) continue;
             if (medA < cos_thr) continue; // median |dot| too small => angle too big
@@ -208,6 +221,11 @@ struct TrajectorySeamMatcher
                 best = si;
             }
         }
+
+        #ifdef DEBUG_LOGGING_TRAJECTORY_SEAM_MATCHER
+        ss << "\tBest seam index: " << best << (best >= 0 ? " <-- selected" : " (no good seam)") << "\n";
+        std::cout << ss.str();
+        #endif
 
         if (best < 0) return false;
         if (out_seam_index) *out_seam_index = best;
