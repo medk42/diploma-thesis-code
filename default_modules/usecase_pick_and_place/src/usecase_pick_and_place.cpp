@@ -35,6 +35,12 @@ UsecasePickAndPlace::UsecasePickAndPlace(
 ) : BaseUsecase(data_path, core, channel_map_info, logger, module_id, module_info, supports_multi_program, supports_pause, supports_stop),
     robot_wrapper_(*this)
 {
+    if (!robot_wrapper_.valid())
+    {
+        log(logging::LogType::ERROR, "UsecasePickAndPlace: Failed to initialize robot wrapper.");
+        return;
+    }
+
     if (!getSubscribeChannelByName(pm::pen_message_intent_subscribe_consumer.channel_type_identifier_, pen_message_intent_subscribe_channel_id_))
     {
         log(logging::LogType::ERROR, "UsecasePickAndPlace: Failed to get pen message intent subscribe channel.");
