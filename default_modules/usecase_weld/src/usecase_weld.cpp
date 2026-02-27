@@ -181,6 +181,12 @@ UsecaseWeld::ProcessingResult UsecaseWeld::processCustomMessageOrResponse(
             return ProcessingResult::DROP;
         }
 
+        if (message.blob_count_ != 1 || message.blobs_ == nullptr)
+        {
+            log(logging::LogType::WARNING, "UsecaseWeld: Pen message intent missing blob data.");
+            return ProcessingResult::DROP;
+        }
+
         std::vector<pm::Pose> trajectory;
         if (!pm::parseTrajectoryBlob(message.blobs_[0].data(), message.blobs_[0].size(), trajectory))
         {
