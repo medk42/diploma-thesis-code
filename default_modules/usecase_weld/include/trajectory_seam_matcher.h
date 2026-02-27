@@ -90,7 +90,7 @@ struct TrajectorySeamMatcher
     {
         // Stage 1 (selection)
         double select_max_median_dist = 0.010;     // 10mm median distance to seam segment
-        double select_angle_eps_deg   = 25.0;     // pen direction vs seam torch_dir_world
+        double select_angle_eps_deg   = 60.0;     // pen direction vs seam torch_dir_world
         double w_dist = 1.0;
         double w_ang  = 0.5;
 
