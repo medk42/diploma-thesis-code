@@ -30,8 +30,8 @@ PenTrackingMulticamModule::PenTrackingMulticamModule(
     T_pen_tip_(defaults::T_pen_tip()),
     poseFilter_(PoseOneEuroFilter::Params{})
 {
-    // should be 3, but preallocate more (10) for safety (reflections etc)
-    poseEstimationResult_ = MulticamPoseEstimator::DetectionResult::preallocate(2, 10);
+    // Preallocate with one camera initially; resize dynamically per incoming message.
+    poseEstimationResult_ = MulticamPoseEstimator::DetectionResult::preallocate(1, 100);
 
     visualization_helper_ = std::make_unique<vis3d::VisualizationHelper>(this);
     if (!visualization_helper_->valid())
@@ -283,19 +283,17 @@ bool PenTrackingMulticamModule::parseCalibrationHeader(message::MessageHeader me
         return false;
     }
 
-    if (cameraSet.calibrated_count > 4)
+    if (cameraSet.calibrated_count == 0 || cameraSet.calibrated_count > 4)
     {
         log(logging::LogType::ERROR, "PenTrackingMulticamModule: invalid calibrated camera count in message.");
         return false;
     }
+    
+    // Keep the camera buffer aligned to the currently reported camera count.
+    camerasDataBuffer_.resize(cameraSet.calibrated_count);
 
     for (uint32_t i = 0; i < cameraSet.calibrated_count; ++i)
     {
-        if (camerasDataBuffer_.size() <= i)
-        {
-            camerasDataBuffer_.emplace_back();
-        }
-
         auto& camData = camerasDataBuffer_[i];
         
         ccrm::Pose camera_pose;
@@ -332,6 +330,7 @@ bool PenTrackingMulticamModule::parseCalibrationHeader(message::MessageHeader me
 bool PenTrackingMulticamModule::parseImageData(message::MessageHeader message, uint32_t expected_image_count)
 {
     uint32_t image_count = 0;
+    grayCameraImagesBuffer_.resize(expected_image_count);
 
     for (uint64_t blob_id = 0; blob_id < message.blob_count_; ++blob_id)
     {
@@ -386,11 +385,6 @@ bool PenTrackingMulticamModule::parseImageData(message::MessageHeader message, u
                 log(logging::LogType::ERROR, "PenTrackingMulticamModule: received more images than expected.");
                 return false;
             }
-            while (grayCameraImagesBuffer_.size() < image_count)
-            {
-                grayCameraImagesBuffer_.emplace_back();
-            }
-
             cm::ImageHeader imageHeader;
             if (!cm::readImageHeader(blob_data, blob_size, img_idx, imageHeader))
             {
@@ -413,7 +407,13 @@ bool PenTrackingMulticamModule::parseImageData(message::MessageHeader message, u
             );
         }
     }
-    
+
+    if (image_count != expected_image_count)
+    {
+        log(logging::LogType::ERROR, "PenTrackingMulticamModule: received fewer images than expected.");
+        return false;
+    }
+
     return true;
 }
 
@@ -466,10 +466,23 @@ void PenTrackingMulticamModule::processMessage(
             defaults::windowSizeMultiple
         );
     }
+    if (markerDetectors_.size() > camera_count)
+    {
+        markerDetectors_.erase(markerDetectors_.begin() + camera_count, markerDetectors_.end());
+    }
 
     while (detectionsBuffer_.size() < camera_count)
     {
-        detectionsBuffer_.emplace_back(MarkerDetector::DetectionResult::preallocate(10));
+        detectionsBuffer_.emplace_back(MarkerDetector::DetectionResult::preallocate(100));
+    }
+    if (detectionsBuffer_.size() > camera_count)
+    {
+        detectionsBuffer_.erase(detectionsBuffer_.begin() + camera_count, detectionsBuffer_.end());
+    }
+
+    if (poseEstimationResult_.candidatePosesPerCameraPerMarker.size() != camera_count)
+    {
+        poseEstimationResult_ = MulticamPoseEstimator::DetectionResult::preallocate(camera_count, 100);
     }
 
     for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx)
