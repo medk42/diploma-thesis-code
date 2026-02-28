@@ -107,7 +107,7 @@ bool UsecasePickAndPlace::sendSceneDetectionRequest(uint64_t& out_request_id)
     // Get channel info for the scene detection request channel
     InputChannelMapInfo::IndividualChannelInfo channel_info = getRequestChannelInfo(scene_detection_request_channel_id_);
         
-    if (channel_info.channel_identifier_ == nullptr || channel_info.channel_identifier_count_ == 0)
+    if (channel_info.channel_identifier_ == nullptr || channel_info.channel_identifier_count_ != 1)
     {
         log(logging::LogType::ERROR, "UsecasePickAndPlace: There should be exactly one scene detection request channel by contract, invalid state");
         return false;
@@ -677,6 +677,7 @@ std::expected<void, uw::helper::ErrorInfo> UsecasePickAndPlace::runProgram(const
         return std::unexpected(uw::helper::ErrorInfo::WithDetails(3, "UsecasePickAndPlace: Failed to parse scene detection response."));
     }
 
+    // There may be multiple boxes with the box_id, let's pick the first one we find
     bool box_found = false;
     pu::SE3 T_world_box = pu::SE3::unit();
     for (const auto& box : detected_boxes)

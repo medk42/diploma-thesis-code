@@ -703,4 +703,4 @@ private:
     }
 };
 
-} // namespace aergo::module::helpers::seams
+}
