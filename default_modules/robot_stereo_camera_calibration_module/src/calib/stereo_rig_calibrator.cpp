@@ -47,7 +47,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         const RigRefinerCeres::Options& refine_opts,
         const std::vector<cv::Mat>& left_images,
         const std::vector<cv::Mat>& right_images,
-        const std::vector<Pose>& robot_poses)
+        const std::vector<Pose>& robot_poses,
+        bool skip_handeye)
     {
         if (already_ran_.load(std::memory_order_relaxed))
         {
@@ -63,7 +64,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         cancel_requested_.store(false, std::memory_order_relaxed);
 
         const size_t n = left_images.size();
-        const uint32_t max_ticks = static_cast<uint32_t>(3 * n + 5); // detect L+R + estimate pose per frame, plus intr L/R, stereo, hand-eye, refine
+        // Per frame: 2 (detect L/R) + 1 (board pose tick). Then +3 intr L/R + stereo; +1 hand-eye +1 Ceres refine, or neither when skip_handeye (virtual static flange / moving board).
+        const uint32_t max_ticks = static_cast<uint32_t>(3 * n + (skip_handeye ? 3 : 5));
         initializeProgress(max_ticks);
         uint32_t tick = 0;
 
@@ -133,46 +135,39 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             ++tick; updateProgress(tick);
         }
 
-        HandEyeCalibrator he(handeye_params);
-        auto he_res = he.run(base_from_flange, rvec_tc, tvec_tc);
-        ++tick; updateProgress(tick);
-        if (!he_res.ok)
-        {
-            return std::unexpected("Hand-eye calibration failed: " + he_res.message);
-        }
-
         if (base_from_flange.empty())
         {
-            return std::unexpected("Hand-eye calibration failed: no usable pose pairs.");
+            return std::unexpected(skip_handeye
+                ? "Calibration failed: no left views with a detected Charuco board (needed for board pose and refinement)."
+                : "Hand-eye calibration failed: no usable pose pairs.");
+        }
+
+        SE3 T_flange_cam;
+        if (skip_handeye)
+        {
+            T_flange_cam = SE3{}; // identity: left camera frame == flange (T_FC = flange <- cam)
+        }
+        else
+        {
+            HandEyeCalibrator he(handeye_params);
+            auto he_res = he.run(base_from_flange, rvec_tc, tvec_tc);
+            ++tick; updateProgress(tick);
+            if (!he_res.ok)
+            {
+                return std::unexpected("Hand-eye calibration failed: " + he_res.message);
+            }
+            T_flange_cam = he_res.T_FC;
         }
 
         SE3 T_base_flange = pose_utils::toSE3(base_from_flange.front());
-        SE3 T_flange_cam = he_res.T_FC;
         SE3 T_cam_board = pose_utils::rtToSE3(rvec_tc.front(), tvec_tc.front());
 
         SE3 T_base_cam = pose_utils::compose(T_base_flange, T_flange_cam);
         SE3 T_base_board = pose_utils::compose(T_base_cam, T_cam_board);
 
-        RigRefinerCeres refiner(refine_opts);
-        RigRefinerCeres::Input rin;
-        rin.viewsL = viewsL;
-        rin.viewsR = viewsR;
-        rin.base_from_flange = robot_poses;
-        rin.board = board;
-        rin.KL = intrL_res.intr;
-        rin.KR = intrR_res.intr;
-        rin.RL = stereo_res.extr;
-        rin.camL_from_flange = pose_utils::invert(he_res.T_FC);
-        rin.world_from_board = T_base_board;
+        const SE3 camL_from_flange = pose_utils::invert(T_flange_cam);
 
-        auto refine_res = refiner.refine(rin);
-        ++tick; updateProgress(tick);
-        if (!refine_res.ok)
-        {
-            return std::unexpected("Ceres refinement failed: " + refine_res.message);
-        }
-
-        // Populate metrics
+        // Populate metrics (intrinsics + stereo always; Ceres only when hand-eye runs — skip_handeye implies static virtual flange / moving board, incompatible with single world<-board in Ceres)
         metrics_.intrinsics_left_rms = intrL_res.rms;
         metrics_.intrinsics_right_rms = intrR_res.rms;
         metrics_.intrinsics_left_used_views = intrL_res.usedViewIndices.size();
@@ -182,17 +177,54 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
         metrics_.stereo_median_sampson = stereo_res.medianSampson;
         metrics_.stereo_used_pairs = stereo_res.usedPairIndices.size();
         metrics_.hand_eye_usable_pairs = base_from_flange.size();
-        metrics_.camera_intrinsics_left = refine_res.KL;
-        metrics_.camera_intrinsics_right = refine_res.KR;
-        metrics_.stereo_extrinsics = refine_res.RL;
-        metrics_.camL_from_flange = refine_res.camL_from_flange;
-        metrics_.camR_from_flange = refine_res.camR_from_flange;
-        metrics_.world_from_board = refine_res.world_from_board;
-        metrics_.refine_initial_reproj_rmse_l = refine_res.initialReprojRmseL;
-        metrics_.refine_initial_reproj_rmse_r = refine_res.initialReprojRmseR;
-        metrics_.refine_final_reproj_rmse_l = refine_res.finalReprojRmseL;
-        metrics_.refine_final_reproj_rmse_r = refine_res.finalReprojRmseR;
-        metrics_.refine_message = refine_res.message;
+
+        if (skip_handeye)
+        {
+            metrics_.camera_intrinsics_left = intrL_res.intr;
+            metrics_.camera_intrinsics_right = intrR_res.intr;
+            metrics_.stereo_extrinsics = stereo_res.extr;
+            metrics_.camL_from_flange = camL_from_flange;
+            metrics_.camR_from_flange = pose_utils::compose(SE3{stereo_res.extr.R_RL, stereo_res.extr.t_RL}, camL_from_flange);
+            metrics_.world_from_board = T_base_board;
+            metrics_.refine_initial_reproj_rmse_l = -1.0;
+            metrics_.refine_initial_reproj_rmse_r = -1.0;
+            metrics_.refine_final_reproj_rmse_l = -1.0;
+            metrics_.refine_final_reproj_rmse_r = -1.0;
+            metrics_.refine_message = "Ceres refinement skipped (skip_handeye: nominal board pose from first Charuco frame only; use intrinsics + stereo).";
+        }
+        else
+        {
+            RigRefinerCeres refiner(refine_opts);
+            RigRefinerCeres::Input rin;
+            rin.viewsL = viewsL;
+            rin.viewsR = viewsR;
+            rin.base_from_flange = robot_poses;
+            rin.board = board;
+            rin.KL = intrL_res.intr;
+            rin.KR = intrR_res.intr;
+            rin.RL = stereo_res.extr;
+            rin.camL_from_flange = camL_from_flange;
+            rin.world_from_board = T_base_board;
+
+            auto refine_res = refiner.refine(rin);
+            ++tick; updateProgress(tick);
+            if (!refine_res.ok)
+            {
+                return std::unexpected("Ceres refinement failed: " + refine_res.message);
+            }
+
+            metrics_.camera_intrinsics_left = refine_res.KL;
+            metrics_.camera_intrinsics_right = refine_res.KR;
+            metrics_.stereo_extrinsics = refine_res.RL;
+            metrics_.camL_from_flange = refine_res.camL_from_flange;
+            metrics_.camR_from_flange = refine_res.camR_from_flange;
+            metrics_.world_from_board = refine_res.world_from_board;
+            metrics_.refine_initial_reproj_rmse_l = refine_res.initialReprojRmseL;
+            metrics_.refine_initial_reproj_rmse_r = refine_res.initialReprojRmseR;
+            metrics_.refine_final_reproj_rmse_l = refine_res.finalReprojRmseL;
+            metrics_.refine_final_reproj_rmse_r = refine_res.finalReprojRmseR;
+            metrics_.refine_message = refine_res.message;
+        }
 
         valid_.store(true, std::memory_order_release); // Calibration successful, can read metrics
         updateProgress(max_ticks);

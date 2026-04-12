@@ -55,7 +55,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
     };
 
     /**
-     * @brief Runs a full stereo rig calibration (intrinsics, stereo extrinsics, hand-eye, optional refinement) once.
+     * @brief Runs a full stereo rig calibration (intrinsics, stereo extrinsics, optional hand-eye, optional refinement) once.
      *        Subsequent calls to runStereoRobotCalibration will fail; create a new instance for another run.
      *        report() may be called at any time (even before/after calibration), but only makes sense after a run.
      */
@@ -75,6 +75,7 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
          * @param left_images Left camera images (aligned with right_images and robot_poses).
          * @param right_images Right camera images.
          * @param robot_poses World<-flange poses.
+         * @param skip_handeye If true, skip OpenCV hand-eye and Ceres refinement: assumes left camera frame equals flange (identity camL<-flange). For virtual/static-flange + moving-board captures the joint Ceres model is invalid; output uses intrinsics + stereo only, with world<-board from the first Charuco frame as a nominal anchor for serialization/runtime.
          * @return expected<void, std::string> Error string on failure.
          */
         std::expected<void, std::string> runStereoRobotCalibration(
@@ -86,7 +87,8 @@ namespace aergo::default_modules::robot_stereo_camera_calibration_module::calib
             const RigRefinerCeres::Options& refine_opts,
             const std::vector<cv::Mat>& left_images,
             const std::vector<cv::Mat>& right_images,
-            const std::vector<Pose>& robot_poses);
+            const std::vector<Pose>& robot_poses,
+            bool skip_handeye = false);
 
         /**
          * @brief Report calibration metrics (intrinsics/stereo/hand-eye/refine). Metrics only valid after a successful run.

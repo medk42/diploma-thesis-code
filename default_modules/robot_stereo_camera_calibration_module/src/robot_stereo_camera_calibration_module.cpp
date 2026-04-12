@@ -196,9 +196,9 @@ bool RobotStereoCameraCalibrationModule::activate(
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    if (parameter_values.size() != 1)
+    if (parameter_values.size() != 1 && parameter_values.size() != 2)
     {
-        log(logging::LogType::ERROR, "RobotStereoCameraCalibration: expected exactly one activation parameter (stereo camera+pose samples).");
+        log(logging::LogType::ERROR, "RobotStereoCameraCalibration: expected one or two activation parameters (stereo samples, optional skip hand-eye flag).");
         return false;
     }
 
@@ -215,6 +215,18 @@ bool RobotStereoCameraCalibrationModule::activate(
     if (!parseStereoSamples(samples, cancel_flag, cancelled, left_images, right_images, poses))
     {
         return false;
+    }
+
+    bool skip_handeye = false;
+    if (parameter_values.size() >= 2)
+    {
+        const auto& flag_param = parameter_values[1];
+        if (flag_param.size() != 1 || flag_param[0].size() != 1)
+        {
+            log(logging::LogType::ERROR, "RobotStereoCameraCalibration: skip hand-eye parameter must be a single boolean value.");
+            return false;
+        }
+        skip_handeye = flag_param[0][0] != 0;
     }
 
     if (cancel_flag.load(std::memory_order_relaxed))
@@ -254,7 +266,7 @@ bool RobotStereoCameraCalibrationModule::activate(
 
     auto res = calibrator_->runStereoRobotCalibration(
         kBoardParams, kDetParams, kIntrParams, kStereoParams, kHandEyeParams, kRefineOpts,
-        left_images, right_images, poses);
+        left_images, right_images, poses, skip_handeye);
 
     stop_thread.store(true, std::memory_order_relaxed);
     if (cancel_thread.joinable())
@@ -297,6 +309,10 @@ bool RobotStereoCameraCalibrationModule::activate(
         }
         const auto& m = calibrator_->report();
         oss << "Calibration succeeded\n";
+        if (skip_handeye)
+        {
+            oss << "      Hand-eye + Ceres refine: skipped (test mode: intrinsics + stereo only; nominal board pose from first frame)\n";
+        }
         oss << "      Intrinsics L RMS: " << m.intrinsics_left_rms << " (views " << m.intrinsics_left_used_views << ")\n";
         oss << "      Intrinsics R RMS: " << m.intrinsics_right_rms << " (views " << m.intrinsics_right_used_views << ")\n";
         oss << "      Stereo RMS: " << m.stereo_rms << " (pairs " << m.stereo_used_pairs << ")\n";

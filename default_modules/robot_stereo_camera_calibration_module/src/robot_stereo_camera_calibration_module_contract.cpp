@@ -68,6 +68,12 @@ static p_desc::ParameterList parameters(std::vector<p_desc::ParameterDescription
         .as_list_ = true,
         .list_size_min_ = 10,
         .list_size_max_ = 0
+    },
+    {
+        .type_ = p_desc::ParameterType::BOOL,
+        .param_name_ = "Skip hand-eye (test)",
+        .param_desc_ = "If enabled, assumes the left camera frame is coincident with the flange (identity left cam <- flange). OpenCV hand-eye and Ceres bundle adjustment are skipped; intrinsics and stereo (right <- left) still run. Use for virtual/static-flange + moving-board testing where Ceres' fixed board-in-world model does not apply.",
+        .default_value_ = "0"
     }
 });
 

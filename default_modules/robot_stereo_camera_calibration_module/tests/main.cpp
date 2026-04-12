@@ -181,7 +181,9 @@ int main()
         refine_opts,
         left_images,
         right_images,
-        robot_poses);
+        robot_poses,
+        false
+    );
 
     stop_thread.store(true, std::memory_order_relaxed);
     progress_thread.join();
