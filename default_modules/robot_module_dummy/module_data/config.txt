@@ -1,0 +1,3 @@
+DOCROOT=docroot
+PORT_HTTP=8091
+WT_CONFIG=wt_config.xml

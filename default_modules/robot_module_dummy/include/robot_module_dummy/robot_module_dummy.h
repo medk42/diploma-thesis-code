@@ -5,11 +5,15 @@
 #include "module_helpers/robot_interface/features/robot_control/messages.h"
 #include "module_helpers/visualization_3d_interface/visualization_helper.h"
 
+#include <Wt/WServer.h>
+
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <span>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -22,6 +26,25 @@ namespace aergo::default_modules::robot_module_dummy
     class RobotModuleDummy : public aergo::module::BaseModule
     {
     public:
+        struct UiSnapshot
+        {
+            bool valid{false};
+            bool moving{false};
+            bool has_error{false};
+            uint64_t active_action_id{0};
+            std::string error_text;
+            std::array<double, 6> joints_rad{};
+            std::array<double, 6> tfc_xyzrpy{};
+            std::array<double, 6> tcp_xyzrpy{};
+        };
+
+        struct UiCommandResult
+        {
+            bool success{false};
+            uint64_t action_id{0};
+            std::string message;
+        };
+
         RobotModuleDummy(const char* data_path,
                          aergo::module::ICore* core,
                          aergo::module::InputChannelMapInfo channel_map_info,
@@ -50,16 +73,27 @@ namespace aergo::default_modules::robot_module_dummy
 
         bool load(ISerializableModule::SaveData) noexcept override
         {
-            return false;
+            return true;
         }
+
+        UiSnapshot getUiSnapshot();
+        UiCommandResult startUiMoveJoint(const std::array<double, 6>& joint_targets_rad, double speed_rad_s);
+        UiCommandResult startUiMoveLinear(const std::array<double, 6>& tcp_xyzrpy_rad, double speed_m_s);
+        UiCommandResult cancelUiMove();
 
     private:
         struct SimState
         {
-            // "axes" == xyzrpy hack (x,y,z in meters; rpy in radians)
+            // x,y,z + roll,pitch,yaw represent the flange/head pose in world coordinates.
             double xyzrpy[6]{0, 0, 0, 0, 0, 0};
             rc::Pose tfc_pose{}; // flange pose (TFC) in world
             rc::Pose tcp_pose{}; // end effector pose (TCP) in world
+        };
+
+        enum class MoveSpace : uint8_t
+        {
+            TFC,
+            TCP
         };
 
         struct ActiveMove
@@ -67,10 +101,12 @@ namespace aergo::default_modules::robot_module_dummy
             uint64_t action_id{0};
             bool active{false};
             bool cancel_requested{false};
+            MoveSpace move_space{MoveSpace::TFC};
 
-            // linear interpolation in xyzrpy space
-            double start[6]{};
-            double target[6]{};
+            double start_pos[3]{};
+            double target_pos[3]{};
+            rc::Quaternion start_quat{0.0, 0.0, 0.0, 1.0};
+            rc::Quaternion target_quat{0.0, 0.0, 0.0, 1.0};
             double duration_s{0.0};
             double t_s{0.0};
         };
@@ -90,18 +126,42 @@ namespace aergo::default_modules::robot_module_dummy
         static rc::Quaternion quatFromWorldRpy(double roll, double pitch, double yaw);
         static void rpyFromQuatWorld(const rc::Quaternion& q_in, double& out_roll, double& out_pitch, double& out_yaw);
         static rc::Pose makePoseFromXyzRpy(const double xyzrpy[6]);
+        static rc::Pose makePoseFromPosQuat(const double pos[3], const rc::Quaternion& quat);
         static rc::Pose tcpFromTfc(const rc::Pose& tfc_pose); // TCP = 10 cm in +Z of TFC
+        static rc::Pose tfcFromTcp(const rc::Pose& tcp_pose); // TFC = TCP shifted by -10 cm in tool +Z
+
+        static rc::Quaternion quatNormalize(const rc::Quaternion& q);
+        static double quatDot(const rc::Quaternion& a, const rc::Quaternion& b);
+        static rc::Quaternion quatNegated(const rc::Quaternion& q);
+        static rc::Quaternion quatSlerpShortest(rc::Quaternion a, rc::Quaternion b, double t);
 
         // visualization
         bool initVisResources();
         bool ensureVisObjectsCreatedLocked();
         void updateVisLocked();
+        bool updateTrajectoryLocked(const rc::Vector3& point, uint16_t history_length = 1000);
+        void resetTrajectoryLocked();
+        UiCommandResult tryStartMoveLocked(const ActiveMove& move_template);
+        static std::string trim(const std::string& s);
+        bool parseConfigFile();
+        std::vector<std::string> makeServerArgs() const;
 
         bool valid_{false};
 
         uint32_t response_channel_id_{0};
         uint32_t status_publish_id_{0};
         uint32_t finished_publish_id_{0};
+
+        struct ServerParameters
+        {
+            std::string docroot;
+            std::string wt_config_path;
+            uint16_t port_http{0};
+        };
+
+        ServerParameters server_parameters_{};
+        std::unique_ptr<Wt::WServer> w_server_;
+        std::string last_error_message_;
 
         aergo::module::BaseModule::AllocatorPtr allocator_;
 
@@ -114,7 +174,11 @@ namespace aergo::default_modules::robot_module_dummy
         vis3d::ObjectId tfc_axes_obj_{0};
         vis3d::ObjectId tcp_axes_obj_{0};
         vis3d::ObjectId head_obj_{0};
+        vis3d::ObjectId trajectory_obj_{0};
         bool vis_objects_created_{false};
+        uint16_t trajectory_length_{0};
+        rc::Vector3 last_trajectory_point_{};
+        vis3d::Color trajectory_color_{ 0xff, 0x6b, 0xf0, 0xFF };
 
         std::atomic<bool> stop_{false};
         std::thread sim_thread_;

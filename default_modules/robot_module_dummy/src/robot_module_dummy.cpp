@@ -1,4 +1,5 @@
 #include "robot_module_dummy/robot_module_dummy.h"
+#include "robot_module_dummy/dummy_robot_web_app.h"
 
 #include "module_helpers/robot_interface/message_types_definitions.h"
 #include "module_helpers/serialization_helper/serialization_helper.h"
@@ -7,6 +8,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <map>
 #include <span>
 #include <thread>
 
@@ -60,6 +64,11 @@ RobotModuleDummy::RobotModuleDummy(const char* data_path,
     if (!initVisResources())
     {
         log(logging::LogType::ERROR, "Failed to register dummy visualization resources");
+        return;
+    }
+    if (!parseConfigFile())
+    {
+        log(logging::LogType::ERROR, "Failed to parse dummy robot web UI configuration");
         return;
     }
 
@@ -153,14 +162,60 @@ bool RobotModuleDummy::threadStart(uint32_t) noexcept
 {
     if (!valid_) return false;
 
-    stop_.store(false, std::memory_order_release);
-    sim_thread_ = std::thread(&RobotModuleDummy::simLoop, this);
-    return true;
+    try
+    {
+        if (w_server_)
+        {
+            return false;
+        }
+
+        auto args = makeServerArgs();
+        std::vector<char*> cargs;
+        cargs.reserve(args.size());
+        for (auto& arg : args)
+        {
+            cargs.push_back(arg.data());
+        }
+
+        w_server_ = std::make_unique<Wt::WServer>("dummy_robot_ui", server_parameters_.wt_config_path);
+        w_server_->setServerConfiguration(static_cast<int>(cargs.size()), cargs.data());
+        w_server_->addEntryPoint(Wt::EntryPointType::Application, [this](const Wt::WEnvironment& env) {
+            return std::make_unique<DummyRobotWebApp>(env, this);
+        });
+        if (!w_server_->start())
+        {
+            log(logging::LogType::ERROR, "Dummy robot UI server failed to start");
+            w_server_.reset();
+            return false;
+        }
+
+        stop_.store(false, std::memory_order_release);
+        sim_thread_ = std::thread(&RobotModuleDummy::simLoop, this);
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        log(logging::LogType::ERROR, std::string("Failed to start dummy robot UI server: ") + e.what());
+        w_server_.reset();
+        return false;
+    }
 }
 
 bool RobotModuleDummy::threadStop(uint32_t) noexcept
 {
     stop_.store(true, std::memory_order_release);
+    if (w_server_)
+    {
+        try
+        {
+            w_server_->stop();
+        }
+        catch (const std::exception& e)
+        {
+            log(logging::LogType::ERROR, std::string("Failed to stop dummy robot UI server: ") + e.what());
+        }
+        w_server_.reset();
+    }
     if (sim_thread_.joinable())
     {
         sim_thread_.join();
@@ -173,6 +228,7 @@ bool RobotModuleDummy::threadStop(uint32_t) noexcept
         visualization_helper_->removeObject(tfc_axes_obj_);
         visualization_helper_->removeObject(tcp_axes_obj_);
         visualization_helper_->removeObject(head_obj_);
+        resetTrajectoryLocked();
         visualization_helper_->sendUpdate();
         vis_objects_created_ = false;
     }
@@ -275,36 +331,55 @@ ResponseData RobotModuleDummy::handleStartRobotControl(std::span<const std::byte
         move_.active = true;
         move_.cancel_requested = false;
         move_.action_id = action_id;
-        std::copy(std::begin(sim_.xyzrpy), std::end(sim_.xyzrpy), std::begin(move_.start));
-        std::copy(std::begin(sim_.xyzrpy), std::end(sim_.xyzrpy), std::begin(move_.target));
+        move_.move_space = MoveSpace::TFC;
+        move_.start_pos[0] = sim_.tfc_pose.position.x;
+        move_.start_pos[1] = sim_.tfc_pose.position.y;
+        move_.start_pos[2] = sim_.tfc_pose.position.z;
+        move_.target_pos[0] = sim_.tfc_pose.position.x;
+        move_.target_pos[1] = sim_.tfc_pose.position.y;
+        move_.target_pos[2] = sim_.tfc_pose.position.z;
+        move_.start_quat = sim_.tfc_pose.orientation;
+        move_.target_quat = sim_.tfc_pose.orientation;
         move_.t_s = 0.0;
 
         if (auto* mj = std::get_if<rc::start::requests::deserialization::MoveJointRequest>(&reqv))
         {
+            double target_xyzrpy[6];
+            std::copy(std::begin(sim_.xyzrpy), std::end(sim_.xyzrpy), std::begin(target_xyzrpy));
             for (size_t i = 0; i < std::min<size_t>(6, mj->joint_targets.size()); ++i)
             {
-                move_.target[i] = mj->joint_targets[i];
+                target_xyzrpy[i] = mj->joint_targets[i];
             }
+            const rc::Pose target_tfc = makePoseFromXyzRpy(target_xyzrpy);
+            move_.target_pos[0] = target_tfc.position.x;
+            move_.target_pos[1] = target_tfc.position.y;
+            move_.target_pos[2] = target_tfc.position.z;
+            move_.target_quat = target_tfc.orientation;
             // duration from max delta / speed (avoid zero)
             double maxd = 0.0;
-            for (int i = 0; i < 6; ++i) maxd = std::max(maxd, std::abs(move_.target[i] - move_.start[i]));
+            for (int i = 0; i < 6; ++i)
+            {
+                maxd = std::max(maxd, std::abs(target_xyzrpy[i] - sim_.xyzrpy[i]));
+            }
             double v = std::max(1e-6, std::abs(mj->speed));
             move_.duration_s = std::max(0.05, maxd / v);
         }
         else if (auto* ml = std::get_if<rc::start::requests::deserialization::MoveLinearRequest>(&reqv))
         {
-            move_.target[0] = ml->pose_target.position.x;
-            move_.target[1] = ml->pose_target.position.y;
-            move_.target[2] = ml->pose_target.position.z;
-            double r, p, y;
-            rpyFromQuatWorld(ml->pose_target.orientation, r, p, y);
-            move_.target[3] = r;
-            move_.target[4] = p;
-            move_.target[5] = y;
+            move_.move_space = MoveSpace::TCP;
+            move_.target_pos[0] = ml->pose_target.position.x;
+            move_.target_pos[1] = ml->pose_target.position.y;
+            move_.target_pos[2] = ml->pose_target.position.z;
+            move_.target_quat = quatNormalize(ml->pose_target.orientation);
 
-            double dx = move_.target[0] - move_.start[0];
-            double dy = move_.target[1] - move_.start[1];
-            double dz = move_.target[2] - move_.start[2];
+            move_.start_pos[0] = sim_.tcp_pose.position.x;
+            move_.start_pos[1] = sim_.tcp_pose.position.y;
+            move_.start_pos[2] = sim_.tcp_pose.position.z;
+            move_.start_quat = sim_.tcp_pose.orientation;
+
+            double dx = move_.target_pos[0] - move_.start_pos[0];
+            double dy = move_.target_pos[1] - move_.start_pos[1];
+            double dz = move_.target_pos[2] - move_.start_pos[2];
             double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
             double v = std::max(1e-6, std::abs(ml->speed));
             move_.duration_s = std::max(0.05, dist / v);
@@ -352,6 +427,134 @@ ResponseData RobotModuleDummy::handleUpdateRobotControl(uint64_t action_id, std:
     return { .success_ = false };
 }
 
+RobotModuleDummy::UiSnapshot RobotModuleDummy::getUiSnapshot()
+{
+    UiSnapshot snapshot{};
+    std::lock_guard<std::mutex> lock(sim_mutex_);
+
+    snapshot.valid = valid_;
+    snapshot.moving = move_.active;
+    snapshot.active_action_id = move_.active ? move_.action_id : 0;
+    snapshot.has_error = !last_error_message_.empty();
+    snapshot.error_text = last_error_message_;
+    for (int i = 0; i < 6; ++i)
+    {
+        snapshot.joints_rad[static_cast<std::size_t>(i)] = sim_.xyzrpy[i];
+        snapshot.tfc_xyzrpy[static_cast<std::size_t>(i)] = sim_.xyzrpy[i];
+    }
+
+    snapshot.tcp_xyzrpy[0] = sim_.tcp_pose.position.x;
+    snapshot.tcp_xyzrpy[1] = sim_.tcp_pose.position.y;
+    snapshot.tcp_xyzrpy[2] = sim_.tcp_pose.position.z;
+    rpyFromQuatWorld(sim_.tcp_pose.orientation, snapshot.tcp_xyzrpy[3], snapshot.tcp_xyzrpy[4], snapshot.tcp_xyzrpy[5]);
+
+    return snapshot;
+}
+
+RobotModuleDummy::UiCommandResult RobotModuleDummy::tryStartMoveLocked(const ActiveMove& move_template)
+{
+    UiCommandResult result{};
+
+    if (move_.active)
+    {
+        result.message = "Dummy robot is busy.";
+        return result;
+    }
+
+    move_ = move_template;
+    move_.active = true;
+    move_.cancel_requested = false;
+    move_.action_id = next_action_id_++;
+    move_.t_s = 0.0;
+    last_error_message_.clear();
+
+    result.success = true;
+    result.action_id = move_.action_id;
+    result.message = "Move started.";
+    return result;
+}
+
+RobotModuleDummy::UiCommandResult RobotModuleDummy::startUiMoveJoint(const std::array<double, 6>& joint_targets_rad, double speed_rad_s)
+{
+    std::lock_guard<std::mutex> lock(sim_mutex_);
+
+    if (speed_rad_s <= 0.0)
+    {
+        return UiCommandResult{ .success = false, .message = "Joint speed must be positive." };
+    }
+
+    ActiveMove move_template{};
+    move_template.move_space = MoveSpace::TFC;
+    move_template.start_pos[0] = sim_.tfc_pose.position.x;
+    move_template.start_pos[1] = sim_.tfc_pose.position.y;
+    move_template.start_pos[2] = sim_.tfc_pose.position.z;
+    move_template.start_quat = sim_.tfc_pose.orientation;
+
+    double target_xyzrpy[6];
+    std::copy(std::begin(sim_.xyzrpy), std::end(sim_.xyzrpy), std::begin(target_xyzrpy));
+    for (std::size_t i = 0; i < 6; ++i)
+    {
+        target_xyzrpy[i] = joint_targets_rad[i];
+    }
+
+    const rc::Pose target_tfc = makePoseFromXyzRpy(target_xyzrpy);
+    move_template.target_pos[0] = target_tfc.position.x;
+    move_template.target_pos[1] = target_tfc.position.y;
+    move_template.target_pos[2] = target_tfc.position.z;
+    move_template.target_quat = target_tfc.orientation;
+
+    double max_delta = 0.0;
+    for (std::size_t i = 0; i < 6; ++i)
+    {
+        max_delta = std::max(max_delta, std::abs(joint_targets_rad[i] - sim_.xyzrpy[i]));
+    }
+    move_template.duration_s = std::max(0.05, max_delta / speed_rad_s);
+
+    return tryStartMoveLocked(move_template);
+}
+
+RobotModuleDummy::UiCommandResult RobotModuleDummy::startUiMoveLinear(const std::array<double, 6>& tcp_xyzrpy_rad, double speed_m_s)
+{
+    std::lock_guard<std::mutex> lock(sim_mutex_);
+
+    if (speed_m_s <= 0.0)
+    {
+        return UiCommandResult{ .success = false, .message = "Linear speed must be positive." };
+    }
+
+    ActiveMove move_template{};
+    move_template.move_space = MoveSpace::TCP;
+    move_template.start_pos[0] = sim_.tcp_pose.position.x;
+    move_template.start_pos[1] = sim_.tcp_pose.position.y;
+    move_template.start_pos[2] = sim_.tcp_pose.position.z;
+    move_template.start_quat = sim_.tcp_pose.orientation;
+
+    move_template.target_pos[0] = tcp_xyzrpy_rad[0];
+    move_template.target_pos[1] = tcp_xyzrpy_rad[1];
+    move_template.target_pos[2] = tcp_xyzrpy_rad[2];
+    move_template.target_quat = quatFromWorldRpy(tcp_xyzrpy_rad[3], tcp_xyzrpy_rad[4], tcp_xyzrpy_rad[5]);
+
+    const double dx = move_template.target_pos[0] - move_template.start_pos[0];
+    const double dy = move_template.target_pos[1] - move_template.start_pos[1];
+    const double dz = move_template.target_pos[2] - move_template.start_pos[2];
+    const double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+    move_template.duration_s = std::max(0.05, dist / speed_m_s);
+
+    return tryStartMoveLocked(move_template);
+}
+
+RobotModuleDummy::UiCommandResult RobotModuleDummy::cancelUiMove()
+{
+    std::lock_guard<std::mutex> lock(sim_mutex_);
+    if (!move_.active)
+    {
+        return UiCommandResult{ .success = false, .message = "No active move." };
+    }
+
+    move_.cancel_requested = true;
+    return UiCommandResult{ .success = true, .action_id = move_.action_id, .message = "Cancel requested." };
+}
+
 void RobotModuleDummy::simLoop()
 {
     // 60+ Hz status publishing
@@ -365,6 +568,7 @@ void RobotModuleDummy::simLoop()
         uint64_t finished_id = 0;
         bool finished_success = true;
         const char* finished_err = nullptr;
+        rc::Vector3 tcp_trajectory_point{};
 
         {
             std::lock_guard<std::mutex> lock(sim_mutex_);
@@ -376,28 +580,53 @@ void RobotModuleDummy::simLoop()
                     finished_id = move_.action_id;
                     finished_success = false;
                     finished_err = "Cancelled";
+                    last_error_message_ = finished_err;
                     move_ = ActiveMove{};
                 }
                 else
                 {
                     move_.t_s += dt_s;
                     double a = (move_.duration_s <= 1e-9) ? 1.0 : std::clamp(move_.t_s / move_.duration_s, 0.0, 1.0);
-                    for (int i = 0; i < 6; ++i)
+                    double pos[3]{
+                        move_.start_pos[0] + (move_.target_pos[0] - move_.start_pos[0]) * a,
+                        move_.start_pos[1] + (move_.target_pos[1] - move_.start_pos[1]) * a,
+                        move_.start_pos[2] + (move_.target_pos[2] - move_.start_pos[2]) * a
+                    };
+                    const rc::Quaternion quat = quatSlerpShortest(move_.start_quat, move_.target_quat, a);
+                    const rc::Pose motion_pose = makePoseFromPosQuat(pos, quat);
+
+                    if (move_.move_space == MoveSpace::TCP)
                     {
-                        sim_.xyzrpy[i] = move_.start[i] + (move_.target[i] - move_.start[i]) * a;
+                        sim_.tcp_pose = motion_pose;
+                        sim_.tfc_pose = tfcFromTcp(sim_.tcp_pose);
                     }
+                    else
+                    {
+                        sim_.tfc_pose = motion_pose;
+                        sim_.tcp_pose = tcpFromTfc(sim_.tfc_pose);
+                    }
+
+                    sim_.xyzrpy[0] = sim_.tfc_pose.position.x;
+                    sim_.xyzrpy[1] = sim_.tfc_pose.position.y;
+                    sim_.xyzrpy[2] = sim_.tfc_pose.position.z;
+                    rpyFromQuatWorld(sim_.tfc_pose.orientation, sim_.xyzrpy[3], sim_.xyzrpy[4], sim_.xyzrpy[5]);
 
                     if (a >= 1.0)
                     {
                         finished_id = move_.action_id;
                         finished_success = true;
+                        last_error_message_.clear();
                         move_ = ActiveMove{};
                     }
                 }
             }
 
-            sim_.tfc_pose = makePoseFromXyzRpy(sim_.xyzrpy);
-            sim_.tcp_pose = tcpFromTfc(sim_.tfc_pose);
+            if (!move_.active)
+            {
+                sim_.tfc_pose = makePoseFromXyzRpy(sim_.xyzrpy);
+                sim_.tcp_pose = tcpFromTfc(sim_.tfc_pose);
+            }
+            tcp_trajectory_point = sim_.tcp_pose.position;
         }
 
         // Publish status + update visualization
@@ -410,6 +639,7 @@ void RobotModuleDummy::simLoop()
             }
             ensureVisObjectsCreatedLocked();
             updateVisLocked();
+            updateTrajectoryLocked(tcp_trajectory_point);
         }
 
         publishStatusLocked(nowMicros());
@@ -484,19 +714,23 @@ void RobotModuleDummy::publishFinished(uint64_t action_id, bool success, const c
     sendMessage(finished_publish_id_, message::MessageHeader::Message(&finished, &blob_copy));
 }
 
-// Kassow convention: roll about world X, pitch about world Y (after roll), yaw about world Z (after pitch)
+// Dummy robot UI convention:
+// user-facing order is roll, then pitch, then yaw, but yaw should act in the
+// already-rotated local frame so that changing yaw spins the head around its
+// own axis instead of orbiting around the world origin.
+// For column-vector composition this is R = Rx(roll) * Ry(pitch) * Rz(yaw).
 rc::Quaternion RobotModuleDummy::quatFromWorldRpy(double roll, double pitch, double yaw)
 {
     const double cr = std::cos(roll * 0.5), sr = std::sin(roll * 0.5);
     const double cp = std::cos(pitch * 0.5), sp = std::sin(pitch * 0.5);
     const double cy = std::cos(yaw * 0.5), sy = std::sin(yaw * 0.5);
 
-    // q = qz(yaw) * qy(pitch) * qx(roll)
+    // q = qx(roll) * qy(pitch) * qz(yaw)
     rc::Quaternion q{};
-    q.w = cy*cp*cr + sy*sp*sr;
-    q.x = cy*cp*sr - sy*sp*cr;
-    q.y = cy*sp*cr + sy*cp*sr;
-    q.z = sy*cp*cr - cy*sp*sr;
+    q.w = cr*cp*cy - sr*sp*sy;
+    q.x = sr*cp*cy + cr*sp*sy;
+    q.y = cr*sp*cy - sr*cp*sy;
+    q.z = cr*cp*sy + sr*sp*cy;
     // normalize
     double s = std::sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
     if (s > 1e-12)
@@ -512,17 +746,17 @@ rc::Quaternion RobotModuleDummy::quatFromWorldRpy(double roll, double pitch, dou
 
 void RobotModuleDummy::rpyFromQuatWorld(const rc::Quaternion& q_in, double& out_roll, double& out_pitch, double& out_yaw)
 {
-    // Extract RPY from quaternion assuming R = Rz(yaw) * Ry(pitch) * Rx(roll)
-    const double x = q_in.x, y = q_in.y, z = q_in.z, w = q_in.w;
-    const double r00 = 1 - 2*(y*y + z*z);
-    const double r10 = 2*(x*y + w*z);
-    const double r20 = 2*(x*z - w*y);
-    const double r21 = 2*(y*z + w*x);
-    const double r22 = 1 - 2*(x*x + y*y);
+    const rc::Quaternion q = quatNormalize(q_in);
+    const double x = q.x, y = q.y, z = q.z, w = q.w;
+    const double r00 = 1.0 - 2.0*(y*y + z*z);
+    const double r01 = 2.0*(x*y - w*z);
+    const double r02 = 2.0*(x*z + w*y);
+    const double r12 = 2.0*(y*z - w*x);
+    const double r22 = 1.0 - 2.0*(x*x + y*y);
 
-    out_pitch = std::asin(std::clamp(-r20, -1.0, 1.0));
-    out_roll  = std::atan2(r21, r22);
-    out_yaw   = std::atan2(r10, r00);
+    out_pitch = std::asin(std::clamp(r02, -1.0, 1.0));
+    out_roll  = std::atan2(-r12, r22);
+    out_yaw   = std::atan2(-r01, r00);
 }
 
 rc::Pose RobotModuleDummy::makePoseFromXyzRpy(const double xyzrpy[6])
@@ -530,6 +764,14 @@ rc::Pose RobotModuleDummy::makePoseFromXyzRpy(const double xyzrpy[6])
     rc::Pose p{};
     p.position = rc::Vector3{ xyzrpy[0], xyzrpy[1], xyzrpy[2] };
     p.orientation = quatFromWorldRpy(xyzrpy[3], xyzrpy[4], xyzrpy[5]);
+    return p;
+}
+
+rc::Pose RobotModuleDummy::makePoseFromPosQuat(const double pos[3], const rc::Quaternion& quat)
+{
+    rc::Pose p{};
+    p.position = rc::Vector3{ pos[0], pos[1], pos[2] };
+    p.orientation = quatNormalize(quat);
     return p;
 }
 
@@ -557,6 +799,71 @@ rc::Pose RobotModuleDummy::tcpFromTfc(const rc::Pose& tfc_pose)
     tcp.position.y += dz.y;
     tcp.position.z += dz.z;
     return tcp;
+}
+
+rc::Pose RobotModuleDummy::tfcFromTcp(const rc::Pose& tcp_pose)
+{
+    rc::Pose tfc = tcp_pose;
+    const auto dz = rotateLocalZToWorld(tcp_pose.orientation, 0.10);
+    tfc.position.x -= dz.x;
+    tfc.position.y -= dz.y;
+    tfc.position.z -= dz.z;
+    return tfc;
+}
+
+rc::Quaternion RobotModuleDummy::quatNormalize(const rc::Quaternion& q)
+{
+    const double n = std::sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
+    if (n <= 1e-12)
+    {
+        return rc::Quaternion{0.0, 0.0, 0.0, 1.0};
+    }
+    return rc::Quaternion{ q.x / n, q.y / n, q.z / n, q.w / n };
+}
+
+double RobotModuleDummy::quatDot(const rc::Quaternion& a, const rc::Quaternion& b)
+{
+    return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
+}
+
+rc::Quaternion RobotModuleDummy::quatNegated(const rc::Quaternion& q)
+{
+    return rc::Quaternion{ -q.x, -q.y, -q.z, -q.w };
+}
+
+rc::Quaternion RobotModuleDummy::quatSlerpShortest(rc::Quaternion a, rc::Quaternion b, double t)
+{
+    a = quatNormalize(a);
+    b = quatNormalize(b);
+
+    double dot = quatDot(a, b);
+    if (dot < 0.0)
+    {
+        b = quatNegated(b);
+        dot = -dot;
+    }
+
+    dot = std::clamp(dot, -1.0, 1.0);
+    if (dot > 0.9995)
+    {
+        return quatNormalize(rc::Quaternion{
+            a.x + (b.x - a.x) * t,
+            a.y + (b.y - a.y) * t,
+            a.z + (b.z - a.z) * t,
+            a.w + (b.w - a.w) * t
+        });
+    }
+
+    const double theta = std::acos(dot);
+    const double sin_theta = std::sin(theta);
+    const double w0 = std::sin((1.0 - t) * theta) / sin_theta;
+    const double w1 = std::sin(t * theta) / sin_theta;
+    return quatNormalize(rc::Quaternion{
+        a.x * w0 + b.x * w1,
+        a.y * w0 + b.y * w1,
+        a.z * w0 + b.z * w1,
+        a.w * w0 + b.w * w1
+    });
 }
 
 bool RobotModuleDummy::initVisResources()
@@ -666,5 +973,194 @@ void RobotModuleDummy::updateVisLocked()
     // TCP axes
     visualization_helper_->updateObject(tcp_axes_obj_, toVisPose(s.tcp_pose));
     visualization_helper_->sendUpdate();
+}
+
+bool RobotModuleDummy::updateTrajectoryLocked(const rc::Vector3& point, uint16_t history_length)
+{
+    const auto last_point = last_trajectory_point_;
+    last_trajectory_point_ = point;
+
+    if (trajectory_length_ == 0)
+    {
+        trajectory_length_ = 1;
+        return true;
+    }
+
+    const vis3d::Vec3 vis_point{
+        static_cast<float>(point.x),
+        static_cast<float>(point.y),
+        static_cast<float>(point.z)
+    };
+
+    if (trajectory_length_ == 1)
+    {
+        if (!visualization_helper_->addTrajectory(
+            {
+                vis3d::Vec3{ static_cast<float>(last_point.x), static_cast<float>(last_point.y), static_cast<float>(last_point.z) },
+                vis_point
+            },
+            trajectory_color_,
+            false,
+            trajectory_obj_))
+        {
+            trajectory_obj_ = vis3d::ObjectId{0};
+            trajectory_length_ = 0;
+            return false;
+        }
+
+        trajectory_length_ = 2;
+        return true;
+    }
+
+    if (std::abs(last_point.x - point.x) < 1e-6 &&
+        std::abs(last_point.y - point.y) < 1e-6 &&
+        std::abs(last_point.z - point.z) < 1e-6)
+    {
+        return true;
+    }
+
+    if (!visualization_helper_->updateTrajectory(
+        trajectory_obj_,
+        { vis_point },
+        (trajectory_length_ < history_length) ? 0 : 1))
+    {
+        return false;
+    }
+
+    if (trajectory_length_ < history_length)
+    {
+        trajectory_length_ += 1;
+    }
+    return true;
+}
+
+void RobotModuleDummy::resetTrajectoryLocked()
+{
+    if (trajectory_obj_.id != 0)
+    {
+        visualization_helper_->removeTrajectory(trajectory_obj_);
+        trajectory_obj_ = vis3d::ObjectId{0};
+    }
+    trajectory_length_ = 0;
+    last_trajectory_point_ = rc::Vector3{};
+}
+
+std::string RobotModuleDummy::trim(const std::string& s)
+{
+    const auto first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+    {
+        return {};
+    }
+    const auto last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+bool RobotModuleDummy::parseConfigFile()
+{
+    namespace fs = std::filesystem;
+
+    const auto& data_path = getDataPath();
+    if (data_path.empty())
+    {
+        log(logging::LogType::ERROR, "Dummy robot module requires a data path for web UI config.");
+        return false;
+    }
+
+    const fs::path cfg_path = fs::path(data_path) / "config.txt";
+    if (!fs::exists(cfg_path))
+    {
+        log(logging::LogType::ERROR, "Dummy robot config file not found: " + cfg_path.string());
+        return false;
+    }
+
+    std::ifstream input(cfg_path);
+    if (!input)
+    {
+        log(logging::LogType::ERROR, "Failed to open dummy robot config file: " + cfg_path.string());
+        return false;
+    }
+
+    std::map<std::string, std::string> kv;
+    std::string line;
+    while (std::getline(input, line))
+    {
+        if (line.rfind('#', 0) == 0)
+        {
+            continue;
+        }
+        const auto pos = line.find('=');
+        if (pos == std::string::npos)
+        {
+            continue;
+        }
+
+        std::string key = trim(line.substr(0, pos));
+        std::string value = trim(line.substr(pos + 1));
+        if (!key.empty())
+        {
+            kv[key] = value;
+        }
+    }
+
+    for (const auto* key : { "DOCROOT", "PORT_HTTP", "WT_CONFIG" })
+    {
+        if (kv.find(key) == kv.end())
+        {
+            log(logging::LogType::ERROR, std::string("Missing dummy robot config key: ") + key);
+            return false;
+        }
+    }
+
+    try
+    {
+        const int port = std::stoi(kv["PORT_HTTP"]);
+        if (port < 1 || port > 65535)
+        {
+            log(logging::LogType::ERROR, "Invalid dummy robot PORT_HTTP value.");
+            return false;
+        }
+        server_parameters_.port_http = static_cast<uint16_t>(port);
+    }
+    catch (...)
+    {
+        log(logging::LogType::ERROR, "Failed to parse dummy robot PORT_HTTP.");
+        return false;
+    }
+
+    auto make_path = [&](const std::string& raw) {
+        fs::path path = raw;
+        if (path.is_relative())
+        {
+            path = fs::path(data_path) / path;
+        }
+        return path.string();
+    };
+
+    server_parameters_.docroot = make_path(kv["DOCROOT"]);
+    server_parameters_.wt_config_path = make_path(kv["WT_CONFIG"]);
+
+    if (!fs::exists(server_parameters_.docroot))
+    {
+        log(logging::LogType::ERROR, "Dummy robot DOCROOT not found: " + server_parameters_.docroot);
+        return false;
+    }
+    if (!fs::exists(server_parameters_.wt_config_path))
+    {
+        log(logging::LogType::ERROR, "Dummy robot WT_CONFIG not found: " + server_parameters_.wt_config_path);
+        return false;
+    }
+
+    return true;
+}
+
+std::vector<std::string> RobotModuleDummy::makeServerArgs() const
+{
+    return {
+        "dummy_robot_ui",
+        "--docroot", server_parameters_.docroot,
+        "--http-address", "0.0.0.0",
+        "--http-port", std::to_string(server_parameters_.port_http)
+    };
 }
 

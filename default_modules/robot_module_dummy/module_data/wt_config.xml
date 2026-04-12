@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<server>
+  <application-settings location="*">
+    <session-management>
+      <shared-process>
+        <num-processes>1</num-processes>
+      </shared-process>
+      <timeout>30</timeout>
+      <tracking>Auto</tracking>
+      <server-push-timeout>50</server-push-timeout>
+    </session-management>
+    <debug>false</debug>
+    <log-config>* -info -debug</log-config>
+    <web-sockets>true</web-sockets>
+    <max-request-size>8192</max-request-size>
+  </application-settings>
+</server>
